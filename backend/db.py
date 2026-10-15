@@ -98,9 +98,21 @@ CREATE TABLE IF NOT EXISTS doc (
   n_pages  INTEGER,
   n_chunks INTEGER DEFAULT 0,
   is_demo  INTEGER DEFAULT 0,
-  added_at TEXT
+  added_at TEXT,
+  block_id TEXT      -- блок дашборда, к которому относится документ
 );
 CREATE INDEX IF NOT EXISTS doc_sha ON doc(sha256);
+
+-- Документ может относиться к нескольким блокам сразу: протокол
+-- учёного совета обсуждает и успеваемость, и трудоустройство, и науку.
+-- Один блок на документ заставил бы либо терять документ, либо
+-- показывать его всем подряд.
+CREATE TABLE IF NOT EXISTS doc_block (
+  doc_id   INTEGER NOT NULL REFERENCES doc(doc_id) ON DELETE CASCADE,
+  block_id TEXT NOT NULL,
+  PRIMARY KEY (doc_id, block_id)
+);
+CREATE INDEX IF NOT EXISTS doc_block_block ON doc_block(block_id);
 
 CREATE TABLE IF NOT EXISTS doc_chunk (
   chunk_id   INTEGER PRIMARY KEY,
@@ -167,10 +179,25 @@ def init_db(conn=None):
     own = conn is None
     conn = conn or connect()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
     if own:
         conn.close()
     return True
+
+
+def _migrate(conn):
+    """Мелкие правки схемы для уже созданных баз.
+
+    Отдельная функция нужна потому, что CREATE TABLE IF NOT EXISTS не
+    добавляет колонку в существующую таблицу: на старой базе установки
+    новый столбец просто не появился бы, и документы молча получили бы
+    block_id = NULL, а специалисты агентов потеряли бы фильтр.
+    """
+    for table, column, decl in (("doc", "block_id", "TEXT"),):
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 def get_meta(conn, key, default=None):
@@ -512,6 +539,92 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
     set_meta(conn, "schema_version", "1")
     set_meta(conn, "demo_data_notice", config.DEMO_BANNER)
     return len(data["metrics"])
+
+
+def detect_blocks(rel_path, title, text=""):
+    """К каким блокам дашборда относится документ. Может быть несколько.
+
+    Нужно, чтобы поиск сужался до домена: иначе каждый вопрос
+    обсуждает все документы и специалисты агентов ничем не отличаются
+    друг от друга.
+
+    Порядок: явные метки в файле важнее догадки по названию. Метки
+    задаются во frontmatter markdown:
+        ---
+        block: finance
+        blocks: academic, results
+        ---
+    Если их нет, смотрим название файла и заголовок документа.
+    """
+    head = (text or "")[:600]
+    found = []
+
+    if head.startswith("---"):
+        parts = head.split("---", 2)
+        if len(parts) >= 3:
+            for line in parts[1].splitlines():
+                if ":" not in line:
+                    continue
+                key, _, value = line.partition(":")
+                key = key.strip().lower()
+                vals = value.replace(",", " ").split()
+                if key in ("block", "blocks"):
+                    for v in vals:
+                        v = v.strip().lower()
+                        if v in BLOCK_IDS and v not in found:
+                            found.append(v)
+    if found:
+        return found
+
+    haystack = " ".join([rel_path.lower(), (title or "").lower()])
+    for block_id, words in BLOCK_KEYWORDS.items():
+        if any(word in haystack for word in words):
+            found.append(block_id)
+    if found:
+        return found
+
+    # Запасной круг: смотрим начало текста. Протокол учёного совета или
+    # стратегия относятся сразу к нескольким блокам, и по названию это
+    # не определить. Ограничение по числу блоков и по порогу совпадений
+    # нужно, чтобы в блок не попал документ, где одно случайное слово
+    # совпало с ключевым.
+    body = (text or "")[:2500].lower()
+    if not body.strip():
+        return found
+    scored = []
+    for block_id, words in BLOCK_KEYWORDS.items():
+        hits = sum(1 for w in words if w in body)
+        if hits:
+            scored.append((hits, block_id))
+    scored.sort(reverse=True)
+    best = scored[0][0] if scored else 0
+    for hits, block_id in scored[:3]:
+        if hits >= max(1, best // 2):
+            found.append(block_id)
+    return found
+
+
+BLOCK_IDS = {b[0] for b in BLOCKS}
+
+# Ключевые слова в названии файла и заголовке. Порядок блоков важен:
+# «трудоустройство» проверяется раньше «репутации», потому что отчёт
+# о трудоустройстве упоминает и удовлетворённость, и медиа.
+BLOCK_KEYWORDS = {
+    "academic": ["priem", "priёm", "приём", "prijem", "контингент", "otchisl",
+                 "отчисл", "восстановл", "admission", "enrol"],
+    "results": ["attestaci", "аттестац", "rezultat", "результатив", "успеваем",
+                "zadolzhen", "задолжен", "качество знаний", "учебн"],
+    "finance": ["finans", "финанс", "byudzhet", "бюджет", "otchet-fin",
+                "эконом", "economic", "выручка", "долгов"],
+    "employ": ["trudoustro", "трудоуст", "vypusk", "выпускник", "karer",
+               "карьер", "работодател", "выпуск"],
+    "science": ["nau", "научн", "grant", "грант", "publikac", "публикац",
+                "scopus", "ринц", "patent", "патент", "исследован"],
+    "ops": ["nagruzk", "нагрузк", "lms", "moodle", "auditor", "аудитор",
+            "cifrov", "цифров", "obespech", "цифровизац"],
+    "reputation": ["reputac", "репутац", "nps", "svi", "сми", "медиа",
+                   "udovletvor", "удовлетвор", "survey", "опрос"],
+}
 
 
 def load_vitrine(conn):

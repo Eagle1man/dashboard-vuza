@@ -477,7 +477,7 @@ function updateStamp() {
       if (!text) return;
       addAiMessage("user", esc(text));
       $("aiInput").value = "";
-      setAiTyping(true);
+      setAiTyping(true, AI.getPipeline() === "crew");
       try {
         var ctx = { periodLabels: periodLabels(state.period).labels, currentBlockId: state.blockId };
         var res = await AI.ask(text, state.data, ctx);
@@ -520,12 +520,82 @@ function updateStamp() {
     box.scrollTop = box.scrollHeight;
   }
 
-  function setAiTyping(on) {
+  function renderCrewTrace(c) {
+    var h = '<details class="crew-trace"><summary>Ход работы · ' +
+      c.trace.length + " шагов · " +
+      Math.round((c.latency_ms || 0) / 100) / 10 + " сек</summary>";
+
+    c.trace.forEach(function (s) {
+      var cls = s.ok ? "ok" : "fail";
+      h += '<div class="crew-step ' + cls + '">' +
+        '<span class="crew-mark">' + (s.ok ? "✓" : "!") + "</span>" +
+        '<span class="crew-agent">' + esc(s.agent) + "</span>" +
+        '<span class="crew-what">' + esc(s.step) + "</span>" +
+        '<span class="crew-ms">' + (s.ms || 0) + " мс</span></div>";
+      if (s.problem) h += '<div class="crew-note">замечание: ' + esc(s.problem) + "</div>";
+      if (s.fix) h += '<div class="crew-note">правка: ' + esc(s.fix) + "</div>";
+      if (s.reason) h += '<div class="crew-note">причина: ' + esc(s.reason) + "</div>";
+      if (s.note) h += '<div class="crew-note">' + esc(s.note) + "</div>";
+    });
+
+    if (c.critic && c.critic.reason) {
+      h += '<div class="crew-note">критик: ' + esc(c.critic.reason) + "</div>";
+    }
+    if (c.notes && c.notes.length) {
+      c.notes.forEach(function (n) {
+        h += '<div class="crew-note">' + esc(n) + "</div>";
+      });
+    }
+    if (c.degraded) {
+      h += '<div class="crew-note crew-warn">Экипаж отработал не полностью, ' +
+        "ответ собран запасным путём.</div>";
+    }
+    h += "</details>";
+    return h;
+  }
+
+  // ---------- Переключатель «экипаж / один агент» ----------
+  function renderPipeline() {
+    var cur = AI.getPipeline();
+    var b1 = $("modeCrew"), b2 = $("modeSingle");
+    if (b1) b1.classList.toggle("is-on", cur === "crew");
+    if (b2) b2.classList.toggle("is-on", cur === "single");
+    var hint = $("modeHint");
+    if (hint) {
+      hint.textContent = cur === "crew"
+        ? "роутер → специалист → критик. Ответ дольше, зато проверен."
+        : "один запрос без роутера и критики. Быстрее, но без проверки.";
+    }
+  }
+
+  function initPipeline() {
+    ["modeCrew", "modeSingle"].forEach(function (id) {
+      var b = $(id);
+      if (!b) return;
+      b.addEventListener("click", function () {
+        AI.setPipeline(b.getAttribute("data-pipeline"));
+        renderPipeline();
+        showToast(b.getAttribute("data-pipeline") === "crew"
+          ? "Экипаж агентов: роутер, специалист, критик"
+          : "Один агент: без роутера и критики", "ok");
+      });
+    });
+    renderPipeline();
+    window.DashboardUI = window.DashboardUI || {};
+    window.DashboardUI.renderPipeline = renderPipeline;
+  }
+
+  function setAiTyping(on, crewMode) {
     if (on) {
       var t = document.createElement("div");
       t.className = "msg ai typing";
       t.id = "aiTyping";
-      t.textContent = "Анализирую данные...";
+      // В режиме экипажа вопрос проходит три-четыре обращения к модели
+      // подряд. Без пояснения пауза в минуту выглядит как зависание,
+      // и человек начинает отправлять вопрос ещё раз.
+      t.textContent = crewMode
+        ? "Экипаж работает: роутер → специалист → критик. Обычно 1–2 минуты."
+        : "Анализирую данные...";
       $("aiMessages").appendChild(t);
     } else {
       var el = $("aiTyping");
@@ -557,6 +627,13 @@ function updateStamp() {
           '</div><div class="src-snip">' + esc(s.snippet) + "</div></div>";
       });
       h += "</details>";
+    }
+
+    // Ход работы экипажа. Показываем всегда, когда он был: иначе
+    // утверждение «ответ проверен критиком» неотличимо от «никто не
+    // проверял», а это ровно то, чего быть не должно.
+    if (res.crew && res.crew.trace && res.crew.trace.length) {
+      h += renderCrewTrace(res.crew);
     }
 
     if (res.drill && res.drill.length) {
@@ -662,6 +739,7 @@ function updateStamp() {
     bindDetailClicks();
     bindControls();
     initAI();
+    initPipeline();
     updateStamp();
     connectServer();
   }

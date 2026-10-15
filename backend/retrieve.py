@@ -118,23 +118,42 @@ def weighted_coverage(stems, title, heading, text) -> float:
     return gained / (FIELD_WEIGHTS[0][1] * len(stems))
 
 
-def _fts_search(conn, query: str, limit: int):
+def _block_clause(blocks):
+    """SQL-условие и параметры для ограничения по блокам дашборда.
+
+    doc.block_id может быть NULL (документ не опознан как относящийся
+    к блоку). Такие документы при фильтре отбрасываются: иначе
+    «специалист по финансам» получал бы в контекст всё подряд,
+    и в специалистах не было бы никакого смысла.
+    """
+    if not blocks:
+        return "", []
+    marks = ",".join("?" * len(blocks))
+    return f" AND d.doc_id IN (SELECT doc_id FROM doc_block WHERE block_id IN ({marks}))", \
+        list(blocks)
+
+
+def _fts_search(conn, query: str, limit: int, blocks=None):
     expr = fts_expression(query)
     if not expr:
         return [], 0
+    clause, params = _block_clause(blocks)
     try:
         rows = conn.execute(
             "SELECT c.chunk_id, bm25(chunk_fts) AS score"
-            " FROM chunk_fts c JOIN doc_chunk dc ON dc.chunk_id = c.chunk_id"
-            " WHERE chunk_fts MATCH ? ORDER BY score LIMIT ?",
-            (expr, limit)).fetchall()
+            " FROM chunk_fts c"
+            " JOIN doc_chunk dc ON dc.chunk_id = c.chunk_id"
+            " JOIN doc d ON d.doc_id = dc.doc_id"
+            " WHERE chunk_fts MATCH ?" + clause +
+            " ORDER BY score LIMIT ?",
+            [expr] + params + [limit]).fetchall()
     except Exception:
         # FTS5 не должен ронять поиск целиком: ловим и идём только по вектору
         return [], 0
     return [(int(r["chunk_id"]), float(r["score"])) for r in rows], len(expr.split(" OR "))
 
 
-def _vector_search(conn, question: str, limit: int):
+def _vector_search(conn, question: str, limit: int, blocks=None):
     """Возвращает (список (chunk_id, cos), backend, max_cos)."""
     # Если модели нет, векторный канал всё равно будет отброшен при
     # слиянии — незачем грузить в память все векторы и считать
@@ -142,8 +161,11 @@ def _vector_search(conn, question: str, limit: int):
     if not embed.ollama_available():
         return [], "ollama-offline", 0.0
 
+    clause, params = _block_clause(blocks)
     rows = conn.execute(
-        "SELECT chunk_id, dim, vec FROM chunk_vec").fetchall()
+        "SELECT v.chunk_id, v.dim, v.vec FROM chunk_vec v"
+        " JOIN doc d ON d.doc_id = v.doc_id WHERE 1=1" + clause,
+        params).fetchall()
     if not rows:
         return [], "none", 0.0
     dim = int(rows[0]["dim"])
@@ -162,7 +184,8 @@ def _vector_search(conn, question: str, limit: int):
             backend, float(scores[order[0]]) if len(order) else 0.0)
 
 
-def search(conn, question: str, top_k: int = None, pool: int = None):
+def search(conn, question: str, top_k: int = None, pool: int = None,
+            blocks=None):
     """Возвращает список найденных кусков со слиянием рангов RRF.
 
     Три решения, без которых гибридный поиск работает хуже, чем
@@ -188,8 +211,8 @@ def search(conn, question: str, top_k: int = None, pool: int = None):
     top_k = top_k or config.RETRIEVE_TOP_K
     pool = pool or max(top_k * 3, 30)
 
-    fts, n_terms = _fts_search(conn, question, pool)
-    vec, vec_backend, max_cos = _vector_search(conn, question, pool)
+    fts, n_terms = _fts_search(conn, question, pool, blocks=blocks)
+    vec, vec_backend, max_cos = _vector_search(conn, question, pool, blocks=blocks)
 
     # --- решения о доверии каналам -------------------------------
     w_fts = 1.0 if fts else 0.0
@@ -210,11 +233,17 @@ def search(conn, question: str, top_k: int = None, pool: int = None):
              "ни один фрагмент не близок к вопросу" if vec
              else "векторы не рассчитаны")),
         "fusion": "fts-only" if w_vec == 0 else "hybrid",
+        "blocks_filter": list(blocks) if blocks else None,
     }
 
     if not fts and not vec:
         stats["empty_index"] = not any(
             conn.execute("SELECT COUNT(*) FROM chunk_vec").fetchone())
+        if blocks:
+            # Фильтр ничего не дал — это не «индекс пуст». Говорить
+            # «ответ не найден» здесь нельзя: по корпусу в целом
+            # документы есть, просто не про этот домен.
+            stats["filtered_out"] = True
         return [], stats
 
     # Обрезаем оба канала до одинаковой длины ДО слияния

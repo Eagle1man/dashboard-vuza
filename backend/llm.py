@@ -57,6 +57,55 @@ def build_context(chunks, limit: int = None) -> str:
     return "\n\n".join(parts)
 
 
+def chat(system: str, user: str, model: str = None, temperature: float = 0.15,
+         num_predict: int = 600):
+    """Одиночный вызов языковой модели.
+
+    Низкоуровневый примитив для агентов: каждый агент ведёт свой
+    разговор со своим системным промптом, и обойтись тут общей
+    подсистемой RAG нельзя — иначе все агенты получали бы один и тот
+    же контекст и отличались бы только именем.
+
+    Возвращает (текст, meta). meta['ok'] = False означает, что модель
+    недоступна, и вызывающий обязан это обработать, а не подставлять
+    пустую строку в ответ.
+    """
+    model = model or chat_model()
+    meta = {"model": model, "ok": False, "reason": None}
+
+    if not embed.ollama_available():
+        meta["reason"] = "Ollama не отвечает на " + config.OLLAMA_URL
+        return "", meta
+    if not model_installed(model):
+        meta["reason"] = f"модель {model} не скачана"
+        return "", meta
+
+    try:
+        out = _post_chat({
+            "model": model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "options": {"temperature": temperature, "num_predict": num_predict},
+        }, timeout=config.OLLAMA_TIMEOUT)
+    except urllib.error.HTTPError as exc:
+        meta["reason"] = f"Ollama вернула HTTP {exc.code}"
+        return "", meta
+    except Exception as exc:
+        meta["reason"] = f"ошибка обращения к Ollama: {exc}"
+        return "", meta
+
+    content = (out.get("message") or {}).get("content")
+    if not content or not content.strip():
+        meta["reason"] = "модель вернула пустой ответ"
+        return "", meta
+
+    meta["ok"] = True
+    return content.strip(), meta
+
+
 def answer(question: str, chunks, model: str = None):
     """Возвращает (текст_ответа, метаданные)."""
     model = model or chat_model()

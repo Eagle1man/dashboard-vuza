@@ -124,6 +124,13 @@
       </div>
       <button id="aiClose" class="icon-btn" aria-label="Закрыть">✕</button>
     </div>
+    <div class="ai-mode">
+      <span class="ai-mode-label">Работает:</span>
+      <div class="seg" role="group" aria-label="Режим работы ассистента">
+        <button type="button" class="seg-btn" id="modeCrew" data-pipeline="crew">Экипаж агентов</button>
+        <button type="button" class="seg-btn" id="modeSingle" data-pipeline="single">Один агент</button>
+      </div>
+    </div>
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-actions" id="aiSuggestions"></div>
     <form id="aiForm" class="ai-input">

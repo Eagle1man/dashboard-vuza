@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from . import autoconfig
 from . import config
+from . import crew
 from . import db
 from . import embed
 from . import ingest as ingest_mod
@@ -68,6 +69,12 @@ app.add_middleware(
 class AskRequest(BaseModel):
     question: str
     top_k: int = 0
+    # "crew" — вопрос проходит роутер, специалиста и критика;
+    # "fast" — без критика, для слабых машин.
+    mode: str = "crew"
+    # "crew" — экипаж агентов, "single" — прежний одиночный путь
+    # (его оставили: он быстрее и служит запасным при отказе экипажа)
+    pipeline: str = "crew"
 
 
 @app.get("/api/health")
@@ -108,6 +115,52 @@ def health():
         "last_ingest": db.get_meta(c, "last_ingest"),
         "demo_notice": db.get_meta(c, "demo_data_notice"),
     }
+
+
+@app.get("/api/agents")
+def agents():
+    """Состав экипажа: кто есть, за что отвечает, какие блоки видит."""
+    out = crew.describe()
+    c = conn()
+    # Сколько документов реально попадает в поле зрения каждого
+    # специалиста. Агент, у которого ноль документов, — не специалист,
+    # а пустая обёртка, и это надо показывать.
+    for a in out["agents"]:
+        if a["blocks"]:
+            marks = ",".join("?" * len(a["blocks"]))
+            a["documents"] = c.execute(
+                f"SELECT COUNT(DISTINCT doc_id) FROM doc_block"
+                f" WHERE block_id IN ({marks})", a["blocks"]).fetchone()[0]
+        else:
+            a["documents"] = c.execute("SELECT COUNT(*) FROM doc").fetchone()[0]
+    return out
+
+
+@app.post("/api/ask/crew")
+def ask_crew(req: AskRequest):
+    question = (req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Пустой вопрос")
+    question = question[:2000]
+    mode = req.mode if req.mode in crew.MODES else "crew"
+
+    c = conn()
+    try:
+        out = crew.run(question, c, mode=mode, top_k=req.top_k)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Ошибка экипажа: {exc}")
+
+    c.execute(
+        "INSERT INTO ask_log(ts, question, answer, chunk_ids, model, hits, latency_ms)"
+        " VALUES(?,?,?,?,?,?,?)",
+        (time.strftime("%Y-%m-%d %H:%M:%S"), question, out["answer"],
+         ",".join(str(s["n"]) for s in out["sources"]),
+         (out.get("search") or {}).get("vector_backend"),
+         len(out["sources"]), out["latency_ms"]))
+    c.commit()
+
+    out["demo_notice"] = db.get_meta(c, "demo_data_notice")
+    return out
 
 
 @app.get("/api/metrics")

@@ -269,15 +269,59 @@
   // ===== RAG через локальный сервер =====
   // Основной режим. Сервер ищет по документам (слова + смысл),
   // формирует ответ языковой моделью и возвращает список источников.
+  // Режим работы ассистента: "crew" — экипаж агентов, "single" —
+  // прежний одиночный путь. Переключается пользователем и хранится.
+  function getPipeline() {
+    var v = null;
+    try { v = global.localStorage.getItem("dash_pipeline"); } catch (e) { v = null; }
+    return v === "single" ? "single" : "crew";
+  }
+
+  function setPipeline(v) {
+    try { global.localStorage.setItem("dash_pipeline", v); } catch (e) { /* режим приватного просмотра */ }
+    if (global.DashboardUI && global.DashboardUI.renderPipeline) {
+      global.DashboardUI.renderPipeline();
+    }
+  }
+
   async function askServer(question) {
     const api = global.DashboardAPI;
     if (!api) return null;
-    const out = await api.ask(question);
+    var crewMode = getPipeline() === "crew";
+    var out = crewMode
+      ? await api.askCrew(question, "crew")
+      : await api.ask(question);
     if (!out || typeof out.answer !== "string") return null;
 
     // В ответе без модели сервер сам объясняет, что не смог ответить,
     // и показывает найденные документы. Причину показываем честно —
     // иначе "аналитик молчит" выглядит как зависание.
+    if (crewMode) {
+      // Экипаж возвращает больше полей, чем одиночный путь, и они
+      // показываются пользователю: без этого «проверено критиком»
+      // ничем не отличается от «никто не проверял».
+      var parts = [];
+      parts.push("Экипаж · " + (out.agent_name || out.agent_id));
+      if (out.critic && out.critic.ran && !out.critic.ok) {
+        parts.push("критик нашёл замечание");
+      } else if (out.critic && out.critic.ran) {
+        parts.push("критик подтвердил");
+      } else if (out.critic) {
+        parts.push("критик не запускался");
+      }
+      parts.push(Math.round((out.latency_ms || 0) / 100) / 10 + " сек");
+      return {
+        text: out.answer,
+        source: parts.join(" · "),
+        sources: out.sources || [],
+        charts: [],
+        demo: !!out.demo_notice,
+        server: true,
+        crew: out,
+        meta: out.meta || {}
+      };
+    }
+
     const meta = out.meta || {};
     let source;
     if (meta.llm) {
@@ -352,6 +396,7 @@
 
   global.AIAssistant = {
     SYNONYM_MAP, matchMetrics, blockName, chartSuggestion, fmtVal,
-    answerLocal, answerOllama, answerDeepSeek, askServer, ask
+    answerLocal, answerOllama, answerDeepSeek, askServer, ask,
+    getPipeline, setPipeline
   };
 })(window);

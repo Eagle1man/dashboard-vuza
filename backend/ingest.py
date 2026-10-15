@@ -47,6 +47,7 @@ def iter_documents(root: Path = None):
 
 
 def _delete_doc(conn, doc_id: int):
+    conn.execute("DELETE FROM doc_block WHERE doc_id = ?", (doc_id,))
     for row in conn.execute(
             "SELECT chunk_id FROM doc_chunk WHERE doc_id = ?", (doc_id,)):
         conn.execute("DELETE FROM chunk_fts WHERE chunk_id = ?", (row[0],))
@@ -90,13 +91,19 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
         _delete_doc(conn, int(existing["doc_id"]))
 
     title = extract.title_from(path, text)
+    blocks = db.detect_blocks(rel, title, text)
     cur = conn.execute(
         "INSERT INTO doc(rel_path, title, doc_type, sha256, n_pages, n_chunks,"
-        " is_demo, added_at) VALUES(?,?,?,?,?,?,?,?)",
+        " is_demo, added_at, block_id) VALUES(?,?,?,?,?,?,?,?,?)",
         (rel, title, extract.doc_type(path), sha, text.count("[стр. ") or None,
          len(unique_chunks), 1 if is_demo else 0,
-         time.strftime("%Y-%m-%d %H:%M:%S")))
+         time.strftime("%Y-%m-%d %H:%M:%S"), blocks[0] if blocks else None))
     doc_id = int(cur.lastrowid)
+
+    for block_id in blocks:
+        conn.execute(
+            "INSERT OR IGNORE INTO doc_block(doc_id, block_id) VALUES(?,?)",
+            (doc_id, block_id))
 
     # inserted держит пары (chunk_id, текст) в том же порядке, в котором
     # считаются эмбеддинги. Раньше id брались повторным SELECT'ом с
@@ -131,7 +138,8 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
         conn.commit()
 
     return {"path": rel, "status": "indexed", "chunks": len(inserted),
-            "dropped_dupes": dropped, "backend": backend, "title": title}
+            "dropped_dupes": dropped, "backend": backend, "title": title,
+            "block_id": blocks[0] if blocks else None, "blocks": blocks}
 
 
 def ingest(force=False, prune=False, root: Path = None) -> dict:

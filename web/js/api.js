@@ -66,9 +66,22 @@
     // Переиндексация папки knowledge (долгая — свой таймаут)
     reindex: function () { return post("/api/reindex?prune=true", {}, 600000); },
 
-    // Вопрос ИИ-ассистенту
+    // Вопрос ИИ-ассистенту (одиночный путь, без агентов)
     ask: function (question, topK) {
       return post("/api/ask", { question: question, top_k: topK || 0 }, 180000);
+    },
+
+    // Вопрос экипажу агентов. Таймаут заведомо большой: полный цикл —
+    // роутер, специалист и критик, то есть три-четыре обращения к
+    // локальной модели подряд.
+    askCrew: function (question, mode) {
+      return post("/api/ask/crew",
+        { question: question, mode: mode || "crew" }, 600000);
+    },
+
+    // Состав экипажа: кто есть, за что отвечает, сколько документов видит
+    agents: function () {
+      return get("/api/agents", 10000);
     },
 
     // Однократная проверка связи. Дёшево: если сервера нет, страницу
