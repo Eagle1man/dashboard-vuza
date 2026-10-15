@@ -335,7 +335,14 @@ function updateStamp() {
     $("btnExportCsv").addEventListener("click", exportSummaryCsv);
     $("btnDetailCsv").addEventListener("click", exportBlockCsv);
     $("btnDrillCsv").addEventListener("click", exportDrillCsv);
-    $("btnExportPdf").addEventListener("click", function () { showToast("PDF-экспорт (в production подключится генератор отчётов)", "warn"); });
+    // PDF делается печатью браузера: в style.css есть блок @media print,
+// который собирает из дашборда отчёт на A4. Собственный генератор
+// PDF нужен только если требуется настоящий файл без диалога печати —
+// тогда его место здесь же.
+$("btnExportPdf").addEventListener("click", function () {
+  showToast("Открылся диалог печати. Выберите «Сохранить как PDF».", "ok");
+  window.print();
+});
     $("btnExportXlsx").addEventListener("click", function () { showToast("Excel-экспорт (в production подключится openpyxl)", "warn"); });
 
     $("filterPeriod").addEventListener("change", function () {

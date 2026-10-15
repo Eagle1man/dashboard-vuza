@@ -27,6 +27,10 @@ html[data-theme="dark"] {
   --shadow-lg: 0 10px 30px rgba(0,0,0,.5);
 }
 html { font-size: 15px; }
+/* Без overflow-x: hidden — он создаёт прокручивающийся контейнер и
+   ломает position: sticky у потомков, а шапка у нас именно липкая.
+   overflow: clip даёт тот же эффект, не создавая контейнера. */
+html, body { overflow-x: clip; }
 body {
   font-family: "Segoe UI", Roboto, -apple-system, Arial, sans-serif;
   background: var(--bg);
@@ -121,6 +125,11 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.data th, table.data td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 table.data th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
 table.data tbody tr:hover { background: var(--surface-2); }
+/* Зебра: подложка через rgba, чтобы работать и на светлой, и на тёмной
+   теме. Фиксированный #f0f0f0 из образца на тёмной теме дал бы
+   подложку темнее самой карточки. */
+table.data tbody tr:nth-child(even) { background: rgba(0,0,0,.022); }
+html[data-theme="dark"] table.data tbody tr:nth-child(even) { background: rgba(255,255,255,.028); }
 table.data td.clickable { color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: underline dotted; }
 
 /* ============ Футер ============ */
@@ -403,3 +412,86 @@ html[data-theme="dark"] .footer-logo {
   color: #9a6c14;
 }
 [data-theme="dark"] .metrics-note { color: #e8bd6a; }
+
+
+/* ============================================================
+   Печать дашборда как отчёта
+   Взято из образца dash-financial-report: страница A4, сброс теней и
+   фонов, перенос карточек целиком на следующий лист. Раньше здесь
+   не было ничего, поэтому кнопка «PDF» выдавала заглушку.
+   ============================================================ */
+@page {
+  size: A4;
+  margin: 12mm 14mm;
+}
+
+@media print {
+  /* Печатаем все представления, а не только активное: отчёт должен
+     включать ленту, детализацию и детизацию, а не один экран. */
+  .view { display: block !important; }
+
+  html, body {
+    background: #fff !important;
+    color: #111 !important;
+    overflow: visible !important;
+  }
+
+  /* Скрываем всё интерактивное: панель ассистента, подсказки темы,
+     тосты, кнопки действий и элементы управления фильтрами. */
+  .app-header .header-controls,
+  .filter-bar,
+  .page-actions,
+  .ai-fab,
+  #aiPanel,
+  #toasts,
+  .sys-status { display: none !important; }
+
+  .app-header {
+    position: static !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid #999 !important;
+    background: #fff !important;
+  }
+  .app-header .brand-text span,
+  .brand-text span { color: #555 !important; }
+  .brand-logo { display: none; }
+
+  /* Тени и фоны карточек не нужны при печати: чернила уходят на подложки,
+     а рамки и так разделяют элементы. */
+  .widget-block,
+  .metric-widget,
+  .section-card,
+  .metrics-box,
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #bbb !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .widget-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* Статусы и динамика обязаны сохранить цвет: иначе отчёт
+     получается однотонным, и в нём не видно, что требует внимания. */
+  .status-pill,
+  .tag-demo { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .page-head h1, .page-head h2 { margin-top: 12mm; }
+
+  table.data tbody tr:nth-child(even) { background: #f3f3f3; }
+
+  .metrics-demo { color: #7a5a00 !important; border-color: #c9a227 !important; }
+
+  /* Кнопки «Детали» внутри таблиц — элемент управления, а не данные.
+     При печати они только съедают место и выглядят как мусор. */
+  .mini-btn { display: none !important; }
+  .metrics-note { color: #7a5a00 !important; }
+
+  /* Разрывы между блоками: в отчёте блоки идут друг за другом,
+     а не наползают друг на друга. */
+  .widget-block { margin-bottom: 6mm; }
+
+  .spark { max-width: 100%; }
+}
