@@ -42,8 +42,7 @@ input, select { font-family: inherit; }
 .app-header { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
 .header-inner { max-width: 1280px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 12px; }
-.brand-logo { width: 46px; height: 46px; flex-shrink: 0; }
-.brand-lockup { height: 42px; margin-left: 16px; }
+.brand-logo { height: 46px; width: auto; flex-shrink: 0; }
 .brand-mark { width: 42px; height: 42px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), #7b2ff7); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-text strong { font-size: 16px; }
@@ -126,14 +125,14 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 
 /* ============ Футер ============ */
 .app-footer { max-width: 1280px; margin: 24px auto 0; padding: 16px 20px 24px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.footer-logo { height: 36px; opacity: .9; }
+.footer-logo { height: 36px; width: auto; opacity: .9; }
 .footer-note { color: var(--muted); font-size: 12px; }
 
 /* ============ ИИ-панель ============ */
 .ai-panel { position: fixed; right: 16px; bottom: 16px; width: 380px; max-width: 94vw; height: min(620px, 80vh); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; z-index: 40; overflow: hidden; }
 .ai-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
 .ai-header-brand { display: flex; align-items: center; gap: 10px; }
-.ai-logo { width: 32px; height: 32px; }
+.ai-logo { height: 32px; width: auto; }
 .ai-status { font-size: 11px; color: var(--green); font-weight: 600; }
 .ai-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .msg { max-width: 88%; padding: 10px 12px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
@@ -164,7 +163,6 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 /* ============ Адаптив ============ */
 @media (max-width: 720px) {
   .header-inner { flex-direction: column; align-items: flex-start; }
-  .brand-lockup { display: none; }
   .search-wrap input { width: 100%; }
   .ai-panel { width: 94vw; height: 80vh; }
   .metric-row { grid-template-columns: 1fr; }
@@ -308,3 +306,16 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
   font-size: 11.5px;
 }
 .crew-warn { color: #c2554f; }
+
+
+/* ---------- Логотип в тёмной теме ----------
+   Знак синий (#3D5074) и рассчитан на белый фон: в тёмной теме он
+   почти не виден. Варианта «перекрасить» нет — это официальный знак,
+   и менять его цвета без разрешения нельзя. Поэтому в тёмной теме
+   логотип убирается, а название остаётся: интерфейс не теряет смысла
+   и не получает неразборчивый знак. */
+html[data-theme="dark"] .brand-logo,
+html[data-theme="dark"] .ai-logo,
+html[data-theme="dark"] .footer-logo {
+  display: none;
+}

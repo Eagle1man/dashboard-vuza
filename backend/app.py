@@ -66,6 +66,26 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def no_stale_assets(request, call_next):
+    """Запрещать браузеру держать устаревшие файлы интерфейса.
+
+    Без Cache-Control браузер применяет эвристическое кэширование и
+    после обновления продолжает отдавать пользователю старые css и js.
+    Для локальной витрины это выглядит как «обновил, а интерфейс
+    прежний», и разбираться приходится вручную — обычно через Ctrl+F5,
+    о котором обычный пользователь не знает.
+
+    Здесь нельзя ставить max-age, зато можно no-cache: браузер будет
+    уточнять у сервера по ETag и получать 304, то есть почти без трафика.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith(("/css/", "/js/", "/img/")) or path in ("/", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 class AskRequest(BaseModel):
     question: str
     top_k: int = 0
