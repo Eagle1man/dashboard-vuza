@@ -134,7 +134,7 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .ai-header-brand { display: flex; align-items: center; gap: 10px; }
 .ai-logo { height: 32px; width: auto; }
 .ai-status { font-size: 11px; color: var(--green); font-weight: 600; }
-.ai-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ai-messages { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .msg { max-width: 88%; padding: 10px 12px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
 .msg.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
 .msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
@@ -144,7 +144,22 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .msg.ai table { margin-top: 8px; border-collapse: collapse; font-size: 12px; width: 100%; }
 .msg.ai table th, .msg.ai table td { border: 1px solid var(--border); padding: 4px 6px; text-align: left; }
 .typing { color: var(--muted); font-style: italic; }
-.ai-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+/* Подсказки — одна прокручиваемая строка, а не перенос по одной на
+   строку. В панели шириной 380px пять подсказок переносились каждая на
+   свою строку и съедали 163px — треть высоты панели, а на сообщения
+   оставалось 150px при содержимом около тысячи. Читать ответ было
+   физически нечем. */
+.ai-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 0 12px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;            /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+.ai-actions::-webkit-scrollbar { height: 0; display: none; }
+.ai-actions .chip { flex: none; white-space: nowrap; }
 .ai-actions .chip { font-size: 11px; padding: 5px 9px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
 .ai-actions .chip:hover { color: var(--primary); border-color: var(--primary); }
 .ai-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
