@@ -163,6 +163,16 @@ def ingest(force=False, prune=False, root: Path = None) -> dict:
         conn.commit()
 
     db.set_meta(conn, "last_ingest", time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # Схлопываем журнал WAL в основной файл. Иначе после долгой работы
+    # основной файл оказывается меньше журнала, и копия одного файла
+    # (которую делает backup.bat) требует ещё и пары -wal/-shm.
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.commit()
+    except Exception:
+        pass
+
     report["totals"] = {
         "docs": conn.execute("SELECT COUNT(*) FROM doc").fetchone()[0],
         "chunks": conn.execute("SELECT COUNT(*) FROM doc_chunk").fetchone()[0],
