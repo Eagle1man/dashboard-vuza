@@ -67,11 +67,11 @@ def test_critic_empty():
 
 def test_registry_blocks():
     ids = {a.agent_id for a in registry.all_agents()}
-    check("десять агентов объявлено", len(ids) == 10, f"найдено {len(ids)}")
+    check("девять агентов объявлено", len(ids) == 9, f"найдено {len(ids)}")
     check("есть аналитик витрины", "analyst" in ids)
     check("роутер просит выбрать режим", "РЕЖИМ" in registry.ROUTER.system)
-    for block_id in ("academic", "results", "finance", "employ",
-                     "science", "ops", "reputation"):
+    for block_id in ("academic", "results", "vnoko", "science",
+                     "upr", "digital"):
         agents = [a for a in registry.all_agents() if block_id in a.blocks]
         check(f"специалист есть для блока {block_id}", len(agents) == 1)
 
@@ -130,14 +130,14 @@ def test_degraded_when_model_down():
 def test_agent_without_documents_fails_honestly():
     """Специалист, которому не досталось документов, должен это сказать.
 
-    Агент ops сейчас видит ноль документов. Если он вместо честного
+    Агент digital сейчас видит ноль документов. Если он вместо честного
     отказа начнёт отвечать по чужой теме (по всему корпусу), ректор
     получит уверенный ответ не по тому вопросу — худший исход из
     возможных, потому что он выглядит правдой.
     """
     from backend import db
 
-    agent = registry.get("ops")
+    agent = registry.get("digital")
     steps = []
     conn = db.connect()
     try:
@@ -214,7 +214,7 @@ def test_metrics_tool_marks_demo():
     from backend import db
     conn = db.connect()
     try:
-        r = tools.query("какая рентабельность университета", conn)
+        r = tools.query("какая успеваемость студентов", conn)
         junk = tools.query("какая погода в Ростове", conn)
     finally:
         conn.close()

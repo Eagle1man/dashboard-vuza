@@ -1,7 +1,13 @@
 /* ============================================================
    data.js — демо-данные дашборда ректора
-   7 стратегических блоков, 32 метрики, drill-down записи.
-   Детерминированная генерация на seeded RNG (стабильные цифры).
+   Южный университет (ИУБиП), ЧОУ ВО.
+
+   Структура и подразделения — реальные, по организационной
+   структуре на 2026–2027 учебный год (приложение 1 к приказу).
+   Цифры — демонстрационные, детерминированные (seeded RNG).
+
+   6 стратегических блоков, 32 метрики, 25 образовательных
+   программ (ФГОС), drill-down записи.
    ============================================================ */
 
 (function (global) {
@@ -21,42 +27,56 @@
   const QUARTERS = ["Q1", "Q2", "Q3", "Q4"];
   const YEARS = ["2022", "2023", "2024", "2025", "2026"];
 
+  // ---- Подразделения: реальные кафедры университета ----
+  // Источник: организационная структура на 2026–2027 учебный год.
+  // Кафедры — учебное ядро, поэтому разбивка показателей идёт по ним.
   const DEPARTMENTS = [
-    { id: "ff", name: "Факультет фундаментальных наук" },
-    { id: "it", name: "Институт информационных технологий" },
-    { id: "econ", name: "Экономический факультет" },
-    { id: "eng", name: "Инженерный институт" },
-    { id: "hum", name: "Гуманитарный институт" },
-    { id: "med", name: "Медицинский институт" }
+    { id: "kaf-it",  name: "Кафедра «Информационные технологии и прикладная математика»" },
+    { id: "kaf-uo",  name: "Кафедра «Управление организационными системами»" },
+    { id: "kaf-psy", name: "Кафедра «Психология и управление персоналом»" },
+    { id: "kaf-gum", name: "Кафедра «Гуманитарные дисциплины»" },
+    { id: "kaf-gr",  name: "Кафедра «Гражданско-правовые дисциплины»" },
+    { id: "kaf-eco", name: "Кафедра «Экономика, туризм и инновационные рыночные исследования»" }
   ];
 
-  // ---- Определение 7 блоков ----
+  // ---- 6 стратегических блоков ----
+  // Блоки соответствуют зонам ответственности проректоров и
+  // направлениям организационной структуры. Финансового и
+  // кадрового блоков в структуре нет — они не появились и здесь.
   const BLOCKS = [
-    { id: "academic", title: "Приём и контингент", icon: "🎓",
-      role: ["rector", "prorector", "admin"], desc: "Набор, численность студентов, движение контингента." },
-    { id: "results", title: "Академическая результативность", icon: "📚",
-      role: ["rector", "prorector", "admin"], desc: "Успеваемость, качество знаний, задолженности." },
-    { id: "finance", title: "Финансовое здоровье", icon: "💰",
-      role: ["rector", "admin"], desc: "Выручка, ликвидность, долговая нагрузка." },
-    { id: "employ", title: "Трудоустройство выпускников", icon: "💼",
-      role: ["rector", "prorector", "admin"], desc: "Доля трудоустроенных и карьерные метрики." },
-    { id: "science", title: "Исследования и инновации", icon: "🔬",
-      role: ["rector", "prorector", "admin"], desc: "Гранты, публикации, интеллектуальная собственность." },
-    { id: "ops", title: "Операционная эффективность", icon: "⚙️",
-      role: ["rector", "prorector", "admin"], desc: "Наполняемость, нагрузка ППС, цифровая трансформация." },
-    { id: "reputation", title: "Репутация и студенческий опыт", icon: "🌟",
-      role: ["rector", "prorector", "admin"], desc: "NPS, удовлетворённость, медиа-присутствие." }
+    { id: "academic", title: "Академическая политика", icon: "🎓",
+      role: ["rector", "prorector", "admin"],
+      desc: "Приём, контингент, действующие образовательные программы." },
+    { id: "results", title: "Учебные результаты", icon: "📚",
+      role: ["rector", "prorector", "admin"],
+      desc: "Успеваемость, качество знаний, промежуточная аттестация." },
+    { id: "vnoko", title: "Качество образования (ВНОКО)", icon: "✅",
+      role: ["rector", "prorector", "admin"],
+      desc: "Внутренняя независимая оценка качества: опросы и план-факт." },
+    { id: "science", title: "Наука и метакомпетенции", icon: "🔬",
+      role: ["rector", "prorector", "admin"],
+      desc: "Гранты, публикации, интеллектуальная собственность, НИЛ." },
+    { id: "upr", title: "Воспитательная работа и молодёжная политика", icon: "🤝",
+      role: ["rector", "prorector", "admin"],
+      desc: "Студенческий совет, юридическая клиника, центр карьеры." },
+    { id: "digital", title: "Цифровые сервисы и ЭИОС", icon: "💻",
+      role: ["rector", "prorector", "admin"],
+      desc: "Электронная информационно-образовательная среда, LMS, сервисы." }
   ];
-// ---- Определение 32 метрик ----
+
+  // ---- 32 метрики ----
   // direction: 'higher' (выше — лучше) или 'lower' (ниже — лучше)
+  // base / vol — параметры генератора тренда, как и раньше.
   const METRIC_DEFS = [
+    // Академическая политика
     { id: "plan-enroll", block: "academic", title: "Выполнение плана приёма", unit: "%", dir: "higher", target: 90, base: 96, vol: 8 },
-    { id: "enroll-count", block: "academic", title: "План приёма (бюджет)", unit: "чел.", dir: "higher", target: 1800, base: 1750, vol: 90 },
-    { id: "enroll-paid", block: "academic", title: "Внебюджетный приём", unit: "чел.", dir: "higher", target: 900, base: 860, vol: 60 },
-    { id: "continuent", block: "academic", title: "Контингент студентов", unit: "чел.", dir: "higher", target: 21000, base: 20800, vol: 220 },
+    { id: "programs", block: "academic", title: "Действующие образовательные программы", unit: "шт.", dir: "higher", target: 25, base: 25, vol: 0 },
+    { id: "enroll-count", block: "academic", title: "Приём на программы (год)", unit: "чел.", dir: "higher", target: 1800, base: 1750, vol: 90 },
+    { id: "continuent", block: "academic", title: "Контингент обучающихся", unit: "чел.", dir: "higher", target: 21000, base: 20800, vol: 220 },
     { id: "rostchislenie", block: "academic", title: "Отчисления (год)", unit: "чел.", dir: "lower", target: 700, base: 640, vol: 70 },
     { id: "procent-otchislenie", block: "academic", title: "Процент отчисления", unit: "%", dir: "lower", target: 3.5, base: 3.1, vol: 0.4 },
 
+    // Учебные результаты
     { id: "sredniy-ball", block: "results", title: "Средний балл ЕГЭ", unit: "балл", dir: "higher", target: 70, base: 74, vol: 3 },
     { id: "uspevaemost", block: "results", title: "Успеваемость (без двоек)", unit: "%", dir: "higher", target: 90, base: 94, vol: 2 },
     { id: "kachestvo", block: "results", title: "Качество знаний (без троек)", unit: "%", dir: "higher", target: 65, base: 68, vol: 3 },
@@ -64,34 +84,75 @@
     { id: "otlichniki", block: "results", title: "Доля отличников", unit: "%", dir: "higher", target: 12, base: 13.5, vol: 1.5 },
     { id: "sga", block: "results", title: "Средний семестровый балл", unit: "балл", dir: "higher", target: 4.0, base: 4.1, vol: 0.15 },
 
-    { id: "vyruchka", block: "finance", title: "Выручка (год)", unit: "млн ₽", dir: "higher", target: 3800, base: 3650, vol: 150 },
-    { id: "rashody", block: "finance", title: "Расходы (год)", unit: "млн ₽", dir: "lower", target: 3600, base: 3520, vol: 140 },
-    { id: "likvidnost", block: "finance", title: "Текущая ликвидность", unit: "x", dir: "higher", target: 1.5, base: 1.35, vol: 0.2 },
-    { id: "dolg", block: "finance", title: "Долговая нагрузка", unit: "%", dir: "lower", target: 40, base: 45, vol: 5 },
-    { id: "rentabel", block: "finance", title: "Рентабельность", unit: "%", dir: "higher", target: 6, base: 7.4, vol: 1.2 },
-    { id: "vnobyudjet", block: "finance", title: "Доля внебюджетных", unit: "%", dir: "higher", target: 30, base: 33, vol: 3 },
+    // Качество образования (ВНОКО)
+    // Четыре опроса — по группам респондентов, как в отчётности
+    // внутренней независимой оценки качества образования.
+    { id: "vnoko-employers", block: "vnoko", title: "Опрос работодателей", unit: "%", dir: "higher", target: 85, base: 88, vol: 2 },
+    { id: "vnoko-staff", block: "vnoko", title: "Опрос педагогических работников", unit: "%", dir: "higher", target: 85, base: 86, vol: 2 },
+    { id: "vnoko-parents", block: "vnoko", title: "Опрос родителей", unit: "%", dir: "higher", target: 85, base: 84, vol: 2 },
+    { id: "vnoko-students", block: "vnoko", title: "Опрос обучающихся", unit: "%", dir: "higher", target: 85, base: 89, vol: 2 },
+    { id: "vnoko-vpr", block: "vnoko", title: "Средний балл ВПР (СПО)", unit: "балл", dir: "higher", target: 4.0, base: 4.2, vol: 0.1 },
+    { id: "vnoko-planfact", block: "vnoko", title: "Доля ООП с опубликованным планом-фактом", unit: "%", dir: "higher", target: 95, base: 80, vol: 3 },
 
-    { id: "trudoustroystvo", block: "employ", title: "Доля трудоустроенных", unit: "%", dir: "higher", target: 80, base: 84, vol: 3 },
-    { id: "zarplata", block: "employ", title: "Ср. з/п выпускников", unit: "тыс ₽", dir: "higher", target: 55, base: 58, vol: 3 },
-    { id: "po-specialnosti", block: "employ", title: "Доля по специальности", unit: "%", dir: "higher", target: 60, base: 63, vol: 3 },
-
+    // Наука и метакомпетенции
     { id: "granty", block: "science", title: "Объём грантов", unit: "млн ₽", dir: "higher", target: 420, base: 390, vol: 25 },
     { id: "publ-scopus", block: "science", title: "Публикации Scopus/WoS", unit: "шт.", dir: "higher", target: 700, base: 680, vol: 40 },
     { id: "publ-rinc", block: "science", title: "Публикации РИНЦ", unit: "шт.", dir: "higher", target: 1400, base: 1080, vol: 70 },
     { id: "citiruemost", block: "science", title: "Цитируемость", unit: "индекс", dir: "higher", target: 12, base: 12.8, vol: 0.8 },
     { id: "patenty", block: "science", title: "Патенты и РИД", unit: "шт.", dir: "higher", target: 40, base: 38, vol: 4 },
 
-    { id: "napolnyaemost", block: "ops", title: "Наполняемость аудиторий", unit: "%", dir: "higher", target: 75, base: 78, vol: 4 },
-    { id: "nagruzka-pps", block: "ops", title: "Средняя нагрузка ППС", unit: "час.", dir: "lower", target: 900, base: 780, vol: 60 },
-    { id: "lms-activity", block: "ops", title: "Активность в LMS", unit: "индекс", dir: "higher", target: 55, base: 62, vol: 6 },
-    { id: "cifrovyye", block: "ops", title: "Цифровые сервисы (внедрённые)", unit: "шт.", dir: "higher", target: 30, base: 20, vol: 3 },
+    // Воспитательная работа и молодёжная политика
+    { id: "studcouncil", block: "upr", title: "Мероприятия студсовета", unit: "шт./год", dir: "higher", target: 60, base: 52, vol: 5 },
+    { id: "clinic", block: "upr", title: "Дела юридической клиники", unit: "шт.", dir: "higher", target: 40, base: 34, vol: 4 },
+    { id: "career-centre", block: "upr", title: "Обращений в центр карьеры", unit: "тыс", dir: "higher", target: 12, base: 11, vol: 1 },
+    { id: "vovlechennost", block: "upr", title: "Вовлечённость в воспитательные мероприятия", unit: "%", dir: "higher", target: 70, base: 66, vol: 4 },
 
-    { id: "nps", block: "reputation", title: "NPS студентов", unit: "балл", dir: "higher", target: 40, base: 44, vol: 5 },
-    { id: "udovletvorennost", block: "reputation", title: "Удовлетворённость", unit: "%", dir: "higher", target: 85, base: 88, vol: 3 },
-    { id: "upominaniya", block: "reputation", title: "Упоминания в СМИ", unit: "шт./мес", dir: "higher", target: 150, base: 112, vol: 15 },
-    { id: "ton-media", block: "reputation", title: "Тональность медиа", unit: "% позитива", dir: "higher", target: 60, base: 52, vol: 6 }
+    // Цифровые сервисы и ЭИОС
+    { id: "napolnyaemost", block: "digital", title: "Наполняемость аудиторий", unit: "%", dir: "higher", target: 75, base: 78, vol: 4 },
+    { id: "nagruzka-pps", block: "digital", title: "Средняя нагрузка ППС", unit: "час.", dir: "lower", target: 900, base: 780, vol: 60 },
+    { id: "lms-activity", block: "digital", title: "Активность в LMS", unit: "индекс", dir: "higher", target: 55, base: 62, vol: 6 },
+    { id: "cifrovyye", block: "digital", title: "Цифровые сервисы (внедрённые)", unit: "шт.", dir: "higher", target: 30, base: 20, vol: 3 },
+    { id: "eios", block: "digital", title: "Доля курсов в ЭИОС", unit: "%", dir: "higher", target: 90, base: 85, vol: 3 }
   ];
-// ---- Генерация ряда тренда для метрики ----
+
+  // ---- Образовательные программы (ФГОС) ----
+  // Источник: раздел «Образовательные стандарты и требования»
+  // на сайте университета. approved — год утверждения действующей
+  // редакции, updated — год последнего изменения. Число программ
+  // и коды реальные; численность обучающихся по программам на
+  // сайте не публикуется, поэтому здесь её нет.
+  const STANDARDS = [
+    // Бакалавриат
+    { code: "09.03.03", level: "Бакалавриат", title: "Прикладная информатика", approved: 2017, updated: 2023 },
+    { code: "37.03.01", level: "Бакалавриат", title: "Психология", approved: 2020, updated: 2023 },
+    { code: "38.03.01", level: "Бакалавриат", title: "Экономика", approved: 2020, updated: 2023 },
+    { code: "38.03.02", level: "Бакалавриат", title: "Менеджмент", approved: 2020, updated: 2023 },
+    { code: "38.03.03", level: "Бакалавриат", title: "Управление персоналом", approved: 2020, updated: 2023 },
+    { code: "38.03.05", level: "Бакалавриат", title: "Бизнес-информатика", approved: 2020, updated: 2023 },
+    { code: "40.03.01", level: "Бакалавриат", title: "Юриспруденция", approved: 2020, updated: 2023 },
+    { code: "43.03.02", level: "Бакалавриат", title: "Туризм", approved: 2017, updated: 2023 },
+    // Магистратура
+    { code: "09.04.03", level: "Магистратура", title: "Прикладная информатика", approved: 2017, updated: 2021 },
+    { code: "37.04.01", level: "Магистратура", title: "Психология", approved: 2020, updated: 2020 },
+    { code: "38.04.01", level: "Магистратура", title: "Экономика", approved: 2020, updated: 2020 },
+    { code: "38.04.02", level: "Магистратура", title: "Менеджмент", approved: 2020, updated: 2020 },
+    { code: "40.04.01", level: "Магистратура", title: "Юриспруденция", approved: 2020, updated: 2020 },
+    { code: "43.04.02", level: "Магистратура", title: "Туризм", approved: 2017, updated: 2021 },
+    // Среднее профессиональное образование
+    { code: "09.02.07", level: "СПО", title: "Информационные системы и программирование", approved: 2016, updated: 2024 },
+    { code: "09.02.11", level: "СПО", title: "Разработка и управление программным обеспечением", approved: 2025, updated: 2025 },
+    { code: "09.02.12", level: "СПО", title: "Техническая эксплуатация и сопровождение информационных систем", approved: 2025, updated: 2025 },
+    { code: "31.02.02", level: "СПО", title: "Акушерское дело", approved: 2022, updated: 2026 },
+    { code: "31.02.06", level: "СПО", title: "Стоматология профилактическая", approved: 2022, updated: 2026 },
+    { code: "33.02.01", level: "СПО", title: "Фармация", approved: 2021, updated: 2026 },
+    { code: "34.02.01", level: "СПО", title: "Сестринское дело", approved: 2022, updated: 2026 },
+    { code: "38.02.01", level: "СПО", title: "Экономика и бухгалтерский учет (по отраслям)", approved: 2024, updated: 2024 },
+    { code: "38.02.03", level: "СПО", title: "Операционная деятельность в логистике", approved: 2022, updated: 2024 },
+    { code: "40.02.04", level: "СПО", title: "Юриспруденция", approved: 2023, updated: 2023 },
+    { code: "43.02.16", level: "СПО", title: "Туризм и гостеприимство", approved: 2022, updated: 2024 }
+  ];
+
+  // ---- Генерация ряда тренда для метрики ----
   function makeSeries(def, seed) {
     const rnd = mulberry32(seed);
     const points = 12; // 12 прошлых периодов
@@ -128,7 +189,8 @@
     }
     return rows;
   }
-// ---- Сборка полного набора данных ----
+
+  // ---- Сборка полного набора данных ----
   function build(seed) {
     const rnd = mulberry32(seed);
     const blocks = BLOCKS.map((b) => ({ ...b }));
@@ -165,7 +227,7 @@
       });
       return m;
     });
-    return { blocks, metrics, dept: DEPARTMENTS, seed };
+    return { blocks, metrics, dept: DEPARTMENTS, standards: STANDARDS, seed };
   }
 
   // ---- Статус по целевым порогам ----
@@ -194,7 +256,7 @@
 
   global.DashboardData = {
     MONTHS, QUARTERS, YEARS, DEPARTMENTS,
-    BLOCKS, METRIC_DEFS,
+    BLOCKS, METRIC_DEFS, STANDARDS,
     build, computeStatus, metricsOfBlock, blocksForRole,
     initialData: initial
   };

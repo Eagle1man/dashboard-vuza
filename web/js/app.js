@@ -122,6 +122,45 @@ function updateStamp() {
     enableDrag();
   }
 
+  // ---------- Справочник образовательных программ ----------
+  // Коды, уровни и годы — реальные (сайт университета). Это не метрика
+  // с трендом, а справочник: по нему видно, сколько программ у
+  // университета и где стандарт устарел.
+  function renderStandards() {
+    var list = (state.data && state.data.standards) || [];
+    var tb = document.querySelector("#standardsTable tbody");
+    if (!tb) return;
+    tb.innerHTML = "";
+    list.forEach(function (s) {
+      var tr = document.createElement("tr");
+      // Стандарт, который не менялся дольше трёх лет, выделяем:
+      // это кандидат на пересмотр, а не ошибка в данных.
+      var stale = s.updated && (new Date().getFullYear() - s.updated) > 3;
+      tr.innerHTML = "<td>" + esc(s.code) + "</td>" +
+        "<td>" + esc(s.title) + "</td>" +
+        "<td>" + esc(s.level) + "</td>" +
+        "<td>" + (s.approved || "—") + "</td>" +
+        "<td" + (stale ? ' class="muted"' : "") + ">" +
+        (s.updated || "—") + (stale ? " ⚠" : "") + "</td>";
+      tb.appendChild(tr);
+    });
+
+    var byLevel = {};
+    list.forEach(function (s) { byLevel[s.level] = (byLevel[s.level] || 0) + 1; });
+    // Родительный падеж для уровня: «8 бакалавриата», а не «8 бакалавриат».
+    var GENITIVE = { "Бакалавриат": "бакалавриата", "Магистратура": "магистратуры", "СПО": "СПО" };
+    var parts = Object.keys(byLevel).map(function (k) {
+      return byLevel[k] + " " + (GENITIVE[k] || k.toLowerCase());
+    });
+    var year = new Date().getFullYear();
+    var fresh = list.filter(function (s) { return s.updated === year; }).length;
+    var el = $("standardsSummary");
+    if (el) {
+      el.textContent = list.length + " программ: " + parts.join(", ") +
+        ". Изменены в " + year + " году: " + fresh + ".";
+    }
+  }
+
   function widgetBlockInner(block, metrics, pl) {
     var h = '<div class="widget-block-head">' +
       '<span class="widget-block-icon">' + block.icon + "</span>" +
@@ -801,6 +840,7 @@ $("btnExportPdf").addEventListener("click", function () {
     applyTheme();
     applyRole();
     renderDashboard();
+    renderStandards();
     bindGridClicks();
     bindDetailClicks();
     bindControls();

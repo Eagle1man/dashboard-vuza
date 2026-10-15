@@ -15,7 +15,7 @@
         <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" title="Южный университет (ИУБиП)" />
         <div class="brand-text">
           <strong>Дашборд ректора</strong>
-          <span>Южный университет (ИУБиП) · демо</span>
+          <span>ЧОУ ВО «Южный университет (ИУБиП)» · демо</span>
         </div>
       </div>
       <div class="header-controls">
@@ -77,6 +77,30 @@
         </div>
       </div>
       <div id="widgetGrid" class="widget-grid"></div>
+
+      <!-- Справочник образовательных программ по ФГОС.
+           Коды и годы — реальные, с сайта университета. Численность
+           обучающихся по программам на сайте не публикуется. -->
+      <div class="section-card" id="standardsCard">
+        <h3>Образовательные программы по ФГОС</h3>
+        <p class="sub" id="standardsSummary"></p>
+        <div class="table-wrap">
+          <table class="data" id="standardsTable">
+            <thead>
+              <tr>
+                <th>Код</th><th>Программа</th><th>Уровень</th>
+                <th>Утверждён</th><th>Изменён</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:10px">
+          ⚠ — стандарт не менялся более трёх лет: кандидат на пересмотр,
+          а не ошибка в данных. Численность обучающихся по программам
+          на сайте не публикуется.
+        </p>
+      </div>
     </section>
 
     <!-- Вью 2: Детализация блока -->
@@ -144,7 +168,7 @@
 
   <footer class="app-footer">
     <img src="img/iubip-logo.svg" alt="Южный университет (ИУБиП)" class="footer-logo" />
-    <span class="footer-note">Дашборд ректора · показатели ленты — демонстрационные · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
+    <span class="footer-note">ЧОУ ВО «Южный университет (ИУБиП)» · Дашборд ректора · показатели ленты — демонстрационные · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
   </footer>
 
   <script src="js/data.js"></script>

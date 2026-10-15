@@ -135,7 +135,7 @@
     const reportMatch = /(отчёт|отчет|сводк|summary|резюме|недельный|еженедел)/.test(q);
     if (reportMatch) {
       let blockId = null;
-      const blockAlias = { "финанс": "finance", "приём": "academic", "контингент": "academic", "академич": "results", "трудоустро": "employ", "исследова": "science", "операцион": "ops", "репута": "reputation", "студенческий опыт": "reputation" };
+      const blockAlias = { "приём": "academic", "контингент": "academic", "академич": "results", "успеваем": "results", "качество образования": "vnoko", "внoko": "vnoko", "вноко": "vnoko", "опрос": "vnoko", "план-факт": "vnoko", "впр": "vnoko", "наук": "science", "грант": "science", "публикац": "science", "воспитан": "upr", "студсовет": "upr", "клиник": "upr", "карьер": "upr", "цифров": "digital", "lms": "digital", "эиос": "digital", "нагрузк": "digital" };
       Object.keys(blockAlias).forEach((k) => { if (q.indexOf(k) !== -1) blockId = blockAlias[k]; });
       if (!blockId) blockId = ctx.currentBlockId || "academic";
       return reportByBlock(question, data, blockId, dept, charts);
@@ -143,7 +143,7 @@
 
     if (matched.length === 0) {
       return {
-        text: "Не удалось однозначно сопоставить вопрос с метриками дашборда. Уточните тему: приём и контингент, успеваемость, финансы, трудоустройство, наука, операционная эффективность, репутация. Например: «Почему выросло отчисление на 1 курсе?»",
+        text: "Не удалось однозначно сопоставить вопрос с метриками дашборда. Уточните тему: приём и контингент, успеваемость, качество образования (ВНОКО), наука, воспитательная работа и карьера, цифровые сервисы. Например: «Почему выросло отчисление на 1 курсе?»",
         source: "Семантический слой метрик",
         charts: []
       };
