@@ -144,8 +144,16 @@
       m.delta = m.prev ? ((m.current - m.prev) / m.prev) * 100 : 0;
       m.status = computeStatus(m);
       // значения по подразделениям
+      // Доли подразделений обязаны в сумме давать итог по университету.
+      // Раньше каждое подразделение получало base * (0.82...1.18)
+      // независимо, и шесть таких значений давали примерно шестикратный
+      // итог. Это было незаметно, пока цифры показывались только общей
+      // строкой; как только агенты стали считать разбивку по факультетам,
+      // части перестали сходиться с целым.
+      const weights = DEPARTMENTS.map(function () { return 0.82 + rnd() * 0.36; });
+      const wsum = weights.reduce(function (a, b) { return a + b; }, 0);
       m.dept = DEPARTMENTS.map((d, di) => {
-        const v = m.base * (0.82 + rnd() * 0.36);
+        const v = m.current * (weights[di] / wsum);
         const rounded = Math.round(v * 10) / 10;
         const share = (rounded / m.current) * 100;
         return { deptId: d.id, deptName: d.name, value: rounded, share };

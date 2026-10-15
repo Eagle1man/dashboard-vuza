@@ -53,6 +53,7 @@ def _delete_doc(conn, doc_id: int):
         conn.execute("DELETE FROM chunk_fts WHERE chunk_id = ?", (row[0],))
         conn.execute("DELETE FROM chunk_vec WHERE chunk_id = ?", (row[0],))
     conn.execute("DELETE FROM doc_chunk WHERE doc_id = ?", (doc_id,))
+    conn.execute("DELETE FROM doc_page WHERE doc_id = ?", (doc_id,))
     conn.execute("DELETE FROM doc WHERE doc_id = ?", (doc_id,))
 
 
@@ -65,7 +66,7 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
     if existing and existing["sha256"] == sha and not force:
         return {"path": rel, "status": "unchanged", "chunks": 0}
 
-    text = extract.extract_text(path)
+    text, page_info = extract.extract_text_with_pages(path)
     if not text or not text.strip():
         if existing:
             _delete_doc(conn, int(existing["doc_id"]))
@@ -105,6 +106,15 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
             "INSERT OR IGNORE INTO doc_block(doc_id, block_id) VALUES(?,?)",
             (doc_id, block_id))
 
+    for pg in (page_info or []):
+        conn.execute(
+            "INSERT OR REPLACE INTO doc_page"
+            "(doc_id, page_no, kind, n_chars, n_images, n_tables)"
+            " VALUES(?,?,?,?,?,?)",
+            (doc_id, int(pg.get("page_no", 0)), pg.get("kind", "text"),
+             int(pg.get("n_chars", 0)), int(pg.get("n_images", 0)),
+             int(pg.get("n_tables", 0))))
+
     # inserted держит пары (chunk_id, текст) в том же порядке, в котором
     # считаются эмбеддинги. Раньше id брались повторным SELECT'ом с
     # нарезкой по позиции — как только один кусок отбрасывался,
@@ -139,7 +149,10 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
 
     return {"path": rel, "status": "indexed", "chunks": len(inserted),
             "dropped_dupes": dropped, "backend": backend, "title": title,
-            "block_id": blocks[0] if blocks else None, "blocks": blocks}
+            "block_id": blocks[0] if blocks else None, "blocks": blocks,
+            "pages": len(page_info or []),
+            "graphic_pages": sum(1 for pg in (page_info or [])
+                                 if pg.get("kind") == "image")}
 
 
 def ingest(force=False, prune=False, root: Path = None) -> dict:
@@ -171,6 +184,16 @@ def ingest(force=False, prune=False, root: Path = None) -> dict:
         conn.commit()
 
     db.set_meta(conn, "last_ingest", time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # Граф связей строится после индексации: он опирается на заголовки
+    # разделов и номера приказов, которые появляются только вместе с
+    # кусками. Ошибка здесь не должна срывать индексацию — корпус
+    # уже загружен, а без графа поиск просто работает чуть хуже.
+    try:
+        from . import graph
+        report["graph"] = graph.build(conn)
+    except Exception as exc:
+        report["graph"] = {"error": str(exc)}
 
     # Схлопываем журнал WAL в основной файл. Иначе после долгой работы
     # основной файл оказывается меньше журнала, и копия одного файла

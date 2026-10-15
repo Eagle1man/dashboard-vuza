@@ -28,16 +28,105 @@ def _require(modname, hint):
         ) from exc
 
 
-def read_pdf(path: Path) -> str:
+def _table_to_markdown(table) -> str:
+    """Таблица PyMuPDF -> markdown, с ручной сборкой как запасным путём."""
+    try:
+        md = table.to_markdown()
+        if md and md.strip():
+            return md.strip()
+    except Exception:
+        pass
+    try:
+        rows = table.extract()
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    lines = []
+    for row in rows:
+        cells = ["" if c is None else str(c).strip().replace("|", "/") for c in row]
+        if any(cells):
+            lines.append("| " + " | ".join(cells) + " |")
+    if not lines:
+        return ""
+    header = "| " + " | ".join(["---"] * (lines[0].count("|") - 1)) + " |"
+    return header + "\n" + "\n".join(lines)
+
+
+# Порог «страница почти без текста». Точное значение неважно: важно,
+# чтобы страница с одним заголовком и схемой не считалась пустой,
+# а страница с половиной текста — считалась графической.
+GRAPHIC_TEXT_LIMIT = 120
+
+
+def read_pdf(path: Path):
+    """Возвращает (текст, список страниц).
+
+    Про графические страницы. Если молча пропускать страницу, где нет
+    извлекаемого текста, ассистент потом уверенно скажет «в документе
+    про это ничего нет» — хотя на странице схема. Поэтому такая
+    страница получает явную пометку в тексте: её видит модель и может
+    сказать «здесь график, прочитать не могу».
+
+    Таблицы из PDF достаются и кладутся в текст как markdown — так же,
+    как это уже делается для XLSX.
+    """
     fitz = _require("fitz", "нужен для чтения PDF")
-    parts = []
+    parts, pages = [], []
+
     with fitz.open(str(path)) as doc:
         for page_no, page in enumerate(doc, start=1):
-            text = page.get_text("text") or ""
-            text = text.strip()
-            if text:
-                parts.append(f"\n\n[стр. {page_no}]\n{text}")
-    return "".join(parts)
+            text = (page.get_text("text") or "").strip()
+
+            try:
+                n_images = len(page.get_images(full=True))
+            except Exception:
+                n_images = 0
+
+            tables_md = []
+            try:
+                found = page.find_tables()
+                for t in (found.tables if found else []):
+                    md = _table_to_markdown(t)
+                    if md:
+                        tables_md.append(md)
+            except Exception:
+                # Таблицы находятся не на всех файлах и не во всех
+                # сборках: отсутствие не повод ронять весь документ.
+                tables_md = []
+
+            kind = "text"
+            if tables_md and not text:
+                kind = "table"
+            if n_images and len(text) < GRAPHIC_TEXT_LIMIT:
+                kind = "image"
+
+            body = text
+            for md in tables_md:
+                body += ("\n\n[таблица со страницы " + str(page_no) + "]\n\n" + md)
+            if kind == "image":
+                body += (
+                    "\n\n[ВНИМАНИЕ, страница " + str(page_no) + ": на странице "
+                    "изображение, схема или график. Текстовый слой либо "
+                    "отсутствует, либо слишком короткий, поэтому содержание "
+                    "изображения НЕ извлечено. Не делай выводов о том, что "
+                    "на нём изображено.]")
+
+            pages.append({
+                "page_no": page_no,
+                "kind": kind,
+                "n_chars": len(text),
+                "n_images": n_images,
+                "n_tables": len(tables_md),
+            })
+            parts.append("\n\n[стр. " + str(page_no) + "]\n" + body)
+
+    return "".join(parts), pages
+
+
+def read_pdf_text(path: Path) -> str:
+    """Только текст PDF — для случаев, где страницы не нужны."""
+    return read_pdf(path)[0]
 
 
 def read_docx(path: Path) -> str:
@@ -120,19 +209,32 @@ def read_html(path: Path) -> str:
 
 def extract_text(path):
     """Возвращает текст документа или None, если формат не поддержан."""
+    return extract_text_with_pages(path)[0]
+
+
+def extract_text_with_pages(path):
+    """Возвращает (текст, список страниц).
+
+    Для PDF разбор идёт постранично: у каждой страницы запоминается,
+    есть ли на ней изображение и нашлась ли таблица. Эти сведения нужны,
+    чтобы система могла сказать «здесь график, текст не извлечён», а не
+    промолчать и выдать уверенный ответ по неполным данным.
+
+    Для остальных форматов список страниц пустой, текст прежний.
+    """
     path = Path(path)
     ext = path.suffix.lower()
     if ext in _PDF:
         return read_pdf(path)
     if ext in _DOCX:
-        return read_docx(path)
+        return read_docx(path), []
     if ext in _XLSX:
-        return read_xlsx(path)
+        return read_xlsx(path), []
     if ext in _MD:
-        return read_text(path)
+        return read_text(path), []
     if ext in _HTML:
-        return read_html(path)
-    return None
+        return read_html(path), []
+    return None, []
 
 
 def doc_type(path) -> str:

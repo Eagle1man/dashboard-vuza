@@ -319,3 +319,72 @@ html[data-theme="dark"] .ai-logo,
 html[data-theme="dark"] .footer-logo {
   display: none;
 }
+
+
+/* ---------- Числа из витрины под ответом ---------- */
+/* Отдельный блок, а не часть текста ответа: эти числа посчитал код по
+   таблице витрины, и человек должен видеть источник и пометку о
+   демонстрационном характере, не вычитывая это из вдохновенного
+   текста модели. */
+.metrics-box {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+.metrics-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.metrics-title { font-weight: 600; font-size: 12.5px; }
+.metrics-demo {
+  font-size: 10.5px;
+  color: #9a6c14;
+  border: 1px solid #d9a441;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+[data-theme="dark"] .metrics-demo { color: #e8bd6a; }
+
+.metrics-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+.metrics-row { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.metrics-row .up { color: #2e9e6b; }
+.metrics-row .down { color: #c2554f; }
+.metrics-row .st-green { color: #2e9e6b; }
+.metrics-row .st-yellow { color: #9a6c14; }
+.metrics-row .st-red { color: #c2554f; }
+
+.metrics-depts {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 9px;
+  margin-bottom: 3px;
+}
+.metrics-box ul { margin: 0; padding-left: 16px; font-size: 12px; }
+.metrics-box li { margin: 1px 0; }
+.metrics-box li span { color: var(--text-muted); }
+.metrics-box li b { float: right; }
+
+.metrics-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.metrics-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #9a6c14;
+}
+[data-theme="dark"] .metrics-note { color: #e8bd6a; }

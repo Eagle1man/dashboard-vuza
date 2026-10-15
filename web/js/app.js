@@ -520,6 +520,61 @@ function updateStamp() {
     box.scrollTop = box.scrollHeight;
   }
 
+  // Числа из витрины показываются отдельным блоком, а не только текстом
+  // ответа: их посчитал код по таблице, и человек должен видеть, откуда
+  // они взялись и что они демонстрационные.
+  function renderMetrics(m) {
+    var met = m.metric;
+    var h = '<div class="metrics-box">' +
+      '<div class="metrics-head">' +
+      '<span class="metrics-title">' + esc(met.title) + "</span>" +
+      '<span class="metrics-demo">' + esc(m.label || "демо-данные") + "</span>" +
+      "</div>";
+
+    if (m.current !== null && m.current !== undefined) {
+      h += '<div class="metrics-value">' + esc(String(m.current)) +
+        (met.unit ? " " + esc(met.unit) : "") + "</div>";
+    }
+    h += '<div class="metrics-row">';
+    if (m.delta !== null && m.delta !== undefined) {
+      h += '<span class="' + (m.delta >= 0 ? "up" : "down") + '">изменение ' +
+        (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + " %</span> · ";
+    }
+    if (met.target !== null && met.target !== undefined) {
+      h += "цель " + esc(String(met.target)) +
+        (met.unit ? " " + esc(met.unit) : "");
+      if (met.status) {
+        h += ' · <span class="st st-' + esc(met.status) + '">' +
+          ({ green: "в норме", yellow: "на грани", red: "ниже нормы" }[met.status] || met.status) +
+          "</span>";
+      }
+    }
+    h += "</div>";
+
+    if (m.by_org && m.by_org.length) {
+      h += '<div class="metrics-depts">по подразделениям:</div><ul>';
+      m.by_org.forEach(function (o) {
+        h += "<li><span>" + esc(o.title) + "</span><b>" +
+          esc(String(o.value)) + (met.unit ? " " + esc(met.unit) : "") +
+          "</b></li>";
+      });
+      h += "</ul>";
+    }
+
+    if (m.periods && m.periods.length > 1) {
+      h += '<div class="metrics-depts">по периодам:</div><div class="metrics-periods">';
+      m.periods.forEach(function (pp) {
+        h += "<span>" + esc(pp.label) + ": <b>" + esc(String(pp.value)) +
+          "</b></span>";
+      });
+      h += "</div>";
+    }
+
+    h += '<div class="metrics-note">' + esc(m.notice || "") + "</div>";
+    h += "</div>";
+    return h;
+  }
+
   function renderCrewTrace(c) {
     var h = '<details class="crew-trace"><summary>Ход работы · ' +
       c.trace.length + " шагов · " +
@@ -627,6 +682,10 @@ function updateStamp() {
           '</div><div class="src-snip">' + esc(s.snippet) + "</div></div>";
       });
       h += "</details>";
+    }
+
+    if (res.crew && res.crew.metrics && res.crew.metrics.metric) {
+      h += renderMetrics(res.crew.metrics);
     }
 
     // Ход работы экипажа. Показываем всегда, когда он был: иначе

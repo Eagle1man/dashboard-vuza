@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS doc_block (
 );
 CREATE INDEX IF NOT EXISTS doc_block_block ON doc_block(block_id);
 
+-- Что лежит на каждой странице документа.
+-- Нужно, чтобы система могла честно сказать «на этой странице график,
+-- текст не извлечён», вместо того чтобы молчать и выдавать уверенный
+-- ответ по неполным данным.
+CREATE TABLE IF NOT EXISTS doc_page (
+  doc_id    INTEGER NOT NULL REFERENCES doc(doc_id) ON DELETE CASCADE,
+  page_no   INTEGER NOT NULL,
+  kind      TEXT NOT NULL,        -- text | table | image
+  n_chars   INTEGER DEFAULT 0,
+  n_images  INTEGER DEFAULT 0,
+  n_tables  INTEGER DEFAULT 0,
+  PRIMARY KEY (doc_id, page_no)
+);
+CREATE INDEX IF NOT EXISTS doc_page_kind ON doc_page(kind);
+
 CREATE TABLE IF NOT EXISTS doc_chunk (
   chunk_id   INTEGER PRIMARY KEY,
   doc_id     INTEGER NOT NULL REFERENCES doc(doc_id) ON DELETE CASCADE,
@@ -453,9 +468,17 @@ def build_demo(seed=config.DEMO_SEED):
         delta = ((current - prev) / prev * 100) if prev else 0.0
         base, _ = GEN[mid]
 
+        # Доли подразделений обязаны в сумме давать итог по университету.
+        # Раньше каждое подразделение получало base * (0.82...1.18)
+        # независимо, и шесть таких значений давали примерно шестикратный
+        # итог. Дефект был не виден, пока цифры показывались только общей
+        # строкой; как только агенты стали считать разбивку по факультетам,
+        # части перестали сходиться с целым.
+        weights = [0.82 + rnd() * 0.36 for _ in DEPARTMENTS]
+        wsum = sum(weights)
         dept_values = []
-        for dept_id, dept_name in DEPARTMENTS:
-            v = base * (0.82 + rnd() * 0.36)
+        for di, (dept_id, dept_name) in enumerate(DEPARTMENTS):
+            v = current * (weights[di] / wsum)
             rounded = js_round(v * 10) / 10
             dept_values.append({
                 "dept_id": dept_id, "dept_name": dept_name,

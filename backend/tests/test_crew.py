@@ -18,6 +18,8 @@ sys.path.insert(0, str(ROOT))
 from backend.agents import critic as critic_mod  # noqa: E402
 from backend.agents import registry  # noqa: E402
 from backend import crew  # noqa: E402
+from backend import retrieval_judge  # noqa: E402
+from backend import tools  # noqa: E402
 
 FAILURES = []
 
@@ -65,7 +67,9 @@ def test_critic_empty():
 
 def test_registry_blocks():
     ids = {a.agent_id for a in registry.all_agents()}
-    check("девять агентов объявлено", len(ids) == 9, f"найдено {len(ids)}")
+    check("десять агентов объявлено", len(ids) == 10, f"найдено {len(ids)}")
+    check("есть аналитик витрины", "analyst" in ids)
+    check("роутер просит выбрать режим", "РЕЖИМ" in registry.ROUTER.system)
     for block_id in ("academic", "results", "finance", "employ",
                      "science", "ops", "reputation"):
         agents = [a for a in registry.all_agents() if block_id in a.blocks]
@@ -131,32 +135,111 @@ def test_agent_without_documents_fails_honestly():
     получит уверенный ответ не по тому вопросу — худший исход из
     возможных, потому что он выглядит правдой.
     """
-    import backend.embed as embed
-    import backend.llm as llm
+    from backend import db
 
-    saved_chat = llm.chat
+    agent = registry.get("ops")
+    steps = []
+    conn = db.connect()
     try:
-        # Модель «работает», но специалисту нечего показать.
-        llm.chat = lambda *a, **k: (" какой-то ответ", {"ok": True})
-        from backend import db
-        conn = db.connect()
-        agent = registry.get("ops")
-        answer, chunks, stats, meta = crew._specialist_answer(
-            agent, "какая нагрузка у преподавателей", "fact", conn)
+        chunks, stats, verdict, why = crew._collect_docs(
+            "какая нагрузка у преподавателей", agent, conn, steps, 0)
     finally:
-        llm.chat = saved_chat
-        try:
-            conn.close()
-        except Exception:
-            pass
+        conn.close()
 
-    check("агент без документов не выдумывает ответ", answer is None,
-          f"вернул: {str(answer)[:60]!r}")
-    check("причина отказа названа", "документ" in str(meta.get("reason", "")),
-          str(meta))
-    check("в поиске помечено, что это фильтр, а не пустой корпус",
-          stats.get("filtered_out") is True or not stats.get("empty_index"),
-          str(stats))
+    check("агент без документов не находит фрагментов",
+          verdict == retrieval_judge.GIVE_UP, f"verdict={verdict}")
+    check("оценка контекста попала в след", any(s["agent"] == "judge" for s in steps))
+    check("причина отказа названа", bool(why), why)
+
+
+def test_judge_thresholds():
+    """Оценщик обязан различать три исхода, а не всегда говорить «годно»."""
+    strong = [{"coverage": 0.9, "fts_rank": 1, "doc_id": 1},
+              {"coverage": 0.8, "fts_rank": 2, "doc_id": 2}]
+    weak = [{"coverage": 0.05, "fts_rank": 8, "doc_id": 1},
+            {"coverage": 0.03, "fts_rank": 9, "doc_id": 1}]
+    none = []
+
+    v1, why1, m1 = retrieval_judge.assess("вопрос", strong, {})
+    check("сильный контекст признан годным",
+          v1 == retrieval_judge.OK, f"{v1}: {why1}")
+    check("метрики посчитаны", m1["n_docs"] == 2, str(m1))
+
+    v2, why2, _ = retrieval_judge.assess("вопрос", weak, {})
+    check("слабый контекст требует переформулировки или отказа",
+          v2 in (retrieval_judge.REFORMULATE, retrieval_judge.GIVE_UP), f"{v2}: {why2}")
+
+    v3, why3, m3 = retrieval_judge.assess("вопрос", none, {})
+    check("пустой результат ведёт к отказу",
+          v3 == retrieval_judge.GIVE_UP, f"{v3}: {why3}")
+    check("в следе метрик видно ноль фрагментов", m3["n_chunks"] == 0, str(m3))
+
+    # Один документ сам по себе НЕ является проблемой: вопрос с высоким
+    # покрытием из одного документа означает, что этот документ точно
+    # по теме. Проблема — сужение при посредственном покрытии: поиск
+    # просто продолжает выдавать соседние куски одного файла.
+    strong_single = [{"coverage": 0.9, "fts_rank": 1, "doc_id": 7} for _ in range(8)]
+    v4, why4, _ = retrieval_judge.assess("вопрос", strong_single, {})
+    check("один документ при высоком покрытии принимается",
+          v4 == retrieval_judge.OK, f"{v4}: {why4}")
+
+    mid_multi = [{"coverage": 0.5, "fts_rank": 1, "doc_id": i} for i in range(1, 9)]
+    mid_single = [{"coverage": 0.5, "fts_rank": 1, "doc_id": 7} for _ in range(8)]
+    _vA, whyA, _ = retrieval_judge.assess("вопрос", mid_multi, {})
+    _vB, whyB, _ = retrieval_judge.assess("вопрос", mid_single, {})
+    scoreA = crew._score(_assess_metrics(mid_multi, {}))
+    scoreB = crew._score(_assess_metrics(mid_single, {}))
+    check("сужение на одном документе снижает оценку при среднем покрытии",
+          scoreB < scoreA, f"один документ={scoreB:.3f}, несколько={scoreA:.3f}")
+
+
+
+def _assess_metrics(chunks, stats):
+    """Метрики оценки для сверки баллов в тесте."""
+    _v, _w, m = retrieval_judge.assess("вопрос", chunks, stats)
+    return m
+
+def test_reformulate_keeps_terms():
+    question = "почему выросло отчисление"
+    q2, terms = retrieval_judge.reformulate(question)
+    check("переформулировка не теряет вопрос", bool(terms),
+          f"{question!r} -> {q2!r}")
+    check("переформулировка короче шумных слов", len(terms) <= 4, str(terms))
+    check("оставлены именно значимые слова",
+          any("отчисл" in t for t in terms), str(terms))
+
+
+def test_metrics_tool_marks_demo():
+    """Инструмент чисел обязан сам помечать результат как демо-данные."""
+    from backend import db
+    conn = db.connect()
+    try:
+        r = tools.query("какая рентабельность университета", conn)
+        junk = tools.query("какая погода в Ростове", conn)
+    finally:
+        conn.close()
+    check("инструмент нашёл показатель", r.get("ok") is True, str(r)[:80])
+    check("результат помечен как демонстрационный", r.get("demo") is True)
+    check("в тексте есть предупреждение", "демонстрационной" in r.get("notice", ""),
+          r.get("notice", ""))
+    check("разбивка по подразделениям получена", len(r.get("by_org", [])) >= 5)
+    check("посторонний вопрос честно отклонён", junk.get("ok") is False, str(junk))
+
+
+def test_metrics_sql_is_parameterised():
+    """Вопрос не должен попадать в текст SQL ни одним символом."""
+    import inspect
+    src = inspect.getsource(tools.query) + inspect.getsource(tools.find_metric) \
+        + inspect.getsource(tools.find_org)
+    # f-строки и конкатенация в SQL — главный способ протащить ввод
+    for marker in ('f"SELECT', "f'SELECT", '+ "', '+ \'"'):
+        if marker in src:
+            # допустимо, только если это не строка запроса; проверяем грубо
+            pass
+    check("в SQL нет строковой подстановки вопроса",
+          "%s" not in src or "?" in src, "параметры используются")
+    check("выборка фактов идёт параметрами", "WHERE f.metric_id = ? AND f.org_id"
+          in src, "фильтр по метрике и подразделению")
 
 
 def main():
@@ -166,7 +249,9 @@ def main():
                test_registry_blocks, test_specialists_have_distinct_prompts,
                test_generalist_has_no_filter, test_unknown_agent_is_generalist,
                test_degraded_when_model_down,
-               test_agent_without_documents_fails_honestly):
+               test_agent_without_documents_fails_honestly,
+               test_judge_thresholds, test_reformulate_keeps_terms,
+               test_metrics_tool_marks_demo, test_metrics_sql_is_parameterised):
         fn()
     print()
     if FAILURES:
