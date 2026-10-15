@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 740 120" role="img" aria-label="Южный университет (ИУБиП)">
+  <defs>
+    <style>
+      .ru { font: 700 30px "Segoe UI", Arial, sans-serif; fill: #1f3d7a; letter-spacing: 1px; }
+      .en { font: 400 19px "Segoe UI", Arial, sans-serif; fill: #6b7c9b; letter-spacing: 2px; }
+    </style>
+  </defs>
+  <!-- ===== Глобус ===== -->
+  <g transform="translate(58,58)">
+    <g fill="none" stroke="#1f3d7a" stroke-width="4">
+      <circle r="50"/>
+      <ellipse rx="22" ry="50"/>
+      <ellipse rx="40" ry="50"/>
+      <line x1="-50" y1="0" x2="50" y2="0"/>
+      <ellipse rx="50" ry="20"/>
+      <ellipse rx="50" ry="36"/>
+    </g>
+    <!-- ===== Красная монограмма W+V+E ===== -->
+    <g fill="#d8232a">
+      <text x="-38" y="6" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="700" font-size="52" transform="skewX(-8)">W</text>
+      <text x="-6" y="30" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="700" font-size="46" transform="skewX(-8)">V</text>
+      <text x="4" y="-8" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-weight="700" font-size="44" transform="skewX(-8)">E</text>
+      <rect x="-3" y="-4" width="14" height="4" rx="2"/>
+    </g>
+  </g>
+  <!-- ===== Подпись ===== -->
+  <line x1="132" y1="14" x2="132" y2="106" stroke="#d5dbe8" stroke-width="2"/>
+  <text x="152" y="58" class="ru" textLength="560" lengthAdjust="spacingAndGlyphs">ЮЖНЫЙ УНИВЕРСИТЕТ (ИУБиП)</text>
+  <text x="153" y="90" class="en" textLength="380" lengthAdjust="spacingAndGlyphs">SOUTHERN UNIVERSITY (IMBL)</text>
+</svg>

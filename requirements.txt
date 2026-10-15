@@ -1,0 +1,18 @@
+# Зависимости бэкенда дашборда ректора.
+# Версии нижние: проверено на Python 3.11–3.14.
+#
+# Установка: install.bat (создаёт .venv и ставит это)
+# или вручную: python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
+
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.0
+
+# векторы и поиск
+numpy>=1.26
+
+# чтение документов. pymupdf — для PDF, остальное — по вкусу:
+# если вуз не приносит DOCX/XLSX, эти три можно убрать.
+pymupdf>=1.24
+python-docx>=1.1
+openpyxl>=3.1

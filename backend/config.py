@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+"""
+Пути, настройки и модели. Один файл, чтобы установщик и бэкенд
+читали одно и то же место.
+"""
+import os
+from pathlib import Path
+
+# Корень проекта — на уровень выше backend/
+ROOT = Path(__file__).resolve().parent.parent
+
+WEB_DIR = ROOT / "web"
+KNOWLEDGE_DIR = ROOT / "knowledge"
+DATA_DIR = ROOT / "data"
+LOG_DIR = ROOT / "logs"
+
+DB_PATH = DATA_DIR / "dashboard.db"
+BACKUP_DIR = DATA_DIR / "backup"
+
+# Локальный сервер Ollama.
+# Именно 127.0.0.1, а не localhost: при выключенной Ollama имя хоста
+# дополнительно тратит около двух секунд на попытку разрешения IPv6
+# (::1) — а такие проверки идут при каждой загрузке страницы.
+OLLAMA_URL = os.environ.get("RECTOR_OLLAMA_URL", "http://127.0.0.1:11434")
+OLLAMA_TIMEOUT = float(os.environ.get("RECTOR_OLLAMA_TIMEOUT", "300"))
+
+# Наш бэкенд
+API_HOST = "127.0.0.1"
+API_PORT = int(os.environ.get("RECTOR_API_PORT", "8765"))
+
+# --- Параметры чанкинга -------------------------------------------------
+# Заданы в токенах, а не в символах: у русского текста символ/токен
+# соотношение примерно 2:1, и резать по символам нестабильно.
+CHUNK_TOKENS = int(os.environ.get("RECTOR_CHUNK_TOKENS", "700"))
+CHUNK_OVERLAP = int(os.environ.get("RECTOR_CHUNK_OVERLAP", "120"))
+
+# Сколько фрагментов уходит в LLM
+RETRIEVE_TOP_K = int(os.environ.get("RECTOR_TOP_K", "20"))
+CONTEXT_CHUNKS = int(os.environ.get("RECTOR_CONTEXT_CHUNKS", "6"))
+
+# Коэффициент слияния RRF (Reciprocal Rank Fusion)
+RRF_K = 60
+
+# Порог схожести, ниже которого векторный канал считается бесполезным.
+# Смысл: если ни один фрагмент не близок к вопросу по вектору, вопрос
+# не про этот корпус — и честнее сказать «не найдено», чем подсунуть
+# нерелевантное. Эмбеддинги нормализованы, поэтому косинус в 0..1.
+MIN_COSINE = float(os.environ.get("RECTOR_MIN_COSINE", "0.42"))
+
+# Вес переранжирования по покрытию вопроса. Сопоставим с величинами
+# RRF (порядка 0.02–0.03), чтобы заметно влиять, но не перебивать
+# саму релевантность: покрытие — добавка к рангу, не замена ему.
+COVERAGE_WEIGHT = float(os.environ.get("RECTOR_COVERAGE_WEIGHT", "0.04"))
+
+# --- Модели -------------------------------------------------------------
+# Подбираются автоматически по железу, см. autoconfig.py.
+# Здесь — только варианты, из которых он выбирает.
+MODELS_TINY = ["qwen2.5:1.5b"]
+MODELS_SMALL = ["qwen2.5:3b"]
+MODELS_MEDIUM = ["qwen2.5:7b"]
+
+EMBED_TINY = ["nomic-embed-text"]
+EMBED_MEDIUM = ["bge-m3"]
+
+# Сид демонстрационных метрик. Тот же, что в web/js/data.js,
+# чтобы числа на экране и в базе совпадали.
+DEMO_SEED = 2026
+
+SUPPORTED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".md", ".txt", ".html", ".htm"}
+
+DEMO_BANNER = "демонстрационные данные"

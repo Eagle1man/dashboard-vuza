@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора · Южный университет (ИУБиП)</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo-mark.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Шапка -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-logo" src="img/logo-mark.svg" alt="Логотип Южного университета (ИУБиП)" title="Южный университет (ИУБиП)" />
+        <div class="brand-text">
+          <strong>Дашборд ректора</strong>
+          <span>Южный университет (ИУБиП) · демо</span>
+        </div>
+        <img class="brand-lockup" src="img/logo.svg" alt="Южный университет (ИУБиП) — Southern University (IMBL)" />
+      </div>
+      <div class="header-controls">
+        <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
+        <div class="search-wrap">
+          <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
+          <span id="searchBadge" class="search-badge" hidden></span>
+        </div>
+        <div class="role-switch" title="Демонстрация ролевого доступа">
+          <label for="roleSelect">Роль</label>
+          <select id="roleSelect">
+            <option value="rector">Ректор</option>
+            <option value="prorector">Проректор</option>
+            <option value="admin">Администратор</option>
+          </select>
+        </div>
+        <button id="themeToggle" class="icon-btn" title="Переключить тему" aria-label="Тема">◐</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- Вью 1: Лента показателей -->
+    <section id="view-dashboard" class="view active">
+      <div class="page-head">
+        <div>
+          <h1>Лента показателей</h1>
+          <p class="sub" id="updateStamp">Обновлено: —</p>
+        </div>
+        <div class="page-actions">
+          <button id="btnRefresh" class="btn btn-primary">⟳ Обновить все данные</button>
+          <button id="btnExportCsv" class="btn btn-outline" title="Экспорт сводки в CSV">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Период</label>
+          <select id="filterPeriod">
+            <option value="month">Месяц</option>
+            <option value="quarter">Квартал</option>
+            <option value="year" selected>Год</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Подразделение</label>
+          <select id="filterDepartment"><option value="all">Все</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Статус</label>
+          <select id="filterStatus">
+            <option value="all">Все</option>
+            <option value="green">Зелёный</option>
+            <option value="yellow">Жёлтый</option>
+            <option value="red">Красный</option>
+          </select>
+        </div>
+        <div class="filter-group filter-tip">
+          <span>🖱 Перетаскивайте блоки для настройки порядка</span>
+        </div>
+      </div>
+      <div id="widgetGrid" class="widget-grid"></div>
+    </section>
+
+    <!-- Вью 2: Детализация блока -->
+    <section id="view-detail" class="view">
+      <div class="page-head">
+        <div>
+          <button id="btnBack" class="btn btn-ghost">← Назад к ленте</button>
+          <h2 id="detailTitle">Блок</h2>
+          <p class="sub" id="detailSubtitle"></p>
+        </div>
+        <div class="page-actions">
+          <button id="btnDetailCsv" class="btn btn-outline" title="Экспорт в CSV">⬇ CSV</button>
+          <button id="btnExportPdf" class="btn btn-outline" title="Экспорт в PDF (демо)">PDF</button>
+          <button id="btnExportXlsx" class="btn btn-outline" title="Экспорт в Excel (демо)">XLSX</button>
+        </div>
+      </div>
+      <div id="detailBody"></div>
+    </section>
+
+    <!-- Вью 3: Drill-down -->
+    <section id="view-drilldown" class="view">
+      <div class="page-head">
+        <div>
+          <button id="btnBackDrill" class="btn btn-ghost">← Назад к блоку</button>
+          <h2 id="drillTitle">Детализация</h2>
+          <p class="sub" id="drillSubtitle"></p>
+        </div>
+        <div class="page-actions">
+          <button id="btnDrillCsv" class="btn btn-outline" title="Экспорт записей в CSV">⬇ CSV</button>
+        </div>
+      </div>
+      <div id="drillBody"></div>
+    </section>
+  </main>
+<!-- ИИ-ассистент -->
+  <aside id="aiPanel" class="ai-panel" hidden>
+    <div class="ai-header">
+      <div class="ai-header-brand">
+        <img src="img/logo-mark.svg" alt="" class="ai-logo" />
+        <div>
+          <strong>Аналитик ректора</strong>
+          <span class="ai-status" id="aiStatus">Онлайн</span>
+        </div>
+      </div>
+      <button id="aiClose" class="icon-btn" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="ai-messages" id="aiMessages"></div>
+    <div class="ai-actions" id="aiSuggestions"></div>
+    <form id="aiForm" class="ai-input">
+      <input id="aiInput" type="text" placeholder="Например: почему выросло отчисление на 1 курсе?" autocomplete="off" />
+      <button type="submit" class="btn btn-primary">➤</button>
+    </form>
+  </aside>
+  <button id="aiOpen" class="ai-fab" title="Аналитик ректора">🤖</button>
+
+  <!-- Тост-уведомления -->
+  <div id="toasts" class="toasts"></div>
+
+  <footer class="app-footer">
+    <img src="img/logo.svg" alt="Южный университет (ИУБиП)" class="footer-logo" />
+    <span class="footer-note">Дашборд ректора · показатели ленты — демонстрационные · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

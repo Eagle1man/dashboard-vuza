@@ -1,0 +1,16 @@
+# Пакетные файлы Windows обязаны быть с CRLF: с LF cmd.exe местами
+# ведёт себя непредсказуемо, а переносы строк в .bat — часть синтаксиса.
+*.bat text eol=crlf
+
+# Python и веб — LF, это их обычная форма на всех платформах.
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+
+# Двоичные
+*.png binary
+*.jpg binary
+*.db binary
