@@ -22,6 +22,8 @@
 from . import db
 from . import retrieve
 
+import re
+
 # Порядок важен: инструмент ничего не находит — он честно отвечает,
 # что не понимает вопрос.
 NONE_FOUND = {
@@ -38,56 +40,201 @@ def _norm(s: str) -> str:
     return "".join(ch.lower() if ch.isalnum() else " " for ch in (s or "")).split()
 
 
+# --- Общие слова: сами по себе метрику не выбирают -----------------------
+#
+# Разбор придумал не тот, кто писал код. Вопросы ректора «сколько
+# студентов» и «какая успеваемость студентов» — разные, а слово
+# «студентов» в них одно и то же. Прежний подсчёт брал по одному
+# лучшему совпадению на метрику, поэтому «студентов» тянуло вопрос в
+# «Иностранных студентов» с тем же весом, с каким «успеваемость»
+# тянуло в «Успеваемость», — и выигрывала та метрика, что стояла в
+# справочнике раньше. Это не мелочь: не тот показатель в ответе хуже,
+# чем никакого.
+#
+# Теперь общие слова метрику не выбирают — они лишь уточняют уже
+# выбранную. Если кроме них ничего не нашлось, вопрос читается как
+# «про обучающихся», и ответом становится контингент.
+GENERIC_ROOTS = ["студент", "обучающ", "человек"]
+
+# Слова-заполнители: не значат ни для выбора, ни для уточнения.
+FILLER_ROOTS = ["какая", "какой", "какие", "какого", "скольк", "всег",
+                "общее", "университет", "вуз", "институт", "сейчас",
+                "также", "более", "менее", "наш", "ваш", "там", "тут",
+                "дайте", "покаж", "скаж", "расскаж", "какие"]
+
+# Слова, которые в названии подразделения ничего не различают: они
+# есть в названии каждой кафедры и уводят выбор на первую попавшуюся.
+ORG_FILLER = ["кафедр", "академ"]
+
+# Сокращения: ФОТ, НИР, ЕГЭ, СПО, ВПР, LMS, ЭИОС. Это язык ректора, а
+# не опечатка, и отбрасывать их вместе с короткими словами нельзя:
+# на «какая доля ФОТ» без сокращения вопрос остаётся без «доли» и
+# уезжает на любой показатель с этим словом в названии.
+_TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+")
+
+
+def _is_abbrev(token: str) -> bool:
+    """Сокращение из заглавных букв: ФОТ, НИР, ЕГЭ, СПО, ВПР, LMS."""
+    if len(token) < 2 or not any(ch.isalpha() for ch in token):
+        return False
+    return token == token.upper()
+
+
+def _is_generic(stem: str) -> bool:
+    return any(stem.startswith(g) or g.startswith(stem) for g in GENERIC_ROOTS)
+
+
+def _is_filler(stem: str) -> bool:
+    return any(stem.startswith(f) or f.startswith(stem) for f in FILLER_ROOTS)
+
+
+def _match(word: str, stem: str) -> int:
+    """Совпадение слова названия с основой слова вопроса.
+
+    2 — точное совпадение основ, 1 — одна основа является началом
+    другой («выпуск» / «выпускники»), 0 — несовпадение.
+
+    Длину слова здесь не проверяем: отбор по длине уже сделал тот,
+    кто собрал слова (см. _words). Повторная проверка выбрасывала
+    сокращения вроде «ФОТ» уже после того, как они были признаны
+    значимыми.
+    """
+    if not word or not stem:
+        return 0
+    if word == stem:
+        return 2
+    if word.startswith(stem) or stem.startswith(word):
+        return 1
+    return 0
+
+
+def _words(text: str):
+    """Значимые слова текста: с основами, без чисел и общего.
+
+    Регистр здесь важен: по нему видно сокращение. «ФОТ» — три буквы,
+    но вопрос «какая доля ФОТ» без него теряет половину смысла.
+    """
+    out = set()
+    for tok in _TOKEN_RE.findall(text or ""):
+        if tok.isdigit():
+            continue
+        st = retrieve.stem_ru(tok)
+        if len(st) < 4 and not _is_abbrev(tok):
+            continue
+        out.add(st)
+    return out
+
+
 def find_metric(conn, question: str):
-    """Ищет метрику по названию и синонимам. Возвращает строку dim_metric."""
-    stems = [retrieve.stem_ru(t) for t in retrieve.tokenize(question)]
-    stems = [s for s in stems if len(s) >= 4]
-    if not stems:
+    """Ищет метрику по названию и синонимам. Возвращает строку dim_metric.
+
+    Порядок решения такой:
+
+    1. Собираем значимые слова вопроса: отдельно те, что несут смысл
+       («успеваемость»), отдельно общие («студентов»).
+    2. Для каждой метрики считаем, сколько её слов нашлось по
+       значимым словам вопроса. Считаем по КАЖДОМУ слову названия, а не
+       по лучшему совпадению: раньше метрика «Успеваемость» и
+       «Иностранных студентов» давали по два балла за одно и то же
+       слово, и выбор решался порядком строк в справочнике.
+    3. Общие слова дают балл только тем метрикам, у которых они тоже
+       есть, — и служат уточнением, а не выбором.
+    4. При равенстве смотрим, сколько слов названия метрики вопрос не
+       объяснил: чем меньше, тем точнее попадание.
+    """
+    q_stems = []
+    for t in retrieve.tokenize(question):
+        st = retrieve.stem_ru(t)
+        if st.isdigit():
+            continue
+        if len(st) < 4 and not _is_abbrev(t):
+            continue
+        if _is_filler(st):
+            continue
+        q_stems.append(st)
+    if not q_stems:
         return None
 
-    scores = {}
+    specific = [s for s in q_stems if not _is_generic(s)]
+    generic = [s for s in q_stems if _is_generic(s)]
+
+    best_key, best_mid = None, None
     for row in conn.execute("SELECT * FROM dim_metric"):
         mid = row["metric_id"]
-        bucket = {mid: 0}
-        for word in _norm(row["title"]):
-            bucket[mid] = max(bucket[mid], _score(word, stems))
+        title_w = _words(row["title"])
+        alias_w = set()
         for a in conn.execute(
                 "SELECT alias FROM metric_alias WHERE metric_id = ?", (mid,)):
-            for word in _norm(a["alias"]):
-                bucket[mid] = max(bucket[mid], _score(word, stems))
-        if bucket[mid] > 0:
-            scores[mid] = bucket[mid]
+            alias_w |= _words(a["alias"])
+        all_w = title_w | alias_w
 
-    if not scores:
+        # Значимые слова: каждое слово названия и синонимов сопоставляется
+        # с лучшим из значимых слов вопроса.
+        matched, weight = set(), 0
+        for w in all_w:
+            if _is_filler(w) or _is_generic(w):
+                continue
+            best = 0
+            for s in specific:
+                sc = _match(w, s)
+                if sc > best:
+                    best = sc
+            if best:
+                matched.add(w)
+                weight += best
+
+        # Общие слова: метрику не выбирают, но уточняют.
+        gen_hits = 0
+        for w in all_w:
+            if not _is_generic(w):
+                continue
+            for s in generic:
+                if _match(w, s):
+                    gen_hits += 1
+                    break
+
+        if weight == 0 and gen_hits == 0:
+            continue
+
+        # Сколько слов названия осталось необъяснёнными: у «Контингента
+        # обучающихся» не объяснено одно слово, у «Контингента
+        # бакалавриата» — два, и на вопрос про численность обучающихся
+        # первое попадание точнее.
+        unexplained = sum(
+            1 for w in title_w
+            if not _is_filler(w) and not _is_generic(w) and w not in matched)
+
+        key = (weight, gen_hits, -unexplained)
+        if best_key is None or key > best_key:
+            best_key, best_mid = key, mid
+
+    if not best_mid:
         return None
-    # При нескольких совпадениях берём самое сильное, а не первое
-    # попавшееся: у вопроса «отчисления и задолженности» обе метрики
-    # найдены, и выбор должен опираться на вес совпадения.
-    best = max(scores.items(), key=lambda kv: kv[1])[0]
     row = conn.execute("SELECT * FROM dim_metric WHERE metric_id = ?",
-                       (best,)).fetchone()
+                       (best_mid,)).fetchone()
     return dict(row) if row else None
-
-
-def _score(word: str, stems) -> int:
-    if not word:
-        return 0
-    if len(word) < 4:
-        return 0
-    for s in stems:
-        if word.startswith(s) or s.startswith(word):
-            return 2 if (word == s) else 1
-    return 0
 
 
 def find_org(conn, question: str):
     """Ищет подразделение по названию. None — весь университет."""
-    stems = [retrieve.stem_ru(t) for t in retrieve.tokenize(question)]
+    q_stems = []
+    for t in retrieve.tokenize(question):
+        st = retrieve.stem_ru(t)
+        if st.isdigit():
+            continue
+        if len(st) < 4 and not _is_abbrev(t):
+            continue
+        q_stems.append(st)
     best, best_score = None, 0
     for row in conn.execute("SELECT org_id, title FROM dim_org"):
         score = 0
-        for word in _norm(row["title"]):
-            score = max(score, _score(word, stems))
+        for w in _words(row["title"]):
+            if w in ORG_FILLER:
+                continue
+            for s in q_stems:
+                sc = _match(w, s)
+                if sc > score:
+                    score = sc
         if score > best_score:
             best, best_score = row["org_id"], score
     return best if best_score >= 2 else None

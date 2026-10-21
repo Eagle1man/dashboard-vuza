@@ -39,14 +39,31 @@ def close(a, b, tol=1e-9):
 
 def main():
     js = dump_js()
-    py = build_demo()
+    all_metrics = build_demo()["metrics"]
+    # Сверяется только слой ДЕМО: официальные числа приходят из базы,
+    # а не из генератора, и в data.js их нет намеренно.
+    py = [m for m in all_metrics if m["source"] == "demo"]
     failures = []
     checked = 0
 
-    if len(js) != len(py["metrics"]):
-        raise SystemExit(f"метрик: js={len(js)}, python={len(py['metrics'])}")
+    official = [m for m in all_metrics if m["source"] == "official"]
+    if not official:
+        failures.append("в витрине нет ни одной официальной метрики")
+    for m in official:
+        if m["has_history"]:
+            failures.append(f"{m['metric_id']}: у официальной метрики "
+                            f"не должно быть истории")
+        if len(m["series"]) != 1:
+            failures.append(f"{m['metric_id']}: официальная метрика должна "
+                            f"иметь одну точку, а не {len(m['series'])}")
+        if m["drill"] or m["dept"]:
+            failures.append(f"{m['metric_id']}: у официальной метрики не должно "
+                            f"быть разбивки по кафедрам")
 
-    for j, p in zip(js, py["metrics"]):
+    if len(js) != len(py):
+        raise SystemExit(f"метрик: js={len(js)}, python={len(py)}")
+
+    for j, p in zip(js, py):
         mid = j["id"]
         checked += 1
         if mid != p["metric_id"]:
@@ -84,8 +101,10 @@ def main():
         for f in failures[:20]:
             print("  -", f)
         return 1
-    print(f"СОВПАДАЕТ: {checked} метрик, ряды, статусы, подразделения "
-          f"и все записи drill-down идентичны выводу Node")
+    print(f"СОВПАДАЕТ: {checked} демо-метрик (ряды, статусы, подразделения "
+          f"и все записи drill-down идентичны выводу Node); "
+          f"{len(official)} официальных метрик проверены на отсутствие "
+          f"выдуманной истории")
     return 0
 
 
