@@ -154,6 +154,26 @@
     { id: "eios",          block: "digital", title: "Доля курсов в ЭИОС", unit: "%", dir: "higher", target: 90, base: 85, vol: 3 }
   ];
 
+  // ---- Официальные значения: резерв для режима без сервера ----------
+  //
+  // Пока сервер не поднят, страница рисует то, что собрано здесь. У
+  // официальных показателей раньше в этом режиме вместо числа стояло
+  // прочерк, а рядом — демонстрационные цифры: выглядело так, будто
+  // настоящих данных нет вовсе.
+  //
+  // Значения дублируются в backend/db.py (OFFICIAL). Расхождение
+  // ловит backend/tests/test_seed_matches_js — вручную их сверять
+  // бессмысленно, их всегда сверяет тест.
+  const OFFICIAL_VALUES = {
+    "continuer-total": 2946, "continuer-spo": 1328, "continuer-ba": 1145,
+    "continuer-ma": 443, "continuer-aspir": 30, "applicant-2025": 1245,
+    "graduate-2025": 888, "foreign": 55, "programs": 25,
+    "trudoustroystvo": 90, "income": 221475.08, "expense": 221475.08,
+    "income-edu": 184447.27, "subsidy": 8287.30, "fot": 89900,
+    "fot-share": 40.6, "arenda-share": 15.9, "subsidy-share": 3.7,
+    "nir": 18, "biblioteka": 84700
+  };
+
   // ---- Образовательные программы (ФГОС) ----
   const STANDARDS = [
     { code: "09.03.03", level: "Бакалавриат", title: "Прикладная информатика", approved: 2017, updated: 2023 },
@@ -198,6 +218,10 @@
   }
 
   const LASTNAMES = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Волков", "Лебедев", "Козлов", "Новиков", "Морозов"];
+  // Единицы, для которых разбивка по кафедрам осмысленна: счётные
+  // величины. Держим в одном списке с backend/db.py (COUNT_UNITS) —
+  // иначе витрина в браузере и в базе разойдутся.
+  const COUNT_UNITS = { "чел.": 1, "шт.": 1, "шт./год": 1, "тыс": 1, "млн ₽": 1 };
   const FIRSTNAMES = ["Алексей", "Мария", "Дмитрий", "Анна", "Иван", "Елена", "Никита", "Ольга", "Сергей", "Наталья"];
   const REASONS = ["академическая задолженность", "неуспеваемость", "семейные обстоятельства", "перевод в другой вуз", "по собственному желанию", "непрохождение аттестации"];
 
@@ -229,10 +253,13 @@
 
       if (def.base === undefined) {
         // Официальная метрика: значения подставляет seedVitrine()
-        // из базы. Ряда нет — рисовать нечего.
+        // из базы. Ряда нет — рисовать нечего. Но и прочерка вместо
+        // числа быть не должно: пока сервер не поднят, значение
+        // известно из документов и показывается.
         m.source = "official";
         m.hasHistory = false;
-        m.series = [];
+        m.current = OFFICIAL_VALUES[def.id];
+        m.series = (m.current === undefined) ? [] : [m.current];
         m.prev = m.delta = null;
         m.dept = [];
         m.drill = {};
@@ -249,18 +276,27 @@
       m.delta = m.prev ? ((m.current - m.prev) / m.prev) * 100 : 0;
       m.status = computeStatus(m);
 
-      const weights = DEPARTMENTS.map(function () { return 0.82 + rnd() * 0.36; });
-      const wsum = weights.reduce(function (a, b) { return a + b; }, 0);
-      m.dept = DEPARTMENTS.map((d, di) => {
-        const v = m.current * (weights[di] / wsum);
-        const rounded = Math.round(v * 10) / 10;
-        const share = (rounded / m.current) * 100;
-        return { deptId: d.id, deptName: d.name, value: rounded, share };
-      });
-      m.drill = {};
-      DEPARTMENTS.forEach((d, di) => {
-        m.drill[d.id] = makeDrill(def, seed + i * 7 + di, d.name, d.id);
-      });
+      // Разбивка по кафедрам строится только для счётных величин.
+      // Для процентов, баллов, индексов и часов она бессмысленна: кафедра
+      // получила бы долю от процента, и «успеваемость 11,4 %» читалось бы
+      // как провал там, где на деле 94 % по университету.
+      if (COUNT_UNITS[def.unit]) {
+        const weights = DEPARTMENTS.map(function () { return 0.82 + rnd() * 0.36; });
+        const wsum = weights.reduce(function (a, b) { return a + b; }, 0);
+        m.dept = DEPARTMENTS.map((d, di) => {
+          const v = m.current * (weights[di] / wsum);
+          const rounded = Math.round(v * 10) / 10;
+          const share = (rounded / m.current) * 100;
+          return { deptId: d.id, deptName: d.name, value: rounded, share };
+        });
+        m.drill = {};
+        DEPARTMENTS.forEach((d, di) => {
+          m.drill[d.id] = makeDrill(def, seed + i * 7 + di, d.name, d.id);
+        });
+      } else {
+        m.dept = [];
+        m.drill = {};
+      }
       return m;
     });
     return { blocks, metrics, dept: DEPARTMENTS, academies: ACADEMIES, standards: STANDARDS, seed };
@@ -293,7 +329,7 @@
 
   global.DashboardData = {
     MONTHS, QUARTERS, YEARS, DEPARTMENTS, ACADEMIES,
-    BLOCKS, METRIC_DEFS, STANDARDS,
+    BLOCKS, METRIC_DEFS, STANDARDS, OFFICIAL_VALUES,
     build, computeStatus, metricsOfBlock, blocksForRole,
     initialData: initial
   };

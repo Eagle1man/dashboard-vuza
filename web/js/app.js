@@ -39,7 +39,7 @@
     // весь дашборд, а не одна его часть.
     if (v === null || v === undefined || isNaN(v)) return "—";
     if (v >= 1000000) return (v / 1000000).toFixed(1).replace(".", ",") + " млн";
-    if (v >= 10000) return (v / 1000).toFixed(1).replace(".", ",") + " тыс";
+    if (v >= 10000) return (v / 1000).toFixed(1).replace(".", ",");
     return String(parseFloat(v.toFixed(2))).replace(".", ",");
   }
   // Изменение к прошлому периоду. У официальных показателей ряда нет,
@@ -49,7 +49,7 @@
     if (m.delta === null || m.delta === undefined || isNaN(m.delta)) {
       return { s: "—", up: true, none: true };
     }
-    var s = (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%";
+    var s = (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1).replace(".", ",") + "%";
     return { s: s, up: m.delta >= 0, none: false };
   }
   function statusClass(s) { return "status-" + s; }
@@ -66,6 +66,43 @@
     if (s === "yellow") return "#d97706";
     if (s === "red") return "#dc2626";
     return "#64748b";
+  }
+  // Значение показателя по выбранному подразделению.
+  //
+  // Фильтр по подразделению стоял в интерфейсе, но ничего не фильтровал:
+  // значение на карточке всегда было университетским. Для показателя с
+  // разбивкой по кафедрам берётся значение этой кафедры, для официального
+  // показателя разбивки нет — остаётся значение по университету, и об
+  // этом сказано прямо в подписи под блоком.
+  function metricValueForDept(m, deptId) {
+    if (!deptId || deptId === "all") return m.current;
+    if (!m.dept || !m.dept.length) return m.current;
+    var d = null;
+    for (var i = 0; i < m.dept.length; i++) {
+      if (m.dept[i].deptId === deptId) { d = m.dept[i]; break; }
+    }
+    return d ? d.value : m.current;
+  }
+  // Статус показателя при выбранном подразделении: считается от значения
+  // этого подразделения, а не от университетского. Иначе карточка
+  // показывала бы зелёный статус рядом с красным по сути числом.
+  function statusForValue(m, value) {
+    if (m.target === null || m.target === undefined) return "none";
+    var score;
+    if (m.dir === "higher") score = m.target === 0 ? 1 : value / m.target;
+    else score = m.target === 0 ? 1 : m.target / value;
+    if (score >= 0.92) return "green";
+    if (score >= 0.8) return "yellow";
+    return "red";
+  }
+  // Название выбранного подразделения — для подписи «показано по …».
+  function selectedDeptName() {
+    if (!state.dept || state.dept === "all") return null;
+    var list = state.data.dept || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === state.dept) return list[i].name;
+    }
+    return null;
   }
   function periodName() { return { month: "месяц", quarter: "квартал", year: "год" }[state.period] || "год"; }
   function shortName(name) { return name.replace(/^(факультет|институт)\s+/i, "").split(" ").slice(0, 2).join(" "); }
@@ -138,7 +175,15 @@ function updateStamp() {
   }
 
   function metricMatches(metric) {
-    if (state.status !== "all" && metric.status !== state.status) return false;
+    // Статус считается от того значения, которое реально показано на
+    // карточке: при выбранном подразделении это значение кафедры, а не
+    // университетское. Иначе фильтр «Красный» отбирал бы показатели
+    // по статусу всего университета, а на карточке стоял бы статус
+    // кафедры — расхождение, которое сбивает с толку.
+    if (state.status !== "all") {
+      var st = statusForValue(metric, metricValueForDept(metric, state.dept));
+      if (st !== state.status) return false;
+    }
     if (state.search) {
       var q = state.search.toLowerCase();
       if (metric.title.toLowerCase().indexOf(q) === -1) return false;
@@ -214,12 +259,63 @@ function updateStamp() {
     return h;
   }
 
+  // Сводка по академиям: кафедры складываются в свою академию.
+  // Академия — верхний уровень сводки, кафедра — учебное ядро. Без
+  // этого девять кафедр в одной плоской куче не дают увидеть, где
+  // университет силён, а где проседает.
+  function academyRollup(dept) {
+    var academies = (state.data.academies && state.data.academies.length)
+      ? state.data.academies : (D.ACADEMIES || []);
+    var parent = {};
+    (state.data.dept || []).forEach(function (d) { parent[d.id] = d.parentId; });
+    var sums = {}, order = [];
+    (dept || []).forEach(function (d) {
+      var pid = parent[d.deptId] || "";
+      if (!(pid in sums)) { sums[pid] = 0; order.push(pid); }
+      sums[pid] += d.value;
+    });
+    return order.map(function (pid) {
+      var name = "";
+      for (var i = 0; i < academies.length; i++) {
+        if (academies[i].id === pid) { name = academies[i].name; break; }
+      }
+      return {
+        id: pid,
+        name: name || "Без академии",
+        value: Math.round(sums[pid] * 10) / 10
+      };
+    });
+  }
+
+  // Короткая подпись источника для карточки. Полный текст — в
+  // детализации, а на карточке хватает, откуда взято число: решение,
+  // принятое по цифре без источника, не подписать нельзя.
+  function shortSource(note) {
+    if (!note) return "";
+    var s = String(note);
+    var m = s.match(/^(.*?)(, стр\\.|, табл\\.|, раздел|, расчёт)/);
+    var head = m ? m[1] : s;
+    if (head.length > 46) head = head.slice(0, 45) + "…";
+    return head;
+  }
+  // Русское окончание для числа: 1 шаг, 2 шага, 5 шагов.
+  function plural(n, forms) {
+    var a = Math.abs(n) % 100, b = a % 10;
+    if (a > 10 && a < 20) return forms[2];
+    if (b > 1 && b < 5) return forms[1];
+    if (b === 1) return forms[0];
+    return forms[2];
+  }
   function widgetHTML(m, pl) {
+    // Выбранное подразделение меняет значение и статус: показывать
+    // рядом с числом кафедры университетский статус — значит врать.
+    var value = metricValueForDept(m, state.dept);
+    var status = statusForValue(m, value);
     var ds = deltaStr(m);
     var good = (m.dir === "higher") ? ds.up : !ds.up;
     var deltaClass = good ? "up" : "down";
     var arrow = (m.delta === null || m.delta === undefined) ? "" : (m.delta >= 0 ? "▲" : "▼");
-    var spark = C.sparkline(m.series, colorForStatus(m.status));
+    var spark = C.sparkline(m.series, colorForStatus(status));
     // У официального показателя исторического ряда нет — спарклайн из
     // одной точки не значит ничего, и подпись «к пред. периоду» вводит
     // в заблуждение.
@@ -227,10 +323,17 @@ function updateStamp() {
       ? '<span class="muted" style="font-size:11px">исторического ряда нет</span>'
       : '<span class="trend"><span class="delta ' + deltaClass + '">' + arrow + " " + ds.s + "</span>" +
         '<span class="muted" style="font-size:11px">к пред. периоду</span></span>';
+    // У официального показателя источник показан прямо на карточке:
+    // решение, принятое по цифре, должно быть подписано.
+    var srcLine = (m.source === "official" && m.srcNote)
+      ? '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
+        esc(shortSource(m.srcNote)) + "</div>"
+      : "";
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
-      '<span class="status-pill ' + statusClass(m.status) + '">' + statusTxt(m.status) + "</span></div>" +
-      '<div class="widget-value">' + fmtFull(m.current) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
+      '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></div>" +
+      '<div class="widget-value">' + fmtFull(value) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
+      srcLine +
       '<div class="widget-footer">' + foot +
       '<span class="mini-actions">' +
       '<button class="mini-btn drill-now" data-metric="' + m.id + '">детали</button></span></div>' +
@@ -279,13 +382,22 @@ function updateStamp() {
       var ds = deltaStr(m);
       var good = (m.dir === "higher") ? ds.up : !ds.up;
       var dc = good ? "up" : "down";
+      var value = metricValueForDept(m, state.dept);
+      var st = statusForValue(m, value);
       h += '<div class="metric-cell clickable-cell" data-metric="' + m.id + '" title="Клик — детализация записей">' +
         '<div class="label">' + esc(m.title) + '</div>' +
-        '<div class="value">' + fmtFull(m.current) + ' <small>' + esc(m.unit) + "</small></div>" +
+        '<div class="value">' + fmtFull(value) + ' <small>' + esc(m.unit) + "</small></div>" +
         '<div><span class="delta ' + dc + '" style="font-size:12px">' + ds.s + "</span> " +
-        '<span class="status-pill ' + statusClass(m.status) + '" style="font-size:10px">' + statusTxt(m.status) + "</span></div></div>";
+        '<span class="status-pill ' + statusClass(st) + '" style="font-size:10px">' + statusTxt(st) + "</span></div></div>";
     });
     h += "</div>";
+
+    var deptName = selectedDeptName();
+    if (deptName) {
+      h += '<p class="muted">Показано по подразделению: ' + esc(deptName) +
+        ". У официальных показателей разбивки по кафедрам в документах нет — " +
+        "для них значение остаётся по университету.</p>";
+    }
 
     var main = mets[0];
     // У официального показателя нет ни исторического ряда, ни разбивки
@@ -313,6 +425,13 @@ function updateStamp() {
         '<div class="chart-wrap">' + C.barChart(depL, depV, {}) + '</div><p class="muted">Клик по столбцу — записи подразделения.</p></div>';
       h += '<div class="section-card"><h3>Доля по подразделениям: ' + esc(main.title) + "</h3>" +
         '<div class="chart-wrap">' + C.donutChart(depL, depV) + "</div></div>";
+      var acc = academyRollup(main.dept);
+      if (acc.length) {
+        h += '<div class="section-card"><h3>По академиям: ' + esc(main.title) + "</h3>" +
+          '<div class="chart-wrap">' + C.barChart(acc.map(function (a) { return shortName(a.name); }),
+            acc.map(function (a) { return a.value; }), {}) + "</div>" +
+          '<p class="muted">Академия — верхний уровень сводки, кафедра — учебное ядро.</p></div>';
+      }
     } else {
       h += '<div class="section-card"><h3>По подразделениям: ' + esc(main.title) + "</h3>" +
         '<p class="muted">Разбивки по подразделениям в документе нет.</p></div>';
@@ -324,9 +443,11 @@ function updateStamp() {
       var ds = deltaStr(m);
       var good = (m.dir === "higher") ? ds.up : !ds.up;
       var dc = good ? "up" : "down";
-      h += "<tr><td>" + esc(m.title) + "</td><td><b>" + fmtFull(m.current) + "</b></td><td>" + esc(m.unit) + "</td>" +
+      var value = metricValueForDept(m, state.dept);
+      var st = statusForValue(m, value);
+      h += "<tr><td>" + esc(m.title) + "</td><td><b>" + fmtFull(value) + "</b></td><td>" + esc(m.unit) + "</td>" +
         '<td class="delta ' + dc + '">' + ds.s + "</td><td>" + fmtFull(m.target) + "</td>" +
-        '<td><span class="status-pill ' + statusClass(m.status) + '">' + statusTxt(m.status) + "</span></td>" +
+        '<td><span class="status-pill ' + statusClass(st) + '">' + statusTxt(st) + "</span></td>" +
         '<td><button class="mini-btn drill-now" data-metric="' + m.id + '">детали →</button></td></tr>';
     });
     h += "</tbody></table></div></div>";
@@ -361,6 +482,15 @@ function updateStamp() {
         h += "<tr><td>" + esc(r.fio) + "</td><td>" + esc(r.dept) + "</td><td><b>" + fmtFull(r.value) + " " + esc(m.unit) + "</b></td><td>" + esc(r.reason || "—") + "</td></tr>";
       });
       h += "</tbody></table></div>";
+    } else if (m.source === "official") {
+      // У официального показателя поимённых записей нет и быть не
+      // может: в отчёте о самообследовании численность приводится
+      // обобщённо, по уровням образования. Пустое состояние «записей
+      // не найдено» читалось бы как сбой.
+      h += "<p class='muted'>Поимённых записей по этому показателю нет: " +
+        "в документах университета численность приводится обобщённо, " +
+        "по уровням образования. Разбивки по кафедрам в документах тоже нет — " +
+        "это можно увидеть на странице показателя.</p>";
     } else h += "<p class='muted'>Записей не найдено.</p>";
     // У официального показателя назван конкретный документ, у
     // демонстрационного — витрина. Формулировка прежняя («данные
@@ -593,7 +723,7 @@ $("btnExportPdf").addEventListener("click", function () {
       if (!text) return;
       addAiMessage("user", esc(text));
       $("aiInput").value = "";
-      setAiTyping(true, AI.getPipeline() === "crew");
+      setAiTyping(true, true);
       try {
         var ctx = { periodLabels: periodLabels(state.period).labels, currentBlockId: state.blockId };
         var res = await AI.ask(text, state.data, ctx);
@@ -693,7 +823,7 @@ $("btnExportPdf").addEventListener("click", function () {
 
   function renderCrewTrace(c) {
     var h = '<details class="crew-trace"><summary>Ход работы · ' +
-      c.trace.length + " шагов · " +
+      c.trace.length + " " + plural(c.trace.length, ["шаг", "шага", "шагов"]) + " · " +
       Math.round((c.latency_ms || 0) / 100) / 10 + " сек</summary>";
 
     c.trace.forEach(function (s) {
@@ -725,47 +855,18 @@ $("btnExportPdf").addEventListener("click", function () {
     return h;
   }
 
-  // ---------- Переключатель «экипаж / один агент» ----------
-  function renderPipeline() {
-    var cur = AI.getPipeline();
-    var b1 = $("modeCrew"), b2 = $("modeSingle");
-    if (b1) b1.classList.toggle("is-on", cur === "crew");
-    if (b2) b2.classList.toggle("is-on", cur === "single");
-    var hint = $("modeHint");
-    if (hint) {
-      hint.textContent = cur === "crew"
-        ? "роутер → специалист → критик. Ответ дольше, зато проверен."
-        : "один запрос без роутера и критики. Быстрее, но без проверки.";
-    }
-  }
-
-  function initPipeline() {
-    ["modeCrew", "modeSingle"].forEach(function (id) {
-      var b = $(id);
-      if (!b) return;
-      b.addEventListener("click", function () {
-        AI.setPipeline(b.getAttribute("data-pipeline"));
-        renderPipeline();
-        showToast(b.getAttribute("data-pipeline") === "crew"
-          ? "Экипаж агентов: роутер, специалист, критик"
-          : "Один агент: без роутера и критики", "ok");
-      });
-    });
-    renderPipeline();
-    window.DashboardUI = window.DashboardUI || {};
-    window.DashboardUI.renderPipeline = renderPipeline;
-  }
-
   function setAiTyping(on, crewMode) {
     if (on) {
       var t = document.createElement("div");
       t.className = "msg ai typing";
       t.id = "aiTyping";
-      // В режиме экипажа вопрос проходит три-четыре обращения к модели
-      // подряд. Без пояснения пауза в минуту выглядит как зависание,
-      // и человек начинает отправлять вопрос ещё раз.
+      // Вопрос проходит несколько обращений к локальной модели подряд.
+      // Без пояснения пауза в минуту выглядит как зависание, и человек
+      // начинает отправлять вопрос ещё раз. Сколько агентов сработает —
+      // решает сервер по типу вопроса, поэтому обещать конкретный
+      // состав здесь нельзя: на простой факт критик не зовётся.
       t.textContent = crewMode
-        ? "Экипаж работает: роутер → специалист → критик. Обычно 1–2 минуты."
+        ? "Экипаж работает: подбираю специалиста и источники. Обычно 1–2 минуты."
         : "Анализирую данные...";
       $("aiMessages").appendChild(t);
     } else {
@@ -901,8 +1002,36 @@ $("btnExportPdf").addEventListener("click", function () {
     deptSel.appendChild(opt0);
     var deptList = (state.data.dept && state.data.dept.length)
       ? state.data.dept
-      : D.DEPARTMENTS.map(function (d) { return { id: d.id, name: d.name }; });
+      : D.DEPARTMENTS.map(function (d) {
+          return { id: d.id, name: d.name, parentId: d.parentId };
+        });
+    var academies = (state.data.academies && state.data.academies.length)
+      ? state.data.academies
+      : (D.ACADEMIES || []);
+    // Кафедры сгруппированы по академиям: кафедра — учебное ядро,
+    // академия — верхний уровень сводки. В одну плоскую кучу девять
+    // названий не складываются, а «Академия управления и цифрового
+    // развития» в списке кафедр вообще не из чего вывести.
+    var byParent = {};
     deptList.forEach(function (d) {
+      var key = d.parentId || "";
+      (byParent[key] = byParent[key] || []).push(d);
+    });
+    academies.forEach(function (a) {
+      var kids = byParent[a.id];
+      if (!kids || !kids.length) return;
+      var g = document.createElement("optgroup");
+      g.label = a.name;
+      kids.forEach(function (d) {
+        var o = document.createElement("option");
+        o.value = d.id; o.textContent = d.name;
+        g.appendChild(o);
+      });
+      deptSel.appendChild(g);
+    });
+    // Кафедры без академии (в структуре 2026–2027 таких нет) — в конец,
+    // чтобы они не потерялись молча.
+    (byParent[""] || []).forEach(function (d) {
       var o = document.createElement("option");
       o.value = d.id; o.textContent = d.name;
       deptSel.appendChild(o);
@@ -915,7 +1044,6 @@ $("btnExportPdf").addEventListener("click", function () {
     bindDetailClicks();
     bindControls();
     initAI();
-    initPipeline();
     updateStamp();
     connectServer();
   }
