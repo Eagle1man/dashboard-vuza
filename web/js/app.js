@@ -33,22 +33,63 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function fmtFull(v) {
+    // У официального показателя цель не задана, а у показателя без
+    // истории нет предыдущей точки. Раньше здесь печаталось «NaN»,
+    // а в deltaStr — падало с TypeError, из-за чего не отрисовывался
+    // весь дашборд, а не одна его часть.
+    if (v === null || v === undefined || isNaN(v)) return "—";
     if (v >= 1000000) return (v / 1000000).toFixed(1).replace(".", ",") + " млн";
     if (v >= 10000) return (v / 1000).toFixed(1).replace(".", ",") + " тыс";
     return String(parseFloat(v.toFixed(2))).replace(".", ",");
   }
+  // Изменение к прошлому периоду. У официальных показателей ряда нет,
+  // поэтому изменения нет либо оно равно нулю — «0,0 %» в этом случае
+  // вводит ректора в заблуждение, значит честнее «—».
   function deltaStr(m) {
+    if (m.delta === null || m.delta === undefined || isNaN(m.delta)) {
+      return { s: "—", up: true, none: true };
+    }
     var s = (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%";
-    return { s: s, up: m.delta >= 0 };
+    return { s: s, up: m.delta >= 0, none: false };
   }
   function statusClass(s) { return "status-" + s; }
-  function statusTxt(s) { return s === "green" ? "OK" : s === "yellow" ? "внимание" : "критично"; }
-  function colorForStatus(s) { return s === "green" ? "#16a34a" : s === "yellow" ? "#d97706" : "#dc2626"; }
+  // Статус «none» — не «красный». У официального показателя нет
+  // целевого порога, и красить его красным значит выдумать тревогу.
+  function statusTxt(s) {
+    if (s === "green") return "OK";
+    if (s === "yellow") return "внимание";
+    if (s === "red") return "критично";
+    return "без порога";
+  }
+  function colorForStatus(s) {
+    if (s === "green") return "#16a34a";
+    if (s === "yellow") return "#d97706";
+    if (s === "red") return "#dc2626";
+    return "#64748b";
+  }
   function periodName() { return { month: "месяц", quarter: "квартал", year: "год" }[state.period] || "год"; }
   function shortName(name) { return name.replace(/^(факультет|институт)\s+/i, "").split(" ").slice(0, 2).join(" "); }
   function sourceLabel(blockId) {
-    var map = { academic: "Moodle, 1С:Университет", results: "Moodle, 1С:Университет", finance: "1С:Бухгалтерия / ERP", employ: "База карьерного центра", science: "Научная часть, Scopus/WoS", ops: "Учётная система деканатов", reputation: "LimeSurvey, Медиалогия" };
+    // Блоки в структуре 2026–2027: academic, results, finance, vnoko,
+    // science, upr, digital. Коды employ, ops и reputation к ней не
+    // относятся — их больше нет.
+    var map = {
+      academic: "приёмная кампания, 1С:Университет",
+      results: "деканаты, Moodle",
+      finance: "бухгалтерия, план ФХД",
+      vnoko: "ВНОКО, результаты опросов",
+      science: "научная часть, Scopus/WoS",
+      upr: "управление по воспитательной работе",
+      digital: "ИТ-служба, ЭИОС"
+    };
     return map[blockId] || "витрина данных";
+  }
+  // Подпись под значением: у официального показателя назван конкретный
+  // документ, и это полезнее, чем общая система-источник.
+  function metricSourceNote(m) {
+    if (!m) return "";
+    if (m.source === "official") return m.srcNote || "документы университета";
+    return "демонстрационные данные витрины";
   }
   function periodLabels(period) {
     switch (period) {
@@ -177,15 +218,20 @@ function updateStamp() {
     var ds = deltaStr(m);
     var good = (m.dir === "higher") ? ds.up : !ds.up;
     var deltaClass = good ? "up" : "down";
-    var arrow = m.delta >= 0 ? "▲" : "▼";
+    var arrow = (m.delta === null || m.delta === undefined) ? "" : (m.delta >= 0 ? "▲" : "▼");
     var spark = C.sparkline(m.series, colorForStatus(m.status));
+    // У официального показателя исторического ряда нет — спарклайн из
+    // одной точки не значит ничего, и подпись «к пред. периоду» вводит
+    // в заблуждение.
+    var foot = ds.none
+      ? '<span class="muted" style="font-size:11px">исторического ряда нет</span>'
+      : '<span class="trend"><span class="delta ' + deltaClass + '">' + arrow + " " + ds.s + "</span>" +
+        '<span class="muted" style="font-size:11px">к пред. периоду</span></span>';
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
       '<span class="status-pill ' + statusClass(m.status) + '">' + statusTxt(m.status) + "</span></div>" +
       '<div class="widget-value">' + fmtFull(m.current) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
-      '<div class="widget-footer"><span class="trend">' +
-      '<span class="delta ' + deltaClass + '">' + arrow + " " + ds.s + "</span>" +
-      '<span class="muted" style="font-size:11px">к пред. периоду</span></span>' +
+      '<div class="widget-footer">' + foot +
       '<span class="mini-actions">' +
       '<button class="mini-btn drill-now" data-metric="' + m.id + '">детали</button></span></div>' +
       '<div class="spark-wrap">' + spark + "</div></div>";
@@ -242,16 +288,35 @@ function updateStamp() {
     h += "</div>";
 
     var main = mets[0];
-    h += '<div class="section-card"><div class="card-head"><h3>Динамика: ' + esc(main.title) + "</h3>" +
-      '<span class="sub">цель: ' + fmtFull(main.target) + " " + esc(main.unit) + " · текущее: " + fmtFull(main.current) + "</span></div>" +
-      '<div class="chart-wrap">' + C.lineChart(pl.labels, [{ name: main.title, data: main.series.slice(-pl.count), color: colorForStatus(main.status) }]) + "</div></div>";
+    // У официального показателя нет ни исторического ряда, ни разбивки
+    // по кафедрам: в документах университета такой разбивки просто нет.
+    // Раньше здесь строились график из одной точки и пустая диаграмма,
+    // а оба выглядели как «данные не пришли».
+    var hasHistory = main.hasHistory !== false && main.series && main.series.length > 1;
+    var hasDept = main.dept && main.dept.length > 0;
 
-    var depL = main.dept.map(function (d) { return shortName(d.deptName); });
-    var depV = main.dept.map(function (d) { return d.value; });
-    h += '<div class="section-card"><h3>По подразделениям: ' + esc(main.title) + "</h3>" +
-      '<div class="chart-wrap">' + C.barChart(depL, depV, {}) + '</div><p class="muted">Клик по столбцу — записи подразделения.</p></div>';
-    h += '<div class="section-card"><h3>Доля по подразделениям: ' + esc(main.title) + "</h3>" +
-      '<div class="chart-wrap">' + C.donutChart(depL, depV) + "</div></div>";
+    if (hasHistory) {
+      h += '<div class="section-card"><div class="card-head"><h3>Динамика: ' + esc(main.title) + "</h3>" +
+        '<span class="sub">цель: ' + fmtFull(main.target) + " " + esc(main.unit) + " · текущее: " + fmtFull(main.current) + "</span></div>" +
+        '<div class="chart-wrap">' + C.lineChart(pl.labels, [{ name: main.title, data: main.series.slice(-pl.count), color: colorForStatus(main.status) }]) + "</div></div>";
+    } else {
+      h += '<div class="section-card"><div class="card-head"><h3>Динамика: ' + esc(main.title) + "</h3>" +
+        '<span class="sub">текущее: ' + fmtFull(main.current) + " " + esc(main.unit) + "</span></div>" +
+        '<p class="muted">Исторического ряда нет: показатель взят из документа на одну дату, '
+        + 'сравнивать с прошлым периодом не с чем. Источник: ' + esc(metricSourceNote(main)) + ".</p></div>";
+    }
+
+    if (hasDept) {
+      var depL = main.dept.map(function (d) { return shortName(d.deptName); });
+      var depV = main.dept.map(function (d) { return d.value; });
+      h += '<div class="section-card"><h3>По подразделениям: ' + esc(main.title) + "</h3>" +
+        '<div class="chart-wrap">' + C.barChart(depL, depV, {}) + '</div><p class="muted">Клик по столбцу — записи подразделения.</p></div>';
+      h += '<div class="section-card"><h3>Доля по подразделениям: ' + esc(main.title) + "</h3>" +
+        '<div class="chart-wrap">' + C.donutChart(depL, depV) + "</div></div>";
+    } else {
+      h += '<div class="section-card"><h3>По подразделениям: ' + esc(main.title) + "</h3>" +
+        '<p class="muted">Разбивки по подразделениям в документе нет.</p></div>';
+    }
 
     h += '<div class="section-card"><h3>Показатели блока (' + mets.length + ")</h3><div class='table-wrap'>" +
       '<table class="data"><thead><tr><th>Показатель</th><th>Значение</th><th>Ед.</th><th>Динамика</th><th>Цель</th><th>Статус</th><th></th></tr></thead><tbody>';
@@ -285,7 +350,7 @@ function updateStamp() {
 
     var h = '<div class="section-card"><div class="metric-row">' +
       '<div class="metric-cell"><div class="label">Текущее</div><div class="value">' + fmtFull(m.current) + " <small>" + esc(m.unit) + "</small></div></div>" +
-      '<div class="metric-cell"><div class="label">Динамика</div><div class="value">' + (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%</div></div>" +
+      '<div class="metric-cell"><div class="label">Динамика</div><div class="value">' + deltaStr(m).s + "</div></div>" +
       '<div class="metric-cell"><div class="label">Записей-источников</div><div class="value">' + rows.length + "</div></div>" +
       '<div class="metric-cell"><div class="label">Статус</div><div class="value"><span class="status-pill ' + statusClass(m.status) + '">' + statusTxt(m.status) + "</span></div></div>" +
       "</div>";
@@ -297,7 +362,12 @@ function updateStamp() {
       });
       h += "</tbody></table></div>";
     } else h += "<p class='muted'>Записей не найдено.</p>";
-    h += '<p class="muted" style="margin-top:10px">Источник витрины: ' + esc(sourceLabel(m.block)) + " · данные обезличены (152-ФЗ).</p>";
+    // У официального показателя назван конкретный документ, у
+    // демонстрационного — витрина. Формулировка прежняя («данные
+    // обезличены») верна только для демо: в отчёте о самообследовании
+    // данных о конкретных людях нет.
+    h += '<p class="muted" style="margin-top:10px">Источник: ' + esc(metricSourceNote(m)) +
+      (m.source === "official" ? "" : " · данные обезличены (152-ФЗ)") + ".</p>";
     h += "</div>";
 
     $("drillBody").innerHTML = h;

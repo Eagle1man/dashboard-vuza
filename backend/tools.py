@@ -283,16 +283,25 @@ def query(question: str, conn, limit_periods: int = 6):
         },
         "org_id": org_id,
         "org_title": next((o["title"] for o in by_org if o["org_id"] == org_id),
-                          None) if org_id else None,
+                           None) if org_id else None,
         "periods": [{"period_id": s["period_id"], "label": s["label"],
                      "value": s["value"]} for s in series],
         "current": current, "prev": prev, "delta": delta,
         "by_org": by_org,
-        "demo": True,
-        "notice": DEMO_NOTICE,
-        "source": (f"витрина: {metric['title']} · "
-                   f"{'все подразделения' if not org_id else org_id} · "
-                   f"период {series[-1]['label'] if series else '—'}"),
+        "demo": metric["source"] == "demo",
+        "source": metric["source"],
+        "src_note": metric.get("src_note"),
+        # У официального показателя источник указан в src_note. Если он
+        # почему-то пуст, писать «Источник: None» нельзя — лучше честно
+        # сказать, что документ не назван.
+        "notice": (DEMO_NOTICE if metric["source"] == "demo" else
+                   ("Источник: " + metric["src_note"]
+                    if metric.get("src_note") else
+                    "Показатель взят из документов университета; "
+                    "конкретный документ не указан.")),
+        "label": (f"витрина: {metric['title']} · "
+                  f"{'все подразделения' if not org_id else org_id} · "
+                  f"период {series[-1]['label'] if series else '—'}"),
     }
 
 
@@ -303,7 +312,14 @@ def render(data: dict) -> str:
                 + str(data.get("reason", "причина неизвестна")) + ".")
 
     m = data["metric"]
-    lines = ["ЧИСЛА ИЗ ВИТРИНЫ ДАШБОРДА (демонстрационные):",
+    # Официальный показатель и демонстрационный — разные вещи, и
+    # подписывать их одинаково нельзя: ректор прочтёт «демонстрационные»
+    # как оговорку и подумает, что перед ним выдуманное число, даже если
+    # число взято из отчёта о самообследовании.
+    header = ("ЧИСЛА ИЗ ВИТРИНЫ ДАШБОРДА (демонстрационные):"
+              if data.get("demo") else
+              "ЧИСЛА ИЗ ВИТРИНЫ ДАШБОРДА (по документам университета):")
+    lines = [header,
              f"показатель: {m['title']} ({m['unit'] or 'без единиц'})",
              f"текущее значение: {data['current']}"]
     if data["delta"] is not None:

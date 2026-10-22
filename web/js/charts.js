@@ -13,11 +13,20 @@
   // Спарклайн (мини-тренд в виджете)
   function sparkline(series, color) {
     const W = 120, H = 40, PAD = 2;
+    // Ряда может не быть совсем (пустой массив) или он может состоять
+    // из одной точки — у официального показателя истории нет. При длине 1
+    // деление на (length-1) давало NaN, и SVG ломался: координаты
+    // «NaN» браузер не рисует, а в консоли сыпались ошибки.
+    if (!series || series.length === 0) {
+      return '<svg class="spark" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true"></svg>';
+    }
     const min = Math.min.apply(null, series);
     const max = Math.max.apply(null, series);
     const range = (max - min) || 1;
     const pts = series.map((v, i) => {
-      const x = PAD + (i / (series.length - 1)) * (W - PAD * 2);
+      const x = series.length === 1
+        ? (PAD + (W - PAD * 2) / 2)
+        : PAD + (i / (series.length - 1)) * (W - PAD * 2);
       const y = H - PAD - ((v - min) / range) * (H - PAD * 2);
       return [x, y];
     });

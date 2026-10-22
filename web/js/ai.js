@@ -62,7 +62,10 @@
   // ---- Вспомогательные функции (внутри замыкания) ----
   function fmtVal(v, unit) {
     let s;
-    if (v >= 1000000) s = (v / 1000000).toFixed(2) + " М";
+    // Значение может отсутствовать (нет данных за период) — прежнее
+    // v.toFixed(2) на этом падало.
+    if (v === null || v === undefined || isNaN(v)) s = "—";
+    else if (v >= 1000000) s = (v / 1000000).toFixed(2) + " М";
     else if (v >= 10000) s = (v / 1000).toFixed(1) + " К";
     else s = parseFloat(v.toFixed(2)).toString();
     return s + (unit ? " " + unit : "");
@@ -74,14 +77,18 @@
   }
 
   function sourceSystem(blockId) {
+    // Блоки в структуре 2026–2027: academic, results, finance, vnoko,
+    // science, upr, digital. Коды employ, ops и reputation к ней не
+    // относятся — их больше нет, и раньше подпись под ответом
+    // уводила в несуществующую систему.
     const map = {
-      academic: "Moodle, 1С:Университет",
-      results: "Moodle, 1С:Университет",
-      finance: "1С:Бухгалтерия / ERP",
-      employ: "База карьерного центра",
-      science: "Научная часть, Scopus/WoS",
-      ops: "Учётная система деканатов",
-      reputation: "LimeSurvey, Медиалогия"
+      academic: "приёмная кампания, 1С:Университет",
+      results: "деканаты, Moodle",
+      finance: "бухгалтерия, план ФХД",
+      vnoko: "ВНОКО, результаты опросов",
+      science: "научная часть, Scopus/WoS",
+      upr: "управление по воспитательной работе",
+      digital: "ИТ-служба, ЭИОС"
     };
     return map[blockId] || "Витрина данных";
   }
@@ -96,16 +103,27 @@
     let green = 0, yellow = 0, red = 0;
     mets.forEach((m) => {
       const cur = dept && m.dept ? (m.dept.find((d) => d.deptId === dept.id) ? m.dept.find((d) => d.deptId === dept.id).value : m.current) : m.current;
-      lines.push("• " + m.title + " — " + fmtVal(cur, m.unit) + " (" + (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%)");
+      // У официального показателя изменения нет: исторического ряда нет,
+      // сравнивать не с чем. Раньше здесь стояло m.delta.toFixed(1) без
+      // проверки, и весь ответ падал.
+      const dt = (m.delta === null || m.delta === undefined)
+        ? "нет данных для сравнения"
+        : ((m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%");
+      lines.push("• " + m.title + " — " + fmtVal(cur, m.unit) + " (" + dt + ")");
       if (m.status === "green") green++;
       else if (m.status === "yellow") yellow++;
-      else red++;
+      else if (m.status === "red") red++;
     });
     lines.push("\nСтатус блока: " + green + " зелёных, " + yellow + " жёлтых, " + red + " красных показателей.");
     if (red > 0) lines.push("⚠️ Требуют внимания (красный): " + mets.filter((m) => m.status === "red").map((m) => m.title).join(", ") + ".");
     charts.push(chartSuggestion(mets[0], DEFAULT_LABELS));
     let drill = [];
-    const dd = dept ? (mets[0].drill && mets[0].drill[dept.id]) : (mets[0].drill && mets[0].drill["ff"]);
+    // Подразделения с id «ff» в структуре больше нет, поэтому записи
+    // детализации по всему университету собираются по всем ключам.
+    const dd = dept
+      ? (mets[0].drill && mets[0].drill[dept.id])
+      : (mets[0].drill && Object.keys(mets[0].drill).reduce(
+          (acc, k) => acc.concat(mets[0].drill[k] || []), []));
     drill = dd || [];
     return {
       text: lines.join("\n"),
@@ -154,22 +172,40 @@
     const label = dept ? dept.name : "в целом по университету";
     const cur = dept && m.dept ? (m.dept.find((d) => d.deptId === dept.id) ? m.dept.find((d) => d.deptId === dept.id).value : m.current) : m.current;
 
-    lines.push("• **" + m.title + "** (" + label + "): текущее значение **" + fmtVal(cur, m.unit) + "**, изменение к прошлому периоду **" + (m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%**.");
+    // У официального показателя изменения нет: исторического ряда нет,
+    // сравнивать не с чем. Раньше здесь стояло m.delta.toFixed(1) без
+    // проверки, и весь ответ падал.
+    const deltaTxt = (m.delta === null || m.delta === undefined)
+      ? "исторического ряда нет, изменение не рассчитано"
+      : ((m.delta >= 0 ? "+" : "") + m.delta.toFixed(1) + "%");
+    lines.push("• **" + m.title + "** (" + label + "): текущее значение **" + fmtVal(cur, m.unit) + "**, изменение к прошлому периоду **" + deltaTxt + "**.");
 
     if (dept && m.current) {
       const diff = ((cur - m.current) / m.current) * 100;
       lines.push("Это " + (diff >= 0 ? "выше" : "ниже") + " среднего по университету (" + fmtVal(m.current, m.unit) + ") на " + Math.abs(diff).toFixed(1) + "%.");
     }
 
-    const statusTxt = m.status === "green" ? "показатель в пределах целевого диапазона" : m.status === "yellow" ? "показатель приближается к нижней границе" : "показатель ниже критичного порога";
-    lines.push("Оценка: " + statusTxt + " (целевой порог " + fmtVal(m.target, m.unit) + ").");
+    // Статус «none» — это «целевого порога нет», а не «показатель ниже
+    // критичного порога». Раньше он попадал в последнюю ветку, и
+    // официальный показатель объявлялся провалившимся.
+    const statusTxt = m.status === "green" ? "показатель в пределах целевого диапазона"
+      : m.status === "yellow" ? "показатель приближается к нижней границе"
+      : m.status === "red" ? "показатель ниже критичного порога"
+      : "целевой порог для этого показателя не задан";
+    lines.push("Оценка: " + statusTxt + (m.target === null || m.target === undefined
+      ? "" : " (целевой порог " + fmtVal(m.target, m.unit) + ")") + ".");
     lines.push("Контекст блока «" + blockName(data, m.block) + "»: " + blockDesc(data, m.block));
     if (m.status === "red" || m.status === "yellow") lines.push("⚠️ Рекомендую детализировать разрез по подразделениям — распределение может быть неравномерным.");
 
     let source = "Витрина: " + blockName(data, m.block) + " · источник: " + sourceSystem(m.block);
     let drill = [];
     if (dept && m.drill) drill = m.drill[dept.id] || [];
-    else if (m.drill) drill = data.dept.filter((d) => d.id === "ff").map((d) => m.drill[d.id] || []).reduce((a, b) => a.concat(b), []);
+    else if (m.drill) {
+      // Раньше здесь искали подразделение с id «ff», которого в структуре
+      // уже нет (кафедры — это девять настоящих org_id), поэтому записи
+      // детализации не попадали в ответ никогда.
+      drill = Object.keys(m.drill).reduce((acc, k) => acc.concat(m.drill[k] || []), []);
+    }
 
     let labels = (ctx && ctx.periodLabels) || DEFAULT_LABELS;
     charts.push(chartSuggestion(m, labels));
