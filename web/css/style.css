@@ -99,6 +99,11 @@ input, select { font-family: inherit; }
    должно быть подписано, а источник — рядом с цифрой, а не за
    кликом в детализацию. */
 .widget-src { font-size: 10.5px; line-height: 1.3; color: var(--muted); margin-top: 4px; }
+/* Имя файла источника под названием: в нём — дата документа
+   («01_Отчёт о самообследовании на 01.04.2026.pdf»). Без даты ответ
+   выглядит как описание нынешнего положения, хотя документ может
+   описывать прошлое. */
+.src-file { font-size: 10.5px; color: var(--muted); margin: 2px 0 4px; word-break: break-all; }
 .widget-unit { font-size: 14px; font-weight: 500; color: var(--muted); }
 .widget-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
 .spark { width: 100%; height: 40px; }

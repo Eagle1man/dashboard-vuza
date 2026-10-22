@@ -59,7 +59,11 @@ RESP_MODES = ("documents", "metrics", "both")
 COMPARISON_HINT = re.compile(
     r"сравн|больше\s+всех|меньше\s+всех|топ|рейтинг"
     r"|почему|зачем|причин|объясн|проанализ|разбор|влияни"
-    r"|отч[её]т|сводк|итог|резюме|соотношени",
+    r"|отч[её]т|сводк|итог|резюме|соотношени"
+    # Перечисления тоже требуют проверки: список кафедр из документа
+    # модель собирает с повторами и пропусками, и глазом это не видно.
+    r"|\bсостав\b|перечисл|список\b|какие\s+кафедры|какие\s+академ|"
+    r"какие\s+подраздел|сколько\s+кафедр|сколько\s+академ",
     re.I)
 
 # Типы вопросов, которые роутер отдаёт как требующие объяснения.
@@ -357,13 +361,83 @@ def _score(metrics):
     return float(metrics.get("coverage_mean", 0.0))
 
 
-def _generate(agent, question, chunks, metrics_data, fix_note=None):
+def _dedup_paragraphs(text: str) -> str:
+    """Убирает дословный повтор абзаца.
+
+    Модель на 1.5b на вопросах со списком часто печатает список дважды:
+    сначала «В составе академий входят следующие кафедры:» с перечнем,
+    потом «Таким образом, ...» с тем же перечнем. Критик на это не
+    смотрит — он проверяет числа и цитаты, а не повторы, — и ректор
+    получает список вдвое длиннее без новой информации.
+    """
+    if not text:
+        return text
+    parts = [p.strip() for p in text.split("\n\n")]
+    seen, out = set(), []
+    for p in parts:
+        if not p:
+            continue
+        key = re.sub(r"\s+", " ", p).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return "\n\n".join(out)
+
+
+# Вопросы, где ответ берётся не из документа, а из справочника структуры.
+STRUCTURE_HINT = re.compile(
+    r"кафедр|академ|структур|подразделени|состав\s+(?:университет|академ)",
+    re.I)
+
+
+def _org_reference(conn) -> str:
+    """Действующая структура — из справочника, а не из документа.
+
+    Отчёт о самообследовании описывает структуру на 1 апреля 2026, а
+    действующий приказ — на 2026–2027 учебный год. Разница в две
+    кафедры и в названиях академий. Если на вопрос о составе
+    кафедр в модель уйдут только фрагменты отчёта, она честно перескажет
+    прошлый состав — и ответ будет расходиться с тем, что показано в
+    дашборде. Поэтому действующая структура подкладывается рядом, с
+    указанием, что документы могут описывать более раннее состояние.
+    """
+    rows = conn.execute(
+        "SELECT org_id, title, parent_id, kind FROM dim_org ORDER BY ord").fetchall()
+    if not rows:
+        return ""
+    academies, depts = [], []
+    for r in rows:
+        if r["kind"] == "academy":
+            academies.append({"id": r["org_id"], "title": r["title"]})
+        else:
+            depts.append({"id": r["org_id"], "title": r["title"],
+                          "parent": r["parent_id"]})
+    if not academies:
+        return ""
+    lines = ["ДЕЙСТВУЮЩАЯ СТРУКТУРА УНИВЕРСИТЕТА",
+             "(организационная структура на 2026–2027 учебный год):"]
+    for a in academies:
+        kids = [d["title"] for d in depts if d["parent"] == a["id"]]
+        lines.append(f"- {a['title']}: " + ("; ".join(kids) if kids else "кафедр нет"))
+    lines.append("ВАЖНО: документы могут описывать более раннее состояние "
+                 "структуры. Если источник говорит о другом составе или "
+                 "о других названиях академий — приведи и источник, и "
+                 "действующую структуру, и укажи, чем они расходятся.")
+    return "\n".join(lines)
+
+
+def _generate(agent, question, chunks, metrics_data, fix_note=None, conn=None):
     """Ответ агента по найденному. Возвращает (текст|None, chunks, meta)."""
     parts = []
     if chunks:
         parts.append("ДОКУМЕНТЫ-ФРАГМЕНТЫ:\n\n" + llm.build_context(chunks))
     if metrics_data and metrics_data.get("ok"):
         parts.append(tools.render(metrics_data))
+    if conn is not None and STRUCTURE_HINT.search(question or ""):
+        ref = _org_reference(conn)
+        if ref:
+            parts.append(ref)
     if not parts:
         return None, chunks, {"ok": False, "reason": "нечего предъявить модели"}
 
@@ -476,7 +550,8 @@ def run(question, conn, mode="auto", model=None, top_k=0):
     # --- 4. Ответ специалиста -----------------------------------------
     gen_agent = registry.get("analyst") if resp_mode == "metrics" else agent
     t0 = time.time()
-    answer, chunks2, meta = _generate(gen_agent, question, chunks, metrics_data)
+    answer, chunks2, meta = _generate(gen_agent, question, chunks, metrics_data,
+                                      conn=conn)
     ms = int((time.time() - t0) * 1000)
     if answer is None:
         trace.append({"agent": gen_agent.agent_id, "name": gen_agent.name,
@@ -516,7 +591,7 @@ def run(question, conn, mode="auto", model=None, top_k=0):
                           "problem": verdict_c.problem, "fix": verdict_c.fix})
             t0 = time.time()
             fixed, _ch, meta2 = _generate(
-                gen_agent, question, chunks, metrics_data,
+                gen_agent, question, chunks, metrics_data, conn=conn,
                 fix_note={"answer": answer,
                           "problem": (verdict_c.problem or "") + " " + (verdict_c.fix or "")})
             ms = int((time.time() - t0) * 1000)
@@ -558,7 +633,7 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
                   str(plan_entry.get("step", "")).replace("агентов:", "").split(",")
                   if a.strip()]
     return {
-        "answer": answer or NOT_FOUND.format(found=found),
+        "answer": _dedup_paragraphs(answer) if answer else NOT_FOUND.format(found=found),
         "sources": _sources(chunks),
         "agent_id": agent_id,
         "agent_name": agent.name,

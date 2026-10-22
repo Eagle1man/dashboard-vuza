@@ -896,7 +896,8 @@ $("btnExportPdf").addEventListener("click", function () {
         h += '<div class="src-item"><div class="src-head">' +
           esc("[" + s.n + "] ") + esc(s.title) + tag +
           (s.heading ? '<span class="src-sec"> — ' + esc(s.heading) + "</span>" : "") +
-          '</div><div class="src-snip">' + esc(s.snippet) + "</div></div>";
+          '</div><div class="src-file">' + esc(s.rel_path || "") + "</div>" +
+          '<div class="src-snip">' + esc(s.snippet) + "</div></div>";
       });
       h += "</details>";
     }
