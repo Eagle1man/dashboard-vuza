@@ -612,7 +612,7 @@ def run(question, conn, mode="auto", model=None, top_k=0):
     return _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode,
                  trace, notes,
                  (verdict_c.as_dict() if verdict_c
-                  else {"ok": True, "ran": False, "reason": "режим «быстро»"}),
+                  else {"ok": True, "ran": False, "reason": plan["reason"]}),
                  metrics_data, stats, False, started)
 
 

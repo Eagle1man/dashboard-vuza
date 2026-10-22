@@ -319,7 +319,9 @@ def _num(v):
     if isinstance(v, float):
         if v.is_integer():
             return str(int(v))
-        return ("%g" % v)
+        # Запятая, а не точка: в русском тексте дробная часть
+        # отделяется запятой, и модель переписывает число из этого блока.
+        return ("%g" % v).replace(".", ",")
     return str(v)
 
 
