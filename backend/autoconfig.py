@@ -19,9 +19,46 @@ import os
 import platform
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 from . import config
+
+
+# --- Что выбирать ---------------------------------------------------------
+#
+# Сначала то, что уже скачано в Ollama. Выбор модели, которой на
+# машине нет, даёт систему, в которой ИИ молчит: стоит тратить время
+# на настройку, чтобы потом гадать, почему ответов нет.
+#
+# qwen2.5 выбран основным: у него нет режима размышления, поэтому
+# время ответа предсказуемо. Модели семейства qwen3 (qvikhr) дают
+# ответы точнее, но на задачах с жёстким форматом уходят в размышление
+# на минуты и не подчиняются ограничению длины ответа.
+PREFERRED_LLM = ["qwen2.5:1.5b", "qwen2.5:3b", "qwen2.5:7b",
+                 "qwikhr:latest", "qwen3:1.7b", "gemma2:2b"]
+PREFERRED_EMBED = ["bge-m3", "nomic-embed-text"]
+
+
+def installed_models():
+    """Какие модели скачаны в Ollama. Пустой список — Ollama не отвечает."""
+    try:
+        with urllib.request.urlopen(
+                config.OLLAMA_URL.rstrip("/") + "/api/tags", timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return [m.get("name", "") for m in data.get("models", [])]
+    except Exception:
+        return []
+
+
+def _match(preferred, installed):
+    """Первая из предпочтительных, что скачана. Тег значения не важен."""
+    for name in preferred:
+        base = name.split(":")[0]
+        for inst in installed:
+            if inst == name or inst.split(":")[0] == base:
+                return inst
+    return None
 
 
 def total_ram_gb() -> float:
@@ -131,19 +168,44 @@ def choose_models(hw: dict = None):
     hw = hw or detect()
     budget = hw["budget_gb"]
     vram = hw["vram_gb"]
+    installed = installed_models()
+
+    llm = _match(PREFERRED_LLM, installed)
+    emb = _match(PREFERRED_EMBED, installed)
+
+    if llm is None:
+        # Ничего не скачано — выбираем по железу, как раньше.
+        if vram >= 9:
+            llm = config.MODELS_MEDIUM[0]
+        elif budget >= 11:
+            llm = config.MODELS_MEDIUM[0]
+        elif budget >= 5.5:
+            llm = config.MODELS_SMALL[0]
+        else:
+            llm = config.MODELS_TINY[0]
+        why_llm = "ничего не скачано, выбрано по железу"
+    else:
+        why_llm = "уже скачана"
+
+    if emb is None:
+        emb = (config.EMBED_MEDIUM if (vram >= 9 or budget >= 11)
+               else config.EMBED_TINY)[0]
+        why_emb = "ничего не скачано, выбрано по железу"
+    else:
+        why_emb = "уже скачана"
 
     if vram >= 9:
-        return (config.MODELS_MEDIUM[0], config.EMBED_MEDIUM[0], "gpu",
-                f"видеокарта {hw['vram_gb']} ГБ — можно 7b")
-    if budget >= 11:
-        return (config.MODELS_MEDIUM[0], config.EMBED_MEDIUM[0], "ram",
-                f"свободно {hw['ram_free_gb']} ГБ ОЗУ — 7b на процессоре")
-    if budget >= 5.5:
-        return (config.MODELS_SMALL[0], config.EMBED_TINY[0], "mid",
-                f"свободно {hw['ram_free_gb']} ГБ — 3b, ответ будет медленнее")
-    return (config.MODELS_TINY[0], config.EMBED_TINY[0], "tiny",
-            f"свободно {hw['ram_free_gb']} ГБ — только 1.5b, "
-            f"качество ответов будет скромным")
+        profile = "gpu"
+    elif budget >= 11:
+        profile = "ram"
+    elif budget >= 5.5:
+        profile = "mid"
+    else:
+        profile = "tiny"
+
+    return (llm, emb, profile,
+            f"{why_llm}; {why_emb}; свободно {hw['ram_free_gb']} ГБ ОЗУ, "
+            f"видеокарта {hw['vram_gb'] if hw['vram_gb'] else 'нет'}")
 
 
 def save_models(llm: str, emb: str, profile: str, hw: dict):
@@ -175,6 +237,24 @@ def load_models():
 def main():
     hw = detect()
     llm, emb, profile, why = choose_models(hw)
+
+    # Модель эмбеддингов нельзя менять, пока в базе лежат векторы,
+    # посчитанные другой моделью: у них другая размерность, и поиск
+    # начнёт сравнивать векторы разной длины — молча и неправильно.
+    # Чтобы перейти на другую, нужен пересчёт корпуса.
+    from . import db
+    try:
+        conn = db.connect()
+        stored = db.get_meta(conn, "embed_model")
+        n_vec = conn.execute("SELECT COUNT(*) FROM chunk_vec").fetchone()[0]
+        conn.close()
+    except Exception:
+        stored, n_vec = None, 0
+    if n_vec and stored and stored != emb:
+        emb = stored
+        why += (f"; модель эмбеддингов оставлена прежней ({stored}): "
+                f"в базе {n_vec} векторов, посчитанных ею")
+
     save_models(llm, emb, profile, hw)
 
     print("Компьютер:")

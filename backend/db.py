@@ -637,6 +637,13 @@ def make_drill(metric_id, seed, dept_name, dept_id, direction):
     return rows
 
 
+# Единицы, для которых разбивка по кафедрам осмысленна: это счётные
+# величины. Для процентов, баллов, индексов и часов разбивка бессмысленна:
+# кафедра получает долю от процента, и «успеваемость 11,4 %» выглядит
+# как провал, хотя на деле это доля университетских 94 % (0,82 · 11,4).
+COUNT_UNITS = {"чел.", "шт.", "шт./год", "тыс", "млн ₽"}
+
+
 def compute_status(value, direction, target):
     # Целевого порога в документах нет — статус по нему считать не из чего.
     # Показывать «красный» по несуществующей цели было бы выдумкой.
@@ -693,23 +700,32 @@ def build_demo(seed=config.DEMO_SEED):
             # итог. Дефект был не виден, пока цифры показывались только общей
             # строкой; как только агенты стали считать разбивку по кафедрам,
             # части перестали сходиться с целым.
-            weights = [0.82 + rnd() * 0.36 for _ in DEPTS]
-            wsum = sum(weights)
-            dept_values = []
-            for di, org in enumerate(DEPTS):
-                dept_id, dept_name = org[0], org[1]
-                v = current * (weights[di] / wsum)
-                rounded = js_round(v * 10) / 10
-                dept_values.append({
-                    "dept_id": dept_id, "dept_name": dept_name,
-                    "value": rounded,
-                    "share": (rounded / current * 100) if current else 0.0,
-                })
+            #
+            # Разбивка строится только для счётных величин. Для процентов
+            # она бессмысленна: кафедра получила бы долю от процента, и
+            # «успеваемость 11,4 %» читалось бы как провал там, где
+            # на деле 94 % по университету.
+            if unit in COUNT_UNITS:
+                weights = [0.82 + rnd() * 0.36 for _ in DEPTS]
+                wsum = sum(weights)
+                dept_values = []
+                for di, org in enumerate(DEPTS):
+                    dept_id, dept_name = org[0], org[1]
+                    v = current * (weights[di] / wsum)
+                    rounded = js_round(v * 10) / 10
+                    dept_values.append({
+                        "dept_id": dept_id, "dept_name": dept_name,
+                        "value": rounded,
+                        "share": (rounded / current * 100) if current else 0.0,
+                    })
+            else:
+                dept_values = []
 
             drill = {}
-            for di, org in enumerate(DEPTS):
-                drill[org[0]] = make_drill(mid, seed + i * 7 + di, org[1],
-                                           org[0], direction)
+            if dept_values:
+                for di, org in enumerate(DEPTS):
+                    drill[org[0]] = make_drill(mid, seed + i * 7 + di, org[1],
+                                               org[0], direction)
 
         metrics.append({
             "metric_id": mid, "block_id": block, "title": title,

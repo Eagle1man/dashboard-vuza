@@ -305,6 +305,24 @@ def query(question: str, conn, limit_periods: int = 6):
     }
 
 
+def _num(v):
+    """Число в том виде, в каком его должен увидеть человек.
+
+    Модель переписывает то, что видит. Если в блоке «2946.0», то и в
+    ответе ректор читает «2946.0» — как будто у числа есть дробная
+    часть, которой нет.
+    """
+    if v is None:
+        return "—"
+    if isinstance(v, bool):
+        return str(v)
+    if isinstance(v, float):
+        if v.is_integer():
+            return str(int(v))
+        return ("%g" % v)
+    return str(v)
+
+
 def render(data: dict) -> str:
     """Готовит блок текста для подстановки в контекст агента."""
     if not data.get("ok"):
@@ -321,7 +339,7 @@ def render(data: dict) -> str:
               "ЧИСЛА ИЗ ВИТРИНЫ ДАШБОРДА (по документам университета):")
     lines = [header,
              f"показатель: {m['title']} ({m['unit'] or 'без единиц'})",
-             f"текущее значение: {data['current']}"]
+             f"текущее значение: {_num(data['current'])}"]
     if data["delta"] is not None:
         lines.append(f"изменение к предыдущему периоду: {data['delta']:+.1f} %")
     if m["target"] is not None:

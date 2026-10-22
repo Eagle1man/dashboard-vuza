@@ -38,8 +38,63 @@ from . import tools
 from .agents import critic as critic_mod
 from .agents import registry
 
-MODES = ("fast", "crew")
+MODES = ("auto", "fast", "crew")
 RESP_MODES = ("documents", "metrics", "both")
+
+# --- Решение о числе агентов --------------------------------------------
+#
+# Раньше режим выбирал человек переключателем в интерфейсе, и подпись
+# «Один агент: без роутера и критики» была неправдой: в режиме «fast»
+# пропускался только критик, а роутер и аналитик витрины работали
+# всегда. Теперь число агентов решает система, по типу вопроса.
+#
+# Критик — отдельный вызов модели: он перечитывает готовый ответ по
+# фрагментам и не видит рассуждений автора. На процессоре это десятки
+# секунд, и платить ими за простой факт («сколько обучающихся») незачем:
+# там, где ответ — цифра из документа, проверять нечего, а ректор
+# ждать не готов.
+#
+# Критик нужен там, где ответ собирается из нескольких источников или
+# требует объяснения: там он ловит выдумку и недословную цитату.
+COMPARISON_HINT = re.compile(
+    r"сравн|больше\s+всех|меньше\s+всех|топ|рейтинг"
+    r"|почему|зачем|причин|объясн|проанализ|разбор|влияни"
+    r"|отч[её]т|сводк|итог|резюме|соотношени",
+    re.I)
+
+# Типы вопросов, которые роутер отдаёт как требующие объяснения.
+CRITIC_QTYPES = ("explain", "report")
+
+
+def plan_agents(question, qtype=None, resp_mode=None):
+    """Решает, сколько агентов нужно на вопрос.
+
+    Возвращает словарь: critic (нужен ли критик), reason (почему так)
+    и agents (список имён для показа). Решение обязано быть видно в
+    следе работы: утверждать «ответ проверен критиком» можно только
+    тогда, когда критик действительно работал, а «экипаж отработал» —
+    только когда отработал.
+    """
+    why = []
+    need = False
+    if qtype in CRITIC_QTYPES:
+        need = True
+        why.append("тип вопроса — " + qtype)
+    if resp_mode == "both":
+        need = True
+        why.append("режим — числа и документы")
+    if COMPARISON_HINT.search(question or ""):
+        need = True
+        why.append("вопрос требует разбора или сравнения")
+
+    agents = ["роутер", "специалист"]
+    if need:
+        agents.append("критик")
+        return {"critic": True, "reason": "критик нужен: " + ", ".join(why),
+                "agents": agents}
+    return {"critic": False,
+            "reason": "критик не нужен: простой факт, проверять нечего",
+            "agents": agents}
 
 # Вопросы, где почти наверняка нужны числа, а не цитаты.
 #
@@ -61,6 +116,23 @@ METRICS_HINT = re.compile(
     r"|топ|рейтинг",
     re.I)
 
+# Форма вопроса: по ней решается, звать ли критика и в каком режиме
+# отвечать. Отдельные списки, а не один общий, потому что «почему
+# выросло отчисление» — это объяснение, а «сводка по университету за
+# 2026 год» — отчёт, и критик нужен в обоих случаях, а вот режим
+# ответа у них разный.
+QUESTION_REPORT_HINT = re.compile(
+    r"отч[её]т|сводк|итог|резюме|обзор|анализ\s+за\s+период|"
+    r"по\s+всем\s+блокам|по\s+всему\s+университет",
+    re.I)
+QUESTION_EXPLAIN_HINT = re.compile(
+    r"почему|зачем|причин|объясн|проанализ|разбор|влияни|чем\s+обуслов",
+    re.I)
+QUESTION_NUMERIC_HINT = re.compile(
+    r"сколько|какой\s+процент|доля|объ[её]м|численност|сумм|итого|"
+    r"размер|уровень|ставк|соотношени",
+    re.I)
+
 NOT_FOUND = (
     "В загруженных документах ответ на этот вопрос не найден, и "
     "повторный поиск его не дал.\n\n"
@@ -70,8 +142,65 @@ NOT_FOUND = (
     "и запустить start.bat заново.")
 
 
-def _route(question, model=None):
+def _route_deterministic(question, conn):
+    """Домен, тип и режим — по словам вопроса, без обращения к модели.
+
+    Зачем. Роутер на локальной модели 1.5b часто не выдаёт допустимый
+    код домена: на вопрос «сколько всего обучающихся» он отвечал
+    «ДОМЕН: 123456», и вопрос уходил в сводного аналитика, хотя по
+    словам домен определялся однозначно. На той же машине модель с
+    размышлением уходила в них на пять минут — а роутер должен быть
+    самым быстрым шагом, а не самым долгим.
+
+    Домен выводится из показателя, который нашёлся в витрине: у
+    показателя известен блок, а у блока — специалист. Это надёжнее
+    угадывания по синонимам: синонимы «студенты» есть у половины
+    показателей.
+
+    Возвращает (domain, qtype, resp_mode) или (None, None, None), если
+    вопрос не удаётся разобрать без модели.
+    """
+    metric = tools.find_metric(conn, question)
+    agent_id = None
+    resp_mode = None
+    if metric:
+        block = metric.get("block_id")
+        specialist = None
+        for a in registry.SPECIALISTS:
+            if block and block in a.blocks:
+                specialist = a.agent_id
+                break
+        if specialist:
+            agent_id = specialist
+
+    qtype = None
+    if QUESTION_REPORT_HINT.search(question or ""):
+        qtype = "report"
+    elif QUESTION_EXPLAIN_HINT.search(question or ""):
+        qtype = "explain"
+    else:
+        qtype = "fact"
+
+    if METRICS_HINT.search(question or ""):
+        resp_mode = "both"
+    elif metric and QUESTION_NUMERIC_HINT.search(question or ""):
+        resp_mode = "metrics"
+    else:
+        resp_mode = "documents"
+
+    if agent_id is None:
+        return None, qtype, resp_mode
+    return agent_id, qtype, resp_mode
+
+
+def _route(question, conn=None, model=None):
     """Определяет домен, тип и режим. (domain, qtype, resp_mode, note)."""
+    # Сначала слова: это быстро и надёжно, когда показатель найден.
+    if conn is not None:
+        agent_id, qtype, resp_mode = _route_deterministic(question, conn)
+        if agent_id:
+            return agent_id, qtype, resp_mode, "домен и режим определены по вопросу"
+
     hint = "\n".join(f"{k} — {v}" for k, v in registry.block_titles().items())
     user = "ВОПРОС: " + question + "\n\nДомены:\n" + hint
     text, meta = llm.chat(registry.ROUTER.system, user, model=model,
@@ -251,15 +380,15 @@ def _generate(agent, question, chunks, metrics_data, fix_note=None):
     return (text.strip() if meta.get("ok") else None), chunks, meta
 
 
-def run(question, conn, mode="crew", model=None, top_k=0):
+def run(question, conn, mode="auto", model=None, top_k=0):
     if mode not in MODES:
-        mode = "crew"
+        mode = "auto"
     started = time.time()
     trace, notes = [], []
 
     # --- 1. Роутер ----------------------------------------------------
     t0 = time.time()
-    agent_id, qtype, resp_mode, route_note = _route(question, model=model)
+    agent_id, qtype, resp_mode, route_note = _route(question, conn, model=model)
     ms = int((time.time() - t0) * 1000)
     if agent_id is None:
         trace.append({"agent": "router", "name": "Роутер",
@@ -272,6 +401,19 @@ def run(question, conn, mode="crew", model=None, top_k=0):
         trace.append({"agent": "router", "name": "Роутер", "ok": True, "ms": ms,
                       "step": "домен: " + agent_id + ", режим: " + resp_mode,
                       "qtype": qtype, "note": route_note})
+
+    # --- 1.1. Сколько агентов нужно ---------------------------------
+    # Решение принимается здесь и показывается в следе работы. Без
+    # этого шага интерфейс обещает «роутер → специалист → критик»
+    # всему подряд, а потом критика в следа нет — и утверждение
+    # «ответ проверен» ничего не значит.
+    plan = plan_agents(question, qtype, resp_mode)
+    if mode == "fast":
+        plan = {"critic": False, "agents": plan["agents"],
+                "reason": "критик не запускался: задан режим «быстро» вручную"}
+    trace.append({"agent": "planner", "name": "Планировщик", "ok": True, "ms": 0,
+                  "step": "агентов: " + ", ".join(plan["agents"]),
+                  "note": plan["reason"]})
 
     # --- 2. Числа из витрины -----------------------------------------
     # Считаем всегда, даже когда роутер выбрал документы: запрос к
@@ -353,8 +495,10 @@ def run(question, conn, mode="crew", model=None, top_k=0):
                   "step": "ответил по источникам", "chunks": len(chunks)})
 
     # --- 5. Критик ------------------------------------------------------
+    # Критик запускается не всегда: решение принял планировщик выше,
+    # и если критик не работал, в следе это должно быть видно.
     verdict_c = None
-    if mode == "crew":
+    if plan["critic"]:
         t0 = time.time()
         verdict_c = critic_mod.review(answer, chunks, model=model)
         ms = int((time.time() - t0) * 1000)
@@ -388,7 +532,7 @@ def run(question, conn, mode="crew", model=None, top_k=0):
                               "reason": meta2.get("reason")})
                 notes.append(f"{gen_agent.name}: не смог исправить ответ")
     else:
-        notes.append("Критик не запускался: режим «быстро»")
+        notes.append("Критик не запускался: " + plan["reason"])
 
     return _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode,
                  trace, notes,
@@ -404,6 +548,15 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
         f"- «{c['doc_title']}»" + (f", раздел {c['heading']}" if c.get("heading") else "")
         for c in chunks[:5]
     ) or "(ничего не нашлось)"
+    # Сколько агентов решило работать — достаём из следа, где это уже
+    # записано планировщиком. Отдельным полем это нужно интерфейсу:
+    # показать «роутер, специалист» честнее, чем обещать «экипаж».
+    plan_entry = next((t for t in trace if t.get("agent") == "planner"), None)
+    agents = []
+    if plan_entry:
+        agents = [a.strip() for a in
+                  str(plan_entry.get("step", "")).replace("агентов:", "").split(",")
+                  if a.strip()]
     return {
         "answer": answer or NOT_FOUND.format(found=found),
         "sources": _sources(chunks),
@@ -412,6 +565,8 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
         "qtype": qtype,
         "resp_mode": resp_mode,
         "mode": mode,
+        "agents": agents,
+        "critic_ran": bool(verdict and verdict.get("ran")),
         "trace": trace,
         "notes": notes,
         "critic": verdict,
@@ -464,4 +619,9 @@ def describe():
             "blocks": a.blocks, "mandate": a.mandate, "documents": None,
         })
     return {"agents": items, "modes": list(MODES),
-            "resp_modes": list(RESP_MODES)}
+            "resp_modes": list(RESP_MODES),
+            "auto_rule": "критик запускается на вопросах, где нужен разбор: "
+                         "тип explain или report, режим «числа и документы», "
+                         "вопрос со сравнением или объяснением. На простой "
+                         "факт критик не зовётся — там проверять нечего, "
+                         "а ректор ждать не готов."}

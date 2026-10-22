@@ -162,7 +162,7 @@ def ask_crew(req: AskRequest):
     if not question:
         raise HTTPException(status_code=400, detail="Пустой вопрос")
     question = question[:2000]
-    mode = req.mode if req.mode in crew.MODES else "crew"
+    mode = req.mode if req.mode in crew.MODES else "auto"
 
     c = conn()
     try:

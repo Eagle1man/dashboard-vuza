@@ -38,10 +38,13 @@ def close(a, b, tol=1e-9):
 
 
 def main():
-    js = dump_js()
+    js_all = dump_js()
+    js = js_all["demo"]
+    js_official = js_all["official"]
     all_metrics = build_demo()["metrics"]
-    # Сверяется только слой ДЕМО: официальные числа приходят из базы,
-    # а не из генератора, и в data.js их нет намеренно.
+    # Сверяется слой ДЕМО: официальные числа приходят из базы, а не из
+    # генератора. В data.js они лежат отдельно — как резерв для режима
+    # без сервера, — и сверяются тоже, отдельной проверкой ниже.
     py = [m for m in all_metrics if m["source"] == "demo"]
     failures = []
     checked = 0
@@ -59,6 +62,25 @@ def main():
         if m["drill"] or m["dept"]:
             failures.append(f"{m['metric_id']}: у официальной метрики не должно "
                             f"быть разбивки по кафедрам")
+
+    # Резерв в data.js обязан совпадать с базой: иначе без сервера
+    # ректор увидит одно число, а с сервером — другое, и подписать
+    # это будет нечем.
+    if len(js_official) != len(official):
+        failures.append(f"официальных метрик: js={len(js_official)} "
+                        f"python={len(official)}")
+    else:
+        for j, m in zip(js_official, official):
+            if j["id"] != m["metric_id"]:
+                failures.append(f"{j['id']}: порядок официальных метрик разошёлся")
+                continue
+            if j["current"] is None or not close(j["current"], m["current"]):
+                failures.append(f"{j['id']}: значение в data.js "
+                                f"js={j['current']} py={m['current']}")
+            if j["hasHistory"]:
+                failures.append(f"{j['id']}: в data.js у официальной метрики "
+                                f"не должно быть истории")
+            checked += 1
 
     if len(js) != len(py):
         raise SystemExit(f"метрик: js={len(js)}, python={len(py)}")
@@ -101,8 +123,9 @@ def main():
         for f in failures[:20]:
             print("  -", f)
         return 1
-    print(f"СОВПАДАЕТ: {checked} демо-метрик (ряды, статусы, подразделения "
-          f"и все записи drill-down идентичны выводу Node); "
+    print(f"СОВПАДАЕТ: {checked} метрик (ряды, статусы, подразделения "
+          f"и все записи drill-down идентичны выводу Node; официальные "
+          f"значения в data.js совпадают с базой); "
           f"{len(official)} официальных метрик проверены на отсутствие "
           f"выдуманной истории")
     return 0

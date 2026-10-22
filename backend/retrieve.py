@@ -133,27 +133,56 @@ def _block_clause(blocks):
         list(blocks)
 
 
-def _fts_search(conn, query: str, limit: int, blocks=None):
+def _demo_clause(include_demo):
+    """Отбрасывает демонстрационные документы, если есть настоящие.
+
+    Зачем. Демо-документы содержат ВЫМЫШЛЕННЫЕ числа: в демонстрационном
+    «Положении о приёме» написано, что студентов 20 800, тогда как в
+    отчёте о самообследовании их 2 946. Пока демо-документы попадают в
+    выдачу, модель приводит «20 800» как число университета — а модель
+    на 1.5b пометку «демо» пропускает.
+
+    Отбрасывает их код, а не просьба модели: на это правило полагаться
+    нельзя.
+
+    Демо-документы остаются в корпусе для установки, где настоящих
+    документов нет: тогда они единственные, и показывать их полезнее,
+    чем не показывать ничего. Но как только в базе появляется хотя бы
+    один настоящий документ, вымышленные числа из ответа исчезают.
+    """
+    if include_demo:
+        return "", []
+    return " AND d.is_demo = 0", []
+
+
+def _has_official_docs(conn):
+    row = conn.execute(
+        "SELECT 1 FROM doc WHERE is_demo = 0 LIMIT 1").fetchone()
+    return bool(row)
+
+
+def _fts_search(conn, query: str, limit: int, blocks=None, include_demo=True):
     expr = fts_expression(query)
     if not expr:
         return [], 0
     clause, params = _block_clause(blocks)
+    demo_clause, demo_params = _demo_clause(include_demo)
     try:
         rows = conn.execute(
             "SELECT c.chunk_id, bm25(chunk_fts) AS score"
             " FROM chunk_fts c"
             " JOIN doc_chunk dc ON dc.chunk_id = c.chunk_id"
             " JOIN doc d ON d.doc_id = dc.doc_id"
-            " WHERE chunk_fts MATCH ?" + clause +
+            " WHERE chunk_fts MATCH ?" + clause + demo_clause +
             " ORDER BY score LIMIT ?",
-            [expr] + params + [limit]).fetchall()
+            [expr] + params + demo_params + [limit]).fetchall()
     except Exception:
         # FTS5 не должен ронять поиск целиком: ловим и идём только по вектору
         return [], 0
     return [(int(r["chunk_id"]), float(r["score"])) for r in rows], len(expr.split(" OR "))
 
 
-def _vector_search(conn, question: str, limit: int, blocks=None):
+def _vector_search(conn, question: str, limit: int, blocks=None, include_demo=True):
     """Возвращает (список (chunk_id, cos), backend, max_cos)."""
     # Если модели нет, векторный канал всё равно будет отброшен при
     # слиянии — незачем грузить в память все векторы и считать
@@ -162,10 +191,11 @@ def _vector_search(conn, question: str, limit: int, blocks=None):
         return [], "ollama-offline", 0.0
 
     clause, params = _block_clause(blocks)
+    demo_clause, demo_params = _demo_clause(include_demo)
     rows = conn.execute(
         "SELECT v.chunk_id, v.dim, v.vec FROM chunk_vec v"
-        " JOIN doc d ON d.doc_id = v.doc_id WHERE 1=1" + clause,
-        params).fetchall()
+        " JOIN doc d ON d.doc_id = v.doc_id WHERE 1=1" + clause + demo_clause,
+        params + demo_params).fetchall()
     if not rows:
         return [], "none", 0.0
     dim = int(rows[0]["dim"])
@@ -210,9 +240,15 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
     """
     top_k = top_k or config.RETRIEVE_TOP_K
     pool = pool or max(top_k * 3, 30)
+    # Демо-документы показываются, только если настоящих нет: в корпусе
+    # с настоящими документами вымышленные числа в ответе опаснее, чем
+    # отсутствие ответа.
+    include_demo = not _has_official_docs(conn)
 
-    fts, n_terms = _fts_search(conn, question, pool, blocks=blocks)
-    vec, vec_backend, max_cos = _vector_search(conn, question, pool, blocks=blocks)
+    fts, n_terms = _fts_search(conn, question, pool, blocks=blocks,
+                               include_demo=include_demo)
+    vec, vec_backend, max_cos = _vector_search(conn, question, pool, blocks=blocks,
+                                                include_demo=include_demo)
 
     # --- решения о доверии каналам -------------------------------
     w_fts = 1.0 if fts else 0.0

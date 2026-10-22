@@ -65,12 +65,48 @@ def test_critic_empty():
     check("пустой ответ помечается как неизвестный", bool(v.reason))
 
 
+def test_plan_agents():
+    """Число агентов решает система, и решение осмысленно.
+
+    Критик — отдельный вызов модели: на простом факте («сколько
+    студентов») он не нужен, там проверять нечего, а ректор ждать не
+    готов. На вопросе с разбором или сравнением — нужен: там ответ
+    собирается из нескольких источников, и критик ловит выдумку.
+    """
+    fact = crew.plan_agents("сколько всего обучающихся в университете",
+                            qtype="fact", resp_mode="metrics")
+    check("на простой факт критик не зовётся", fact["critic"] is False,
+          fact["reason"])
+    check("на простой факт агентов двое", fact["agents"] == ["роутер", "специалист"],
+          str(fact["agents"]))
+
+    explain = crew.plan_agents("почему выросло отчисление",
+                                qtype="explain", resp_mode="both")
+    check("на объяснение критик зовётся", explain["critic"] is True,
+          explain["reason"])
+    check("на объяснение агентов трое", len(explain["agents"]) == 3,
+          str(explain["agents"]))
+
+    report = crew.plan_agents("сделай сводку по университету",
+                               qtype="report", resp_mode="documents")
+    check("на отчёт критик зовётся", report["critic"] is True, report["reason"])
+
+    compare = crew.plan_agents("сравни показатели двух академий",
+                                qtype="fact", resp_mode="documents")
+    check("на сравнение критик зовётся", compare["critic"] is True,
+          compare["reason"])
+
+    check("решение объяснено", all(p.get("reason") for p in
+                                    (fact, explain, report, compare)))
+
+
 def test_registry_blocks():
     ids = {a.agent_id for a in registry.all_agents()}
-    check("девять агентов объявлено", len(ids) == 9, f"найдено {len(ids)}")
+    # Роутер, семь специалистов, аналитик витрины и сводный аналитик.
+    check("десять агентов объявлено", len(ids) == 10, f"найдено {len(ids)}")
     check("есть аналитик витрины", "analyst" in ids)
     check("роутер просит выбрать режим", "РЕЖИМ" in registry.ROUTER.system)
-    for block_id in ("academic", "results", "vnoko", "science",
+    for block_id in ("academic", "results", "finance", "vnoko", "science",
                      "upr", "digital"):
         agents = [a for a in registry.all_agents() if block_id in a.blocks]
         check(f"специалист есть для блока {block_id}", len(agents) == 1)
@@ -80,8 +116,14 @@ def test_specialists_have_distinct_prompts():
     prompts = [a.system for a in registry.SPECIALISTS]
     check("промпты специалистов различаются", len(set(prompts)) == len(prompts))
     for a in registry.SPECIALISTS:
+        # Базовое правило «отвечать только по источникам» и собственная
+        # постановка агента. Первая фраза базового правила менялась:
+        # теперь агенту можно дать не только фрагменты документов, но и
+        # посчитанные числа витрины, поэтому проверяем по смыслу, а не
+        # по точному тексту.
         check(f"у агента {a.agent_id} есть постановка",
-              "ТОЛЬКО по фрагментам" in a.system and a.mandate != "",
+              ("ТОЛЬКО по тому, что тебе дали" in a.system
+               or "ТОЛЬКО по фрагментам" in a.system) and a.mandate != "",
               "потеряно базовое правило или mandate")
 
 
@@ -215,6 +257,8 @@ def test_metrics_tool_marks_demo():
     conn = db.connect()
     try:
         r = tools.query("какая успеваемость студентов", conn)
+        count = tools.query("сколько публикаций в Scopus", conn)
+        official = tools.query("сколько всего обучающихся в университете", conn)
         junk = tools.query("какая погода в Ростове", conn)
     finally:
         conn.close()
@@ -222,7 +266,20 @@ def test_metrics_tool_marks_demo():
     check("результат помечен как демонстрационный", r.get("demo") is True)
     check("в тексте есть предупреждение", "демонстрационной" in r.get("notice", ""),
           r.get("notice", ""))
-    check("разбивка по подразделениям получена", len(r.get("by_org", [])) >= 5)
+    # Разбивка по кафедрам есть только у счётных величин. У процента
+    # она бессмысленна: кафедра получила бы долю от процента, и
+    # «успеваемость 11,4 %» читалось бы как провал.
+    check("у процентного показателя разбивки нет",
+          len(r.get("by_org", [])) == 0, str(r.get("by_org"))[:80])
+    check("у счётного показателя разбивка получена",
+          len(count.get("by_org", [])) >= 5, str(count.get("by_org"))[:80])
+    # Официальный показатель: источник назван, демо-метки нет.
+    check("официальный показатель не помечен как демо",
+          official.get("ok") is True and official.get("demo") is False,
+          str(official.get("demo")))
+    check("у официального показателя назван источник",
+          "Отчёт о самообследовании" in (official.get("notice") or ""),
+          str(official.get("notice"))[:100])
     check("посторонний вопрос честно отклонён", junk.get("ok") is False, str(junk))
 
 
@@ -246,7 +303,7 @@ def main():
     print("Проверка экипажа агентов (без языковой модели)")
     for fn in (test_critic_verdict_ok, test_critic_verdict_fail,
                test_critic_garbage_is_not_ok, test_critic_empty,
-               test_registry_blocks, test_specialists_have_distinct_prompts,
+               test_registry_blocks, test_specialists_have_distinct_prompts, test_plan_agents,
                test_generalist_has_no_filter, test_unknown_agent_is_generalist,
                test_degraded_when_model_down,
                test_agent_without_documents_fails_honestly,

@@ -29,4 +29,12 @@ const out = data.metrics
     drill: Object.keys(m.drill).sort().map((k) =>
       m.drill[k].map((r) => ({ fio: r.fio, value: r.value, reason: r.reason }))),
   }));
-process.stdout.write(JSON.stringify(out, null, 1));
+
+// Официальные значения из data.js — резерв для режима без сервера.
+// Они обязаны совпадать с тем, что лежит в базе: иначе в офлайне
+// ректор увидит одно число, а с сервером — другое.
+const official = data.metrics
+  .filter((m) => m.source === 'official')
+  .map((m) => ({ id: m.id, current: m.current, hasHistory: m.hasHistory }));
+
+process.stdout.write(JSON.stringify({ demo: out, official: official }, null, 1));
