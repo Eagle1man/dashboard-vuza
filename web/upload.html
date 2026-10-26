@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Загрузка данных · Дашборд ректора ИУБиП</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+        <div class="brand-text">
+          <strong>Дашборд ректора</strong>
+          <span>ЧОУ ВО «Южный университет (ИУБиП)» · Загрузка данных</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <a href="/dashboard.html" class="btn btn-outline">← К ленте показателей</a>
+        <a href="uploads.html" class="btn btn-outline">Мои загрузки</a>
+        <button id="btnLogout" class="btn btn-outline">Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" style="max-width: 760px">
+    <div class="page-head">
+      <div>
+        <h1>Загрузить данные подразделения</h1>
+        <p class="sub">Каждый файл приходит с анкетой: зачем данные, за какой период,
+        как часто обновляются и кто отвечает. Без этого число в дашборде нельзя
+        подписать источником — а значит, нельзя принимать по нему решение.</p>
+      </div>
+    </div>
+
+    <div id="authBox" class="section-card" style="display:none">
+      <div class="card-head"><h3>Вход подразделения</h3></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Логин подразделения</label>
+          <input type="text" id="loginInput" placeholder="например, buhgalteria" />
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="passInput" placeholder="••••••••" />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1">
+          <button class="btn btn-primary" id="btnLogin">Войти</button>
+          <span id="loginErr" class="muted" style="color:var(--red);margin-left:10px"></span>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:8px">
+        Логин и пароль выдаёт администратор дашборда. Администратор заходит под логином
+        <code>admin</code>.
+      </p>
+    </div>
+
+    <form id="uploadForm" class="section-card" style="display:none">
+      <div class="card-head"><h3>Анкета и файл</h3></div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Подразделение <span class="muted" style="font-weight:normal">(определяется по логину)</span></label>
+          <input type="text" id="divInput" readonly style="background:var(--surface-2)" />
+        </div>
+        <div class="form-group">
+          <label>Что это за данные <span class="muted" style="font-weight:normal">обязательно</span></label>
+          <input type="text" id="titleInput" placeholder="например, Отчёт по успеваемости за I семестр 2025/26" />
+          <p class="hint">Краткое название, которое будет видно в списке загрузок.</p>
+        </div>
+        <div class="form-group">
+          <label>Зачем данные / какое решение помогают принять <span class="muted" style="font-weight:normal">обязательно</span></label>
+          <textarea id="purposeInput" rows="3" placeholder="например, увидеть динамику отсева и решить, нужны ли дополнительные занятия"></textarea>
+          <p class="hint">Без ответа на этот вопрос число в карточке дашборда — просто цифра, а не основа для решения.</p>
+        </div>
+        <div class="form-group">
+          <label>Период <span class="muted" style="font-weight:normal">обязательно</span></label>
+          <input type="text" id="periodInput" placeholder="например, I квартал 2026, 01.04.2026, 2026" />
+          <p class="hint">За какой период собраны данные. Будет показан в карточке показателя.</p>
+        </div>
+        <div class="form-group">
+          <label>Файл <span class="muted" style="font-weight:normal">обязательно</span></label>
+          <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.html,.htm" />
+          <p class="hint">PDF, DOCX, XLSX, MD, TXT, HTML. До 50 МБ. Повторная загрузка того же файла (по содержимому) не допускается.</p>
+        </div>
+        <div class="form-group">
+          <label>Как часто обновляются данные</label>
+          <select id="freqInput">
+            <option value="разово" selected>Разово</option>
+            <option value="ежемесячно">Ежемесячно</option>
+            <option value="ежеквартально">Ежеквартально</option>
+            <option value="раз в семестр">Раз в семестр</option>
+            <option value="ежегодно">Ежегодно</option>
+          </select>
+          <p class="hint">По умолчанию «разово» — система не будет сигналить о просрочке. Выберите реальную частоту, и дашборд покажет «просрочено», если данные не обновятся вовремя.</p>
+        </div>
+        <div class="form-group">
+          <label>Ответственный <span class="muted" style="font-weight:normal">обязательно</span></label>
+          <input type="text" id="respInput" placeholder="ФИО, должность, телефон или почта" />
+          <p class="hint">Кто отвечает за эти данные и ответит на вопросы ректора.</p>
+        </div>
+        <div class="form-group">
+          <label>Уровень доступа</label>
+          <select id="accessInput">
+            <option value="open" selected>Открыто (видно всем в ответах ИИ)</option>
+            <option value="internal">Служебное (только внутри вуза)</option>
+            <option value="confidential">Конфиденциальное (хранится и индексируется для ИИ-поиска)</option>
+          </select>
+          <p class="hint">Конфиденциальные файлы хранятся в базе и индексируются для ИИ-поиска — так решено владельцем системы. Уровень доступа ставьте честно, это видно в списке загрузок.</p>
+        </div>
+        <div class="form-group">
+          <label>Какие карточки дашборда кормит этот документ</label>
+          <select id="metricsInput" multiple size="8"></select>
+          <p class="hint">Можно выбрать несколько — список берётся из настоящих показателей дашборда. Если не выбрать — документ просто попадёт в базу знаний, и ИИ сможет ссылаться на него в ответах.</p>
+        </div>
+      </div>
+
+      <div class="confirm-box" style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="confirmValues" />
+          <span>Я подтверждаю, что ввожу точные числа для выбранных карточек (ниже).</span>
+        </label>
+        <div id="valuesBox" style="margin-top:10px;display:none">
+          <p class="muted" style="font-size:12px">Введите число для каждой выбранной карточки:</p>
+          <div id="metricValuesList"></div>
+        </div>
+      </div>
+
+      <div class="page-actions" style="margin-top:16px">
+        <button type="submit" class="btn btn-primary" id="btnUpload">Загрузить файл и анкету</button>
+        <span id="uploadMsg" class="muted" style="margin-left:12px"></span>
+      </div>
+    </form>
+
+    <div id="resultBox" class="section-card" style="display:none">
+      <div class="card-head"><h3>Загрузка успешна</h3></div>
+      <div id="resultBody"></div>
+      <div class="page-actions" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="location.reload()">Загрузить ещё</button>
+        <a href="uploads.html" class="btn btn-outline">Список загрузок</a>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var loginBox = document.getElementById("authBox");
+      var formBox = document.getElementById("uploadForm");
+      var resultBox = document.getElementById("resultBox");
+      var loginErr = document.getElementById("loginErr");
+      var uploadMsg = document.getElementById("uploadMsg");
+      var divInput = document.getElementById("divInput");
+      var confirmValues = document.getElementById("confirmValues");
+      var valuesBox = document.getElementById("valuesBox");
+      var metricsInput = document.getElementById("metricsInput");
+      var metricValuesList = document.getElementById("metricValuesList");
+      var btnLogout = document.getElementById("btnLogout");
+
+      var currentDivision = null;
+
+      // --- Инициализация ---------------------------------------------
+      // Без этого блока страница на старте пустая: и вход, и форма
+      // спрятаны, и показываются только после клика по кнопке, которую
+      // не видно. Проверяем сессию: вошли — сразу форма, нет — вход.
+      (function init() {
+        fetch("/api/me").then(function (r) {
+          if (!r.ok) throw new Error("no session");
+          return r.json();
+        }).then(function (me) {
+          currentDivision = me.division_id;
+          loginBox.style.display = "none";
+          formBox.style.display = "block";
+          divInput.value = me.division_title + " (" + me.division_id + ")";
+          uploadMsg.textContent = "Вошли как " + me.division_title;
+          setupMetrics();
+        }).catch(function () {
+          loginBox.style.display = "block";
+        });
+      })();
+
+      // --- Вход -------------------------------------------------------
+      document.getElementById("btnLogin").addEventListener("click", async function () {
+        var login = document.getElementById("loginInput").value.trim();
+        var pass = document.getElementById("passInput").value;
+        if (!login || !pass) { loginErr.textContent = "Введите логин и пароль"; return; }
+        try {
+          var res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ login: login, password: pass }),
+          });
+          if (!res.ok) { loginErr.textContent = "Неверный логин или пароль"; return; }
+          var data = await res.json();
+          currentDivision = data.division_id;
+          loginBox.style.display = "none";
+          formBox.style.display = "block";
+          divInput.value = data.division_title + " (" + data.division_id + ")";
+          uploadMsg.textContent = "Вошли как " + data.division_title;
+          setupMetrics();
+        } catch (e) { loginErr.textContent = "Ошибка связи с сервером"; }
+      });
+
+      btnLogout.addEventListener("click", async function () {
+        await fetch("/api/logout", { method: "POST" });
+        location.reload();
+      });
+
+      // --- Какие карточки кормит -------------------------------------
+      function setupMetrics() {
+        metricsInput.addEventListener("change", renderValues);
+        loadMetricsList();
+        renderValues();
+      }
+      // Список карточек берём из настоящей витрины (/api/metrics),
+      // а не из прописанного руками списка: хардкод расходится с БД
+      // после каждой новой метрики, и число уходит в несуществующую
+      // карточку.
+      function loadMetricsList() {
+        fetch("/api/metrics").then(function (r) {
+          if (!r.ok) throw new Error("http " + r.status);
+          return r.json();
+        }).then(function (v) {
+          if (!v || !v.metrics || !v.metrics.length) return;
+          var byBlock = {};
+          (v.blocks || []).forEach(function (b) {
+            byBlock[b.id] = { title: b.title, items: [] };
+          });
+          v.metrics.forEach(function (m) {
+            if (!byBlock[m.block]) byBlock[m.block] = { title: m.block, items: [] };
+            byBlock[m.block].items.push(m);
+          });
+          metricsInput.innerHTML = "";
+          Object.keys(byBlock).forEach(function (key) {
+            var b = byBlock[key];
+            if (!b.items.length) return;
+            var g = document.createElement("optgroup");
+            g.label = b.title;
+            b.items.forEach(function (m) {
+              var o = document.createElement("option");
+              o.value = m.id;
+              o.textContent = m.title;
+              g.appendChild(o);
+            });
+            metricsInput.appendChild(g);
+          });
+        }).catch(function () {
+          metricsInput.innerHTML = '<option disabled>Не удалось получить список показателей</option>';
+        });
+      }
+      function renderValues() {
+        metricValuesList.innerHTML = "";
+        var selected = Array.from(metricsInput.selectedOptions);
+        if (!selected.length || !confirmValues.checked) { valuesBox.style.display = "none"; return; }
+        valuesBox.style.display = "block";
+        selected.forEach(function (o) {
+          var wrap = document.createElement("div");
+          wrap.style.marginBottom = "8px";
+          wrap.innerHTML =
+            '<label style="font-weight:600">' + esc(o.text) + '</label>' +
+            '<input type="text" class="metric-val" data-metric="' + esc(o.value) +
+            '" placeholder="число" style="margin-top:4px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;width:140px" />';
+          metricValuesList.appendChild(wrap);
+        });
+      }
+      confirmValues.addEventListener("change", renderValues);
+
+      // --- Загрузка --------------------------------------------------
+      document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var file = document.getElementById("fileInput").files[0];
+        if (!file) { uploadMsg.textContent = "Выберите файл"; return; }
+
+        var formData = new FormData();
+        formData.append("file", file);
+        formData.append("division_id", currentDivision);
+        formData.append("title", document.getElementById("titleInput").value.trim());
+        formData.append("purpose", document.getElementById("purposeInput").value.trim());
+        formData.append("period", document.getElementById("periodInput").value.trim());
+        formData.append("frequency", document.getElementById("freqInput").value);
+        formData.append("responsible", document.getElementById("respInput").value.trim());
+        formData.append("access_level", document.getElementById("accessInput").value);
+        formData.append("metric_ids", JSON.stringify(Array.from(metricsInput.selectedOptions).map(function (o) { return o.value; })));
+        formData.append("confirmed", confirmValues.checked ? "true" : "false");
+
+        // значения метрик
+        var mv = {};
+        document.querySelectorAll(".metric-val").forEach(function (inp) {
+          var v = inp.value.trim();
+          if (v) mv[inp.dataset.metric] = v;
+        });
+        formData.append("metric_values", JSON.stringify(mv));
+
+        var btn = document.getElementById("btnUpload");
+        btn.disabled = true;
+        uploadMsg.textContent = "Загружается и индексируется…";
+        try {
+          var res = await fetch("/api/upload", { method: "POST", body: formData });
+          if (!res.ok) {
+            var err = await res.json().catch(function () { return { detail: res.statusText }; });
+            uploadMsg.textContent = "Ошибка: " + (err.detail || "неизвестная");
+            btn.disabled = false;
+            return;
+          }
+          var data = await res.json();
+          formBox.style.display = "none";
+          resultBox.style.display = "block";
+          document.getElementById("resultBody").innerHTML =
+            '<p><strong>Файл:</strong> ' + esc(data.filename) + '</p>' +
+            '<p><strong>Путь:</strong> ' + esc(data.rel_path) + '</p>' +
+            '<p><strong>Подразделение:</strong> ' + currentDivision + '</p>' +
+            '<p><strong>Кусков в индексе:</strong> ' + data.chunks + '</p>' +
+            (data.blocks.length ? '<p><strong>Блоки дашборда:</strong> ' + data.blocks.join(", ") + '</p>' : "") +
+            (data.next_expected ? '<p><strong>Ожидаемое следующее обновление:</strong> ' + data.next_expected + '</p>' : "") +
+            (data.confirmed ? '<p style="color:var(--green)"><strong>Числа подтверждены</strong> и записаны в витрину показателей.</p>' : '<p class="muted">Числа не подтверждены — документ в базе знаний, но не в карточках метрик.</p>');
+        } catch (err) {
+          uploadMsg.textContent = "Ошибка связи: " + err.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+    })();
+  </script>
+</body>
+</html>
+

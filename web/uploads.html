@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Мои загрузки · Дашборд ректора ИУБиП</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+        <div class="brand-text">
+          <strong>Дашборд ректора</strong>
+          <span>ЧОУ ВО «Южный университет (ИУБиП)» · Мои загрузки</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <a href="/dashboard.html" class="btn btn-outline">← К ленте показателей</a>
+        <a href="upload.html" class="btn btn-outline">Загрузить ещё</a>
+        <button id="btnLogout" class="btn btn-outline">Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" style="max-width: 1200px">
+    <div class="page-head">
+      <div>
+        <h1>Мои загрузки</h1>
+        <p class="sub">Список файлов, загруженных вашим подразделением, со статусом свежести.
+        «Просрочено» означает, что по выбранной частоте данные следовало обновить уже.</p>
+      </div>
+    </div>
+
+    <div id="msg" class="muted" style="margin-bottom:10px"></div>
+
+    <div class="table-wrap" id="uploadsTableWrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Файл</th><th>Название</th><th>Подразделение</th><th>Период</th>
+            <th>Загружено</th><th>Обновлять</th><th>Статус</th><th>Доступ</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="uploadsTbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var tbody = document.getElementById("uploadsTbody");
+      var msg = document.getElementById("msg");
+      var btnLogout = document.getElementById("btnLogout");
+
+      btnLogout.addEventListener("click", async function () {
+        await fetch("/api/logout", { method: "POST" });
+        location.reload();
+      });
+
+      async function load() {
+        try {
+          var res = await fetch("/api/uploads");
+          if (!res.ok) { msg.textContent = "Не удалось загрузить список"; return; }
+          var data = await res.json();
+          render(data.uploads || []);
+        } catch (e) { msg.textContent = "Ошибка связи с сервером"; }
+      }
+
+      function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+      function render(list) {
+        tbody.innerHTML = "";
+        if (!list.length) {
+          tbody.innerHTML = "<tr><td colspan='9' class='muted'>Загрузок пока нет. Начните со страницы загрузки.</td></tr>";
+          return;
+        }
+        list.forEach(function (u) {
+          var freshClass = u.freshness === "overdue" ? "overdue" : "ok";
+          var freshLabel = u.freshness === "overdue" ? "ПРОСРОЧЕНО" : "актуально";
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + esc(u.filename) + "</td>" +
+            "<td>" + esc(u.title || u.filename) + "</td>" +
+            "<td>" + esc(u.division_title || u.division_id) + "</td>" +
+            "<td>" + esc(u.period || "—") + "</td>" +
+            "<td><span class='muted' style='font-size:12px'>" + esc(u.uploaded_at || "") + "</span></td>" +
+            "<td><span class='" + freshClass + "'>" + freshLabel + "</span>" +
+            (u.next_expected ? " · до " + esc(u.next_expected) : "") + "</td>" +
+            "<td>" + (u.status === "ok" ? "ОК" : u.status) + "</td>" +
+            "<td>" + esc(u.access_level || "open") + "</td>" +
+            "<td style='white-space:nowrap'><button class='btn btn-ghost btn-small' style='padding:4px 8px;font-size:12px'>Детали</button></td>";
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Классы для статуса свежести
+      var style = document.createElement("style");
+      style.textContent = ".overdue { color: var(--red); font-weight: 600; } .ok { color: var(--green); }";
+      document.head.appendChild(style);
+
+      load();
+    })();
+  </script>
+</body>
+</html>
+

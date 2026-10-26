@@ -121,10 +121,16 @@
     };
     return map[blockId] || "витрина данных";
   }
-  // Подпись под значением: у официального показателя назван конкретный
-  // документ, и это полезнее, чем общая система-источник.
+  // Подпись под значением: показывает, откуда цифра пришла. Загрузка
+  // через анкету важнее общего источника — это конкретное подразделение
+  // подписало конкретный документ.
   function metricSourceNote(m) {
     if (!m) return "";
+    if (m.prov && m.prov.length) {
+      var p = m.prov[0];
+      var d = (p.uploaded_at || "").slice(0, 10);
+      return "загружено: " + p.division + (d ? " · " + d : "");
+    }
     if (m.source === "official") return m.srcNote || "документы университета";
     return "демонстрационные данные витрины";
   }
@@ -324,11 +330,29 @@ function updateStamp() {
       : '<span class="trend"><span class="delta ' + deltaClass + '">' + arrow + " " + ds.s + "</span>" +
         '<span class="muted" style="font-size:11px">к пред. периоду</span></span>';
     // У официального показателя источник показан прямо на карточке:
-    // решение, принятое по цифре, должно быть подписано.
-    var srcLine = (m.source === "official" && m.srcNote)
-      ? '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
-        esc(shortSource(m.srcNote)) + "</div>"
-      : "";
+    // решение, принятое по цифре, должно быть подписано. Если значение
+    // пришло загрузкой подразделения — важнее показать, кто и когда
+    // загрузил документ.
+    var srcLine = "";
+    if (m.prov && m.prov.length) {
+      var p0 = m.prov[0];
+      // Свежесть: если подразделение обещало обновлять данные, а дата
+      // прошла — карточка обязана это показать, иначе устаревшая цифра
+      // выглядит свежей.
+      var overdue = p0.next_expected && p0.next_expected < new Date().toISOString().slice(0, 10);
+      var full0 = (p0.title ? p0.title + " · " : "") + p0.division +
+        (p0.period ? " · период: " + p0.period : "") +
+        ((p0.uploaded_at || "") ? " · загружено " + p0.uploaded_at : "") +
+        (p0.next_expected ? " · обновить до " + p0.next_expected : "") +
+        (overdue ? " · ПРОСРОЧЕНО" : "");
+      var short0 = "📥 " + esc(p0.division) +
+        ((p0.uploaded_at || "") ? " · " + esc(p0.uploaded_at.slice(0, 10)) : "") +
+        (overdue ? ' · <span style="color:var(--red);font-weight:600">просрочено</span>' : "");
+      srcLine = '<div class="widget-src" title="' + esc(full0) + '">' + short0 + "</div>";
+    } else if (m.source === "official" && m.srcNote) {
+      srcLine = '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
+        esc(shortSource(m.srcNote)) + "</div>";
+    }
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
       '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></div>" +
@@ -717,6 +741,18 @@ $("btnExportPdf").addEventListener("click", function () {
   function initAI() {
     $("aiOpen").addEventListener("click", function () { toggleAI(true); });
     $("aiClose").addEventListener("click", function () { toggleAI(false); });
+    // Закрыть должно быть легко: Esc, клик вне панели или кнопка «Закрыть».
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("aiPanel").hidden) toggleAI(false);
+    });
+    document.addEventListener("click", function (e) {
+      if ($("aiPanel").hidden) return;
+      if ($("aiPanel").contains(e.target)) return;
+      // Кнопка открытия тоже исключается: её клик всплывает до document,
+      // и без проверки панель открылась бы и тут же закрылась.
+      if ($("aiOpen").contains(e.target)) return;
+      toggleAI(false);
+    });
     $("aiForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       var text = $("aiInput").value.trim();
@@ -848,7 +884,7 @@ $("btnExportPdf").addEventListener("click", function () {
       });
     }
     if (c.degraded) {
-      h += '<div class="crew-note crew-warn">Экипаж отработал не полностью, ' +
+      h += '<div class="crew-note crew-warn">Агент отработал не полностью, ' +
         "ответ собран запасным путём.</div>";
     }
     h += "</details>";
@@ -866,7 +902,7 @@ $("btnExportPdf").addEventListener("click", function () {
       // решает сервер по типу вопроса, поэтому обещать конкретный
       // состав здесь нельзя: на простой факт критик не зовётся.
       t.textContent = crewMode
-        ? "Экипаж работает: подбираю специалиста и источники. Обычно 1–2 минуты."
+        ? "Агент работает: подбираю специалиста и источники. Обычно 1–2 минуты."
         : "Анализирую данные...";
       $("aiMessages").appendChild(t);
     } else {

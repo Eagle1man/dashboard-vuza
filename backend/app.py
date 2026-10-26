@@ -12,13 +12,14 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Cookie, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import autoconfig
+from . import auth
 from . import config
 from . import crew
 from . import db
@@ -26,6 +27,7 @@ from . import embed
 from . import ingest as ingest_mod
 from . import llm
 from . import retrieve
+from . import uploads
 
 _conn = None
 
@@ -38,6 +40,7 @@ def conn():
         db.init_db(_conn)
         if not db.get_meta(_conn, "demo_seeded"):
             db.seed_metrics(_conn)
+        db.seed_divisions(_conn)
     return _conn
 
 
@@ -168,7 +171,7 @@ def ask_crew(req: AskRequest):
     try:
         out = crew.run(question, c, mode=mode, top_k=req.top_k)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Ошибка экипажа: {exc}")
+        raise HTTPException(status_code=500, detail=f"Ошибка агента: {exc}")
 
     c.execute(
         "INSERT INTO ask_log(ts, question, answer, chunk_ids, model, hits, latency_ms)"
@@ -267,6 +270,141 @@ def asklog(limit: int = 20):
         "SELECT ts, question, model, hits, latency_ms FROM ask_log"
         " ORDER BY id DESC LIMIT ?", (min(limit, 200),)).fetchall()
     return {"entries": [dict(r) for r in rows]}
+
+
+# ------------------------------------------------------------------
+# Аутентификация подразделений
+# ------------------------------------------------------------------
+class LoginRequest(BaseModel):
+    login: str
+    password: str
+
+
+@app.post("/api/login")
+def login(req: LoginRequest):
+    division_id = auth.verify_login(req.login, req.password)
+    if not division_id:
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+    token = auth.create_session(division_id)
+    c = db.connect()
+    div = c.execute(
+        "SELECT division_id, title FROM division WHERE division_id = ?",
+        (division_id,)).fetchone()
+    response = JSONResponse(content={
+        "ok": True,
+        "division_id": division_id,
+        "division_title": div["title"],
+        "is_admin": division_id == "admin",
+    })
+    response.set_cookie(
+        key="dashboard_session", value=token,
+        httponly=True, max_age=auth.SESSION_TTL, path="/",
+        samesite="lax")
+    return response
+
+
+def _session_division(request: Request) -> str:
+    token = request.cookies.get("dashboard_session")
+    division_id = auth.validate_session(token)
+    return auth.require_auth(division_id)
+
+
+@app.post("/api/logout")
+def logout(request: Request):
+    token = request.cookies.get("dashboard_session")
+    if token:
+        auth.delete_session(token)
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie(key="dashboard_session", path="/")
+    return response
+
+
+@app.get("/api/me")
+def me(request: Request):
+    division_id = _session_division(request)
+    c = db.connect()
+    div = c.execute(
+        "SELECT division_id, title, contact FROM division WHERE division_id = ?",
+        (division_id,)).fetchone()
+    return {"division_id": division_id, "division_title": div["title"],
+            "contact": div["contact"], "is_admin": division_id == "admin"}
+
+
+# ------------------------------------------------------------------
+# Справочник подразделений (для выпадающего списка в анкете)
+# ------------------------------------------------------------------
+@app.get("/api/divisions")
+def divisions(request: Request):
+    division_id = _session_division(request)
+    c = db.connect()
+    rows = c.execute(
+        "SELECT division_id, title, login, contact FROM division"
+        " ORDER BY division_id").fetchall()
+    return {"divisions": [dict(r) for r in rows]}
+
+
+# ------------------------------------------------------------------
+# Загрузка файлов подразделениями
+# ------------------------------------------------------------------
+class UploadResponse(BaseModel):
+    pass
+
+
+@app.post("/api/upload")
+async def upload(request: Request,
+                 file: UploadFile = File(...),
+                 division_id: str | None = Form(default=None),
+                 title: str = Form(default=""),
+                 purpose: str = Form(default=""),
+                 period: str = Form(default=""),
+                 frequency: str = Form(default="разово"),
+                 responsible: str = Form(default=""),
+                 access_level: str = Form(default="open"),
+                 metric_ids: str = Form(default="[]"),
+                 confirmed: str = Form(default="false"),
+                 metric_values: str = Form(default="{}")):
+
+    did = _session_division(request)
+    if division_id and division_id != did:
+        raise HTTPException(
+            status_code=403,
+            detail="Нельзя загружать от имени другого подразделения")
+    division_id = did
+
+    form = {
+        "title": title, "purpose": purpose, "period": period,
+        "frequency": frequency, "responsible": responsible,
+        "access_level": access_level, "metric_ids": metric_ids,
+        "confirmed": confirmed, "metric_values": metric_values,
+    }
+    try:
+        return uploads.handle_upload(division_id, file, form)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/uploads")
+def uploads_list(request: Request, division_id: str | None = None):
+    did = _session_division(request)
+    if division_id and division_id != did and did != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Нельзя смотреть загрузки другого подразделения")
+    return {"uploads": uploads.list_uploads(division_id)}
+
+
+@app.get("/api/uploads/{upload_id}")
+def upload_detail(request: Request, upload_id: int):
+    did = _session_division(request)
+    detail = uploads.get_upload_detail(upload_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Загрузка не найдена")
+    if did != "admin" and detail["division_id"] != did:
+        raise HTTPException(status_code=403,
+                            detail="Нельзя смотреть загрузку другого подразделения")
+    return detail
 
 
 @app.exception_handler(500)

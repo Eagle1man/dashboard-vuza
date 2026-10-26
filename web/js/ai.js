@@ -323,7 +323,7 @@
       // показываются пользователю: без этого «проверено критиком»
       // ничем не отличается от «никто не проверял».
       var parts = [];
-      parts.push("Экипаж · " + (out.agent_name || out.agent_id));
+      parts.push("Агент · " + (out.agent_name || out.agent_id));
       if (out.agents && out.agents.length) {
         parts.push("агентов: " + out.agents.join(", "));
       }

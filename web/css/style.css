@@ -80,6 +80,7 @@ input, select { font-family: inherit; }
 .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 .btn-ghost { background: transparent; color: var(--primary); border-color: transparent; padding-left: 0; }
 .btn-ghost:hover { text-decoration: underline; }
+.btn-small { font-size: 12px; padding: 4px 8px; }
 /* ============ Фильтры ============ */
 .filter-bar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 12px 0 20px; box-shadow: var(--shadow); }
 .filter-group { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -182,8 +183,24 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .ai-actions .chip:hover { color: var(--primary); border-color: var(--primary); }
 .ai-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
 .ai-input input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text); }
-.ai-fab { position: fixed; right: 20px; bottom: 20px; width: 56px; height: 56px; border-radius: 50%; border: none; background: linear-gradient(135deg, var(--primary), #7b2ff7); color: #fff; font-size: 24px; box-shadow: var(--shadow-lg); z-index: 39; }
-.ai-fab:hover { transform: scale(1.05); }
+/* Пилюля-кнопка чата: заметная, с подписью — значка 🤖 одного мало,
+   чтобы её нашли. */
+.ai-fab {
+  position: fixed; right: 20px; bottom: 20px;
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 14px 22px;
+  border-radius: 999px; border: none;
+  background: linear-gradient(135deg, var(--primary), #7b2ff7);
+  color: #fff; font-size: 15px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(31, 61, 122, .45);
+  z-index: 39; cursor: pointer;
+  transition: transform .15s ease, filter .15s ease;
+}
+.ai-fab .ai-fab-ico { font-size: 20px; line-height: 1; }
+.ai-fab:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.ai-fab:active { transform: translateY(0); }
+/* Широкая кнопка закрытия в шапке панели: крестик-крошка не находили. */
+.ai-close-btn { font-size: 13px; padding: 7px 14px; font-weight: 600; white-space: nowrap; }
 
 /* ============ Тост ============ */
 .toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 60; align-items: center; width: max-content; max-width: 92vw; }

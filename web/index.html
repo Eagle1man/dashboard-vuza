@@ -6,169 +6,330 @@
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ---------- Первый экран: лендинг-вход ---------- */
+    :root {
+      --land-bg: linear-gradient(135deg, #0b1533 0%, #1f3d7a 55%, #5b3aa6 100%);
+      --land-fg: #ffffff;
+      --land-fg-dim: rgba(255, 255, 255, .72);
+      --land-card: rgba(255, 255, 255, .10);
+      --land-card-border: rgba(255, 255, 255, .22);
+      --land-input-bg: rgba(255, 255, 255, .14);
+    }
+    html[data-theme="dark"] {
+      --land-bg: linear-gradient(135deg, #0b1533 0%, #1f3d7a 55%, #5b3aa6 100%);
+      --land-fg: #ffffff;
+      --land-fg-dim: rgba(255, 255, 255, .72);
+      --land-card: rgba(255, 255, 255, .08);
+      --land-card-border: rgba(255, 255, 255, .18);
+      --land-input-bg: rgba(255, 255, 255, .12);
+    }
+    html[data-theme="light"] {
+      --land-bg: linear-gradient(135deg, #eaf0fb 0%, #d9e4f8 55%, #e9dffb 100%);
+      --land-fg: #14213f;
+      --land-fg-dim: #4b5675;
+      --land-card: rgba(255, 255, 255, .78);
+      --land-card-border: rgba(31, 61, 122, .16);
+      --land-input-bg: #ffffff;
+    }
+
+    body.landing {
+      min-height: 100vh;
+      background: var(--land-bg);
+      color: var(--land-fg);
+      display: flex;
+      flex-direction: column;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    /* угловые «световые пятна» — живость без картинок */
+    .landing::before, .landing::after {
+      content: "";
+      position: fixed;
+      width: 46vmax; height: 46vmax;
+      border-radius: 50%;
+      filter: blur(70px);
+      opacity: .30;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .landing::before { background: #4f8cff; top: -18vmax; right: -12vmax; }
+    .landing::after  { background: #9b5de5; bottom: -20vmax; left: -14vmax; }
+
+    .land-top {
+      position: relative; z-index: 2;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 28px;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .land-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--land-fg-dim); }
+    .land-dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa4bd; box-shadow: 0 0 0 3px rgba(154,164,189,.25); }
+    .land-dot.on  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.25); }
+    .land-dot.off { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.25); }
+
+    .land-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--land-fg);
+      background: var(--land-card);
+      border: 1px solid var(--land-card-border);
+      border-radius: 999px; padding: 7px 14px;
+      backdrop-filter: blur(8px);
+      text-decoration: none; cursor: pointer;
+      transition: transform .15s ease, background .15s ease;
+    }
+    .land-chip:hover { transform: translateY(-1px); }
+
+    .land-main {
+      position: relative; z-index: 1;
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px 20px 40px;
+      gap: 34px;
+      text-align: center;
+    }
+
+    .land-brand { animation: fadeUp .6s ease both; }
+    .land-logo {
+      width: 86px; height: 86px;
+      background: #fff;
+      border-radius: 22px;
+      padding: 12px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, .30);
+      margin: 0 auto 18px;
+      display: block;
+    }
+    .land-brand h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      letter-spacing: -.02em;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, .25);
+    }
+    .land-brand p { color: var(--land-fg-dim); font-size: clamp(14px, 2vw, 17px); max-width: 640px; margin: 0 auto; }
+
+    .land-cards {
+      display: flex; gap: 22px; flex-wrap: wrap;
+      justify-content: center;
+      width: 100%; max-width: 900px;
+    }
+    .land-card {
+      flex: 1 1 320px; max-width: 420px;
+      background: var(--land-card);
+      border: 1px solid var(--land-card-border);
+      border-radius: 20px;
+      padding: 26px 26px 24px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+      text-align: left;
+      animation: fadeUp .6s ease both;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .land-card:nth-child(1) { animation-delay: .12s; }
+    .land-card:nth-child(2) { animation-delay: .26s; }
+    .land-card:hover { transform: translateY(-4px); box-shadow: 0 26px 56px rgba(0, 0, 0, .28); }
+
+    .land-card .icon { font-size: 34px; margin-bottom: 10px; }
+    .land-card h2 { font-size: 21px; margin-bottom: 8px; color: var(--land-fg); }
+    .land-card .desc { font-size: 14px; color: var(--land-fg-dim); margin-bottom: 18px; line-height: 1.55; }
+
+    .land-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: filter .15s ease, transform .15s ease;
+    }
+    .land-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .land-btn.primary { background: #1f3d7a; color: #fff; }
+    html[data-theme="dark"] .land-btn.primary { background: #3560c4; }
+    .land-btn.ghost { background: transparent; color: var(--land-fg); border: 1px solid var(--land-card-border); }
+
+    .land-field { margin-bottom: 12px; }
+    .land-field label { display: block; font-size: 12.5px; color: var(--land-fg-dim); margin-bottom: 6px; }
+    .land-field input {
+      width: 100%;
+      padding: 11px 13px;
+      border-radius: 10px;
+      border: 1px solid var(--land-card-border);
+      background: var(--land-input-bg);
+      color: var(--land-fg);
+      font-size: 14.5px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .land-field input:focus { border-color: #6ea0ff; box-shadow: 0 0 0 3px rgba(110, 160, 255, .28); }
+    .land-err { color: #ffb4b4; font-size: 13px; min-height: 17px; margin-top: 4px; }
+    html[data-theme="light"] .land-err { color: #c62828; }
+
+    .land-hint { font-size: 12px; color: var(--land-fg-dim); margin-top: 12px; line-height: 1.5; }
+    .land-hint code { background: rgba(127,127,127,.18); padding: 1px 6px; border-radius: 6px; }
+
+    .land-welcome { font-size: 14px; margin-bottom: 14px; color: var(--land-fg); }
+    .land-welcome b { color: #7dffbb; }
+    html[data-theme="light"] .land-welcome b { color: #0b7a41; }
+
+    .land-foot {
+      position: relative; z-index: 2;
+      text-align: center;
+      padding: 0 20px 22px;
+      font-size: 12.5px;
+      color: var(--land-fg-dim);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 560px) {
+      .land-cards { flex-direction: column; align-items: stretch; }
+      .land-card { max-width: none; }
+      .land-top { padding: 14px 16px; }
+    }
+  </style>
 </head>
-<body>
-  <!-- Шапка -->
-  <header class="app-header">
-    <div class="header-inner">
-      <div class="brand">
-        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" title="Южный университет (ИУБиП)" />
-        <div class="brand-text">
-          <strong>Дашборд ректора</strong>
-          <span>ЧОУ ВО «Южный университет (ИУБиП)»</span>
-        </div>
-      </div>
-      <div class="header-controls">
-        <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
-        <div class="search-wrap">
-          <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
-          <span id="searchBadge" class="search-badge" hidden></span>
-        </div>
-        <div class="role-switch" title="Демонстрация ролевого доступа">
-          <label for="roleSelect">Роль</label>
-          <select id="roleSelect">
-            <option value="rector">Ректор</option>
-            <option value="prorector">Проректор</option>
-            <option value="admin">Администратор</option>
-          </select>
-        </div>
-        <button id="themeToggle" class="icon-btn" title="Переключить тему" aria-label="Тема">◐</button>
-      </div>
+<body class="landing">
+  <!-- Верхняя панель: состояние сервера и управление -->
+  <div class="land-top">
+    <span class="land-status">
+      <span class="land-dot" id="srvDot"></span>
+      <span id="srvText">проверка сервера…</span>
+    </span>
+    <div style="display:flex; gap:10px; flex-wrap:wrap">
+      <button id="themeToggle" class="land-chip" title="Сменить тему">◐ День / Ночь</button>
+      <a href="uploads.html" class="land-chip">Мои загрузки</a>
     </div>
-  </header>
+  </div>
 
-  <main class="app-main">
-    <!-- Вью 1: Лента показателей -->
-    <section id="view-dashboard" class="view active">
-      <div class="page-head">
-        <div>
-          <h1>Лента показателей</h1>
-          <p class="sub" id="updateStamp">Обновлено: —</p>
-        </div>
-        <div class="page-actions">
-          <button id="btnRefresh" class="btn btn-primary">⟳ Обновить все данные</button>
-          <button id="btnExportCsv" class="btn btn-outline" title="Экспорт сводки в CSV">⬇ CSV</button>
-        </div>
-      </div>
-      <div class="filter-bar">
-        <div class="filter-group">
-          <label>Период</label>
-          <select id="filterPeriod">
-            <option value="month">Месяц</option>
-            <option value="quarter">Квартал</option>
-            <option value="year" selected>Год</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label>Подразделение</label>
-          <select id="filterDepartment"><option value="all">Все</option></select>
-        </div>
-        <div class="filter-group">
-          <label>Статус</label>
-          <select id="filterStatus">
-            <option value="all">Все</option>
-            <option value="green">Зелёный</option>
-            <option value="yellow">Жёлтый</option>
-            <option value="red">Красный</option>
-            <option value="none">Без порога</option>
-          </select>
-        </div>
-        <div class="filter-group filter-tip">
-          <span>🖱 Перетаскивайте блоки для настройки порядка</span>
-        </div>
-      </div>
-      <div id="widgetGrid" class="widget-grid"></div>
+  <!-- Центр: бренд + карточки-действия -->
+  <main class="land-main">
+    <div class="land-brand">
+      <img class="land-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+      <h1>Дашборд ректора</h1>
+      <p>ЧОУ ВО «Южный университет (ИУБиП)» — показатели университета, аналитика на данных
+         и приём файлов от подразделений в единую базу знаний.</p>
+    </div>
 
-      <!-- Справочник образовательных программ по ФГОС.
-           Коды и годы — реальные, с сайта университета. Численность
-           обучающихся по программам на сайте не публикуется. -->
-      <div class="section-card" id="standardsCard">
-        <h3>Образовательные программы по ФГОС</h3>
-        <p class="sub" id="standardsSummary"></p>
-        <div class="table-wrap">
-          <table class="data" id="standardsTable">
-            <thead>
-              <tr>
-                <th>Код</th><th>Программа</th><th>Уровень</th>
-                <th>Утверждён</th><th>Изменён</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p class="muted" style="font-size:12px;margin-top:10px">
-          ⚠ — стандарт не менялся более трёх лет: кандидат на пересмотр,
-          а не ошибка в данных. Численность обучающихся по программам
-          на сайте не публикуется.
-        </p>
-      </div>
-    </section>
+    <div class="land-cards">
+      <!-- Карточка 1: лента показателей, без входа -->
+      <section class="land-card">
+        <div class="icon">📈</div>
+        <h2>Лента показателей</h2>
+        <p class="desc">Метрики и графики университета, детализация по блокам,
+           экспорт и ИИ-аналитик «Агент ректора». Вход не нужен.</p>
+        <a class="land-btn primary" href="dashboard.html">Открыть дашборд →</a>
+      </section>
 
-    <!-- Вью 2: Детализация блока -->
-    <section id="view-detail" class="view">
-      <div class="page-head">
-        <div>
-          <button id="btnBack" class="btn btn-ghost">← Назад к ленте</button>
-          <h2 id="detailTitle">Блок</h2>
-          <p class="sub" id="detailSubtitle"></p>
-        </div>
-        <div class="page-actions">
-          <button id="btnDetailCsv" class="btn btn-outline" title="Экспорт в CSV">⬇ CSV</button>
-          <button id="btnExportPdf" class="btn btn-outline" title="Печать или сохранение в PDF">PDF</button>
-          <button id="btnExportXlsx" class="btn btn-outline" title="Экспорт в Excel">XLSX</button>
-        </div>
-      </div>
-      <div id="detailBody"></div>
-    </section>
+      <!-- Карточка 2: вход подразделения для загрузки данных -->
+      <section class="land-card">
+        <div class="icon">📤</div>
+        <h2>Загрузка данных</h2>
+        <p class="desc">Подразделение входит под своим логином, загружает файл
+           с анкетой — и документ сразу попадает в базу знаний для ИИ-поиска.</p>
 
-    <!-- Вью 3: Drill-down -->
-    <section id="view-drilldown" class="view">
-      <div class="page-head">
-        <div>
-          <button id="btnBackDrill" class="btn btn-ghost">← Назад к блоку</button>
-          <h2 id="drillTitle">Детализация</h2>
-          <p class="sub" id="drillSubtitle"></p>
-        </div>
-        <div class="page-actions">
-          <button id="btnDrillCsv" class="btn btn-outline" title="Экспорт записей в CSV">⬇ CSV</button>
-        </div>
-      </div>
-      <div id="drillBody"></div>
-    </section>
+        <div id="welcomeBox" class="land-welcome" hidden></div>
+
+        <form id="loginForm" autocomplete="on">
+          <div class="land-field">
+            <label for="loginInput">Логин подразделения</label>
+            <input id="loginInput" type="text" placeholder="например, buhgalteria" autocomplete="username" />
+          </div>
+          <div class="land-field">
+            <label for="passInput">Пароль</label>
+            <input id="passInput" type="password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <div class="land-err" id="loginErr"></div>
+          <button class="land-btn primary" type="submit" id="btnLogin">Войти и загрузить данные</button>
+        </form>
+
+        <p class="land-hint">Логин выдаёт администратор. Администратор заходит под
+          <code>admin</code>. Пароль по умолчанию совпадает с логином.</p>
+      </section>
+    </div>
   </main>
-<!-- ИИ-ассистент -->
-  <aside id="aiPanel" class="ai-panel" hidden>
-    <div class="ai-header">
-      <div class="ai-header-brand">
-        <img src="img/iubip-logo.svg" alt="" class="ai-logo" />
-        <div>
-          <strong>Аналитик ректора</strong>
-          <span class="ai-status" id="aiStatus">Онлайн</span>
-        </div>
-      </div>
-      <button id="aiClose" class="icon-btn" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="ai-messages" id="aiMessages"></div>
-    <div class="ai-actions" id="aiSuggestions"></div>
-    <form id="aiForm" class="ai-input">
-      <input id="aiInput" type="text" placeholder="Например: почему выросло отчисление на 1 курсе?" autocomplete="off" />
-      <button type="submit" class="btn btn-primary">➤</button>
-    </form>
-  </aside>
-  <button id="aiOpen" class="ai-fab" title="Аналитик ректора">🤖</button>
 
-  <!-- Тост-уведомления -->
-  <div id="toasts" class="toasts"></div>
+  <div class="land-foot">
+    ЧОУ ВО «Южный университет (ИУБиП)» · данные из документов университета и загрузок подразделений ·
+    персональные данные обезличены (152-ФЗ)
+  </div>
 
-  <footer class="app-footer">
-    <img src="img/iubip-logo.svg" alt="Южный университет (ИУБиП)" class="footer-logo" />
-    <span class="footer-note">ЧОУ ВО «Южный университет (ИУБиП)» · Дашборд ректора · часть показателей — из документов университета (отчёт о самообследовании на 01.04.2026, план ФХД на 2026 год), часть — демонстрационная и помечена · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
-  </footer>
+  <script>
+    (function () {
+      "use strict";
 
-  <script src="js/data.js"></script>
-  <script src="js/charts.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/app.js"></script>
+      // ---------- Тема ----------
+      // Ключ тот же, что у дашборда (dash_theme): тема выбранная на
+      // входе должна пережить переход на рабочие страницы.
+      var KEY = "dash_theme";
+      var saved = localStorage.getItem(KEY);
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+      document.getElementById("themeToggle").addEventListener("click", function () {
+        var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", cur);
+        localStorage.setItem(KEY, cur);
+      });
+
+      // ---------- Состояние сервера ----------
+      var dot = document.getElementById("srvDot");
+      var txt = document.getElementById("srvText");
+      fetch("/api/health").then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        dot.classList.add("on");
+        txt.textContent = "сервер онлайн";
+      }).catch(function () {
+        dot.classList.add("off");
+        txt.textContent = "сервер офлайн — запустите start.bat";
+      });
+
+      // ---------- Уже вошли? ----------
+      var form = document.getElementById("loginForm");
+      var welcome = document.getElementById("welcomeBox");
+      fetch("/api/me").then(function (r) {
+        if (!r.ok) return null;
+        return r.json();
+      }).then(function (me) {
+        if (!me) return;
+        welcome.hidden = false;
+        form.hidden = true;
+        welcome.innerHTML = "Вы вошли: <b>" + esc(me.division_title) + "</b> · " +
+          '<a href="upload.html" style="color:#9ec3ff">перейти к загрузке →</a> ' +
+          '<a href="#" id="lnkLogout" style="color:#ffb4b4">(выйти)</a>';
+        document.getElementById("lnkLogout").addEventListener("click", function (e) {
+          e.preventDefault();
+          fetch("/api/logout", { method: "POST" }).then(function () { location.reload(); });
+        });
+      }).catch(function () {});
+
+      // ---------- Вход ----------
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var login = document.getElementById("loginInput").value.trim();
+        var pass = document.getElementById("passInput").value;
+        var err = document.getElementById("loginErr");
+        if (!login || !pass) { err.textContent = "Введите логин и пароль"; return; }
+        err.textContent = "";
+        fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: login, password: pass })
+        }).then(function (r) {
+          if (!r.ok) throw new Error("bad");
+          return r.json();
+        }).then(function () {
+          location.href = "upload.html";
+        }).catch(function () {
+          err.textContent = "Неверный логин или пароль";
+        });
+      });
+
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+    })();
+  </script>
 </body>
 </html>

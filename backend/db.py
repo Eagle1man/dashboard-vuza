@@ -196,6 +196,58 @@ CREATE TABLE IF NOT EXISTS ask_log (
   hits       INTEGER,
   latency_ms INTEGER
 );
+
+-- 5. Загрузка данных подразделениями -----------------------------------
+CREATE TABLE IF NOT EXISTS division (
+  division_id TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  login       TEXT UNIQUE NOT NULL,
+  pass_hash   TEXT NOT NULL,
+  contact     TEXT,
+  created_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS division_login ON division(login);
+
+CREATE TABLE IF NOT EXISTS upload (
+  upload_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+  division_id TEXT NOT NULL REFERENCES division(division_id),
+  doc_id      INTEGER REFERENCES doc(doc_id) ON DELETE SET NULL,
+  filename    TEXT NOT NULL,
+  rel_path    TEXT NOT NULL,
+  sha256      TEXT NOT NULL,
+  size_bytes  INTEGER NOT NULL,
+  uploaded_at TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'ok',   -- ok | error | duplicate
+  error       TEXT
+);
+CREATE INDEX IF NOT EXISTS upload_division ON upload(division_id);
+CREATE INDEX IF NOT EXISTS upload_sha ON upload(sha256);
+
+CREATE TABLE IF NOT EXISTS doc_meta (
+  doc_id         INTEGER PRIMARY KEY REFERENCES doc(doc_id) ON DELETE CASCADE,
+  upload_id      INTEGER REFERENCES upload(upload_id),
+  division_id    TEXT NOT NULL REFERENCES division(division_id),
+  title          TEXT NOT NULL,
+  purpose        TEXT NOT NULL,      -- зачем нужны эти данные / какое решение принимают
+  period         TEXT NOT NULL,      -- за какой период (квартал / семестр / год / дата среза)
+  frequency      TEXT NOT NULL,      -- разово | ежемесячно | ежеквартально | раз в семестр | ежегодно
+  responsible    TEXT NOT NULL,      -- ответственный (ФИО + контакт)
+  access_level   TEXT NOT NULL DEFAULT 'open',  -- open | internal | confidential
+  next_expected  TEXT,               -- дата, когда ожидается следующая загрузка
+  metric_ids     TEXT DEFAULT '[]',   -- JSON-массив id карточек дашборда, которые кормит этот документ
+  confirmed      INTEGER DEFAULT 0,   -- ответственный подтвердил числа
+  uploaded_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS doc_meta_division ON doc_meta(division_id);
+CREATE INDEX IF NOT EXISTS doc_meta_next_expected ON doc_meta(next_expected);
+
+CREATE TABLE IF NOT EXISTS metric_source (
+  metric_id TEXT NOT NULL,
+  doc_id    INTEGER NOT NULL REFERENCES doc(doc_id) ON DELETE CASCADE,
+  confirmed INTEGER DEFAULT 0,
+  PRIMARY KEY (metric_id, doc_id)
+);
+CREATE INDEX IF NOT EXISTS metric_source_metric ON metric_source(metric_id);
 """
 
 
@@ -551,6 +603,45 @@ ALIASES = {
 MONTHS = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
           "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
 
+# Подразделения, которые загружают данные для дашборда.
+# Состав берём из организационной структуры на 2026–2027 учебный год
+# (Orgstruktura_2026.pdf, Приложение 1 к приказу) — официальный документ
+# университета. «Другое» — для подразделений, которых ещё нет в списке:
+# админ добавит в справочник по мере необходимости.
+DIVISIONS = [
+    ("buhgalteria",   "Бухгалтерия",                          "Исполняющий обязанности директора по экономике и финансам", None),
+    ("finoecon",      "Финансово-экономический отдел",        "Исполняющий обязанности директора по экономике и финансам", None),
+    ("acad_director", "Академическая дирекция",               "Директор академической дирекции", None),
+    ("umo",           "Учебно-методический отдел",            "Заведующий УМО", None),
+    ("admission",     "Приёмная комиссия",                    "Председатель приёмной комиссии", None),
+    ("hr",            "Отдел кадров",                         "Начальник отдела кадров", None),
+    ("meta_comp",     "Центр развития метакомпетенций",       "Директор центра", None),
+    ("digital_learn", "Управление цифрового обучения",        "Начальник управления", None),
+    ("nir_lab",       "Научно-исследовательская лаборатория", "Руководитель лаборатории", None),
+    ("npp_center",    "Центр подготовки научно-педагогических работников", "Директор центра", None),
+    ("educ_work",     "Управление воспитательной работы и социализации", "Начальник управления", None),
+    ("career",        "Центр карьеры",                        "Директор центра карьеры", None),
+    ("student_hub",   "Студенческий цифровой хаб",            "Куратор хаба", None),
+    ("it_support",    "Отдел информационно-технического обеспечения", "Начальник отдела", None),
+    ("digital_serv",  "Лаборатория разработки цифровых сервисов", "Руководитель лаборатории", None),
+    ("marketing",     "Центр маркетинга и развития",          "Директор по маркетингу и инновациям", None),
+    ("advertising",   "Отдел рекламы",                        "Начальник отдела рекламы", None),
+    ("general",       "Общий отдел",                          "Начальник отдела", None),
+    ("org_control",   "Организационно-контрольное управление", "Начальник управления", None),
+    ("other",         "Другое",                               "Уточняется при загрузке", None),
+]
+
+# Как часто подразделение обещает обновлять данные. Подсказка в анкете:
+# отдельные подразделения сами выбирают при загрузке, здесь — valeurs по
+# умолчанию для расчёта next_expected.
+FREQ_DAYS = {
+    "разово": None,
+    "ежемесячно": 30,
+    "ежеквартально": 90,
+    "раз в семестр": 180,
+    "ежегодно": 365,
+}
+
 LASTNAMES = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов",
              "Волков", "Лебедев", "Козлов", "Новиков", "Морозов"]
 FIRSTNAMES = ["Алексей", "Мария", "Дмитрий", "Анна", "Иван",
@@ -842,6 +933,40 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
     return len(data["metrics"])
 
 
+def seed_divisions(conn):
+    """Заводит подразделения с логином и паролем по умолчанию.
+
+    Пароль — тот же, что логин (честно, как в старой системе). Каждое
+    подразделение заходит под своим логином, видит и правит только свои
+    загрузки. Админ — отдельный логин `admin`, права на всё.
+    """
+    import hashlib
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    admin_pass = hashlib.pbkdf2_hmac("sha256", b"admin", b"dashboard-admin", 100_000).hex()
+    conn.execute(
+        "INSERT OR REPLACE INTO division(division_id, title, login, pass_hash, contact, created_at)"
+        " VALUES(?,?,?,?,?,?)",
+        ("admin", "Администратор", "admin", admin_pass, "rector@iubip.ru", now))
+    for did, title, responsible, contact in DIVISIONS:
+        login = did
+        pass_hash = hashlib.pbkdf2_hmac("sha256", login.encode(), f"dashboard-{did}".encode(), 100_000).hex()
+        conn.execute(
+            "INSERT OR REPLACE INTO division(division_id, title, login, pass_hash, contact, created_at)"
+            " VALUES(?,?,?,?,?,?)",
+            (did, title, login, pass_hash, responsible, now))
+    conn.commit()
+
+
+def next_expected_for(frequency: str, from_date=None) -> str | None:
+    """Дата следующей ожидаемой загрузки по частоте обновления."""
+    if frequency not in FREQ_DAYS or FREQ_DAYS[frequency] is None:
+        return None
+    import datetime
+    base = from_date or datetime.date.today()
+    days = FREQ_DAYS[frequency]
+    return (base + datetime.timedelta(days=days)).isoformat()
+
+
 def detect_blocks(rel_path, title, text=""):
     """К каким блокам дашборда относится документ. Может быть несколько.
 
@@ -957,6 +1082,25 @@ def load_vitrine(conn):
               for b in BLOCKS]
 
     labels = [p["label"] for p in periods]
+
+    # Провенанс показателя: каким подразделением, когда и на основании
+    # какого документа подтверждено значение. Пустой список = цифра
+    # пока ничем не подписана (демо или официальный документ без
+    # загрузки через анкету).
+    prov_by_metric = {}
+    for r in conn.execute(
+            "SELECT ms.metric_id, ms.confirmed, dm.title, dm.period,"
+            " dm.uploaded_at, dm.next_expected, d.title AS div_title"
+            " FROM metric_source ms"
+            " JOIN doc_meta dm ON dm.doc_id = ms.doc_id"
+            " JOIN division d ON d.division_id = dm.division_id"
+            " ORDER BY dm.uploaded_at DESC"):
+        prov_by_metric.setdefault(r["metric_id"], []).append({
+            "division": r["div_title"], "title": r["title"],
+            "period": r["period"], "uploaded_at": r["uploaded_at"],
+            "next_expected": r["next_expected"],
+            "confirmed": bool(r["confirmed"])})
+
     metrics = []
     for row in conn.execute(
             "SELECT * FROM dim_metric ORDER BY ord"):
@@ -998,6 +1142,7 @@ def load_vitrine(conn):
             "unit": row["unit"], "dir": row["dir"], "target": row["target"],
             "source": row["source"], "srcNote": row["src_note"],
             "hasHistory": not official,
+            "prov": prov_by_metric.get(mid, []),
             "series": series, "current": current, "prev": prev,
             "delta": delta,
             "status": compute_status(current, row["dir"], row["target"]),
