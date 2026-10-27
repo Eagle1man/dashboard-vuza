@@ -7,30 +7,48 @@
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
   <link rel="stylesheet" href="css/style.css" />
   <style>
-    /* ---------- Первый экран: лендинг-вход ---------- */
+    /* ---------- Первый экран: лендинг-вход ----------
+       Палитра дизайн-системы eagle1man: светлая azure-подложка днём,
+       navy-герой с янтарной каймой, белые карточки, капсулы. */
     :root {
-      --land-bg: linear-gradient(135deg, #0b1533 0%, #1f3d7a 55%, #5b3aa6 100%);
-      --land-fg: #ffffff;
-      --land-fg-dim: rgba(255, 255, 255, .72);
-      --land-card: rgba(255, 255, 255, .10);
-      --land-card-border: rgba(255, 255, 255, .22);
-      --land-input-bg: rgba(255, 255, 255, .14);
+      --land-bg: linear-gradient(180deg, #ebf7ff 0%, #dcf0fc 100%);
+      --land-fg: #06172d;
+      --land-fg-dim: #4b688b;
+      --land-card: #ffffff;
+      --land-card-border: #cfe0ed;
+      --land-input-bg: #ffffff;
+      --land-hero: #0c5f97;
+      --land-hero-2: #063d6b;
+      --land-azure: #097aae;
+      --land-azure-hover: #065d89;
+      --land-amber: #e5b02a;
+      --land-amber-ink: #063d6b;
+      --land-link: #097aae;
+      --land-link-out: #c8102e;
+      --land-ok: #0f7a38;
+      --land-err: #c62828;
+      --land-glow-a: rgba(126, 200, 242, .55);
+      --land-glow-b: rgba(242, 193, 78, .42);
+      --land-shadow: 0 18px 44px rgba(6, 61, 107, .16);
+      --land-shadow-hover: 0 26px 56px rgba(6, 61, 107, .22);
     }
     html[data-theme="dark"] {
-      --land-bg: linear-gradient(135deg, #0b1533 0%, #1f3d7a 55%, #5b3aa6 100%);
-      --land-fg: #ffffff;
-      --land-fg-dim: rgba(255, 255, 255, .72);
-      --land-card: rgba(255, 255, 255, .08);
-      --land-card-border: rgba(255, 255, 255, .18);
-      --land-input-bg: rgba(255, 255, 255, .12);
-    }
-    html[data-theme="light"] {
-      --land-bg: linear-gradient(135deg, #eaf0fb 0%, #d9e4f8 55%, #e9dffb 100%);
-      --land-fg: #14213f;
-      --land-fg-dim: #4b5675;
-      --land-card: rgba(255, 255, 255, .78);
-      --land-card-border: rgba(31, 61, 122, .16);
-      --land-input-bg: #ffffff;
+      --land-bg: linear-gradient(180deg, #0f0f0f 0%, #171717 100%);
+      --land-fg: #f5f5f5;
+      --land-fg-dim: #adadad;
+      --land-card: #1f1f1f;
+      --land-card-border: #383838;
+      --land-input-bg: #262626;
+      --land-azure: #0b78ab;
+      --land-azure-hover: #0e8dcc;
+      --land-link: #4fb3e0;
+      --land-link-out: #e35d6a;
+      --land-ok: #2fa363;
+      --land-err: #ff8a85;
+      --land-glow-a: rgba(9, 122, 174, .38);
+      --land-glow-b: rgba(229, 176, 42, .26);
+      --land-shadow: 0 18px 44px rgba(0, 0, 0, .5);
+      --land-shadow-hover: 0 26px 56px rgba(0, 0, 0, .6);
     }
 
     body.landing {
@@ -41,6 +59,7 @@
       flex-direction: column;
       font-family: "Segoe UI", Roboto, Arial, sans-serif;
     }
+    .landing h1, .landing h2 { font-family: Georgia, "Times New Roman", serif; }
 
     /* угловые «световые пятна» — живость без картинок */
     .landing::before, .landing::after {
@@ -49,12 +68,12 @@
       width: 46vmax; height: 46vmax;
       border-radius: 50%;
       filter: blur(70px);
-      opacity: .30;
+      opacity: .55;
       pointer-events: none;
       z-index: 0;
     }
-    .landing::before { background: #4f8cff; top: -18vmax; right: -12vmax; }
-    .landing::after  { background: #9b5de5; bottom: -20vmax; left: -14vmax; }
+    .landing::before { background: var(--land-glow-a); top: -18vmax; right: -12vmax; }
+    .landing::after  { background: var(--land-glow-b); bottom: -20vmax; left: -14vmax; }
 
     .land-top {
       position: relative; z-index: 2;
@@ -69,15 +88,16 @@
 
     .land-chip {
       display: inline-flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--land-fg);
+      font-size: 13.5px; color: var(--land-fg);
       background: var(--land-card);
       border: 1px solid var(--land-card-border);
-      border-radius: 999px; padding: 7px 14px;
-      backdrop-filter: blur(8px);
+      border-radius: 999px; padding: 10px 18px;
+      min-height: 40px;
       text-decoration: none; cursor: pointer;
-      transition: transform .15s ease, background .15s ease;
+      box-shadow: var(--land-shadow);
+      transition: transform .15s ease, border-color .15s ease;
     }
-    .land-chip:hover { transform: translateY(-1px); }
+    .land-chip:hover { transform: translateY(-1px); border-color: var(--land-azure); }
 
     .land-main {
       position: relative; z-index: 1;
@@ -85,13 +105,28 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       padding: 24px 20px 40px;
-      gap: 34px;
+      gap: 30px;
       text-align: center;
     }
 
-    .land-brand { animation: fadeUp .6s ease both; }
+    /* Блок бренда — navy-герой с янтарной каймой снизу. */
+    .land-brand {
+      animation: fadeUp .6s ease both;
+      width: 100%; max-width: 880px;
+      background: linear-gradient(135deg, var(--land-hero) 0%, var(--land-hero-2) 100%);
+      border-radius: 26px;
+      border-bottom: 5px solid var(--land-amber);
+      padding: 40px 34px 36px;
+      box-shadow: 0 24px 60px rgba(6, 61, 107, .35);
+    }
+    .land-eyebrow {
+      font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .14em;
+      color: var(--land-amber);
+      margin-bottom: 16px;
+    }
     .land-logo {
-      width: 86px; height: 86px;
+      width: 84px; height: 84px;
       background: #fff;
       border-radius: 22px;
       padding: 12px;
@@ -101,11 +136,11 @@
     }
     .land-brand h1 {
       font-size: clamp(28px, 5vw, 44px);
+      color: #fff;
       letter-spacing: -.02em;
       margin-bottom: 10px;
-      text-shadow: 0 2px 18px rgba(0, 0, 0, .25);
     }
-    .land-brand p { color: var(--land-fg-dim); font-size: clamp(14px, 2vw, 17px); max-width: 640px; margin: 0 auto; }
+    .land-brand p { color: rgba(255, 255, 255, .85); font-size: clamp(14px, 2vw, 17px); max-width: 640px; margin: 0 auto; }
 
     .land-cards {
       display: flex; gap: 22px; flex-wrap: wrap;
@@ -116,61 +151,64 @@
       flex: 1 1 320px; max-width: 420px;
       background: var(--land-card);
       border: 1px solid var(--land-card-border);
-      border-radius: 20px;
+      border-radius: 18px;
       padding: 26px 26px 24px;
-      backdrop-filter: blur(14px);
-      box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+      box-shadow: var(--land-shadow);
       text-align: left;
       animation: fadeUp .6s ease both;
-      transition: transform .18s ease, box-shadow .18s ease;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
     }
     .land-card:nth-child(1) { animation-delay: .12s; }
     .land-card:nth-child(2) { animation-delay: .26s; }
-    .land-card:hover { transform: translateY(-4px); box-shadow: 0 26px 56px rgba(0, 0, 0, .28); }
+    .land-card:hover { transform: translateY(-4px); box-shadow: var(--land-shadow-hover); border-color: var(--land-azure); }
 
     .land-card .icon { font-size: 34px; margin-bottom: 10px; }
-    .land-card h2 { font-size: 21px; margin-bottom: 8px; color: var(--land-fg); }
+    .land-card h2 { font-size: 22px; margin-bottom: 8px; color: var(--land-fg); }
     .land-card .desc { font-size: 14px; color: var(--land-fg-dim); margin-bottom: 18px; line-height: 1.55; }
 
     .land-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       width: 100%;
-      padding: 12px 18px;
-      border-radius: 12px;
+      padding: 13px 20px;
+      border-radius: 999px;
       border: none;
       font-size: 15px; font-weight: 600;
       cursor: pointer;
       text-decoration: none;
-      transition: filter .15s ease, transform .15s ease;
+      transition: filter .15s ease, transform .15s ease, background .15s ease;
     }
-    .land-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
-    .land-btn.primary { background: #1f3d7a; color: #fff; }
-    html[data-theme="dark"] .land-btn.primary { background: #3560c4; }
+    .land-btn:hover { transform: translateY(-1px); }
+    .land-btn.primary { background: var(--land-azure); color: #fff; }
+    .land-btn.primary:hover { background: var(--land-azure-hover); }
+    /* Главное действие — янтарная капсула с тёмным текстом. */
+    .land-btn.call { background: var(--land-amber); color: var(--land-amber-ink); }
+    .land-btn.call:hover { filter: brightness(1.06); }
     .land-btn.ghost { background: transparent; color: var(--land-fg); border: 1px solid var(--land-card-border); }
 
     .land-field { margin-bottom: 12px; }
-    .land-field label { display: block; font-size: 12.5px; color: var(--land-fg-dim); margin-bottom: 6px; }
+    .land-field label { display: block; font-size: 13.5px; color: var(--land-fg-dim); margin-bottom: 6px; }
     .land-field input {
       width: 100%;
-      padding: 11px 13px;
+      padding: 12px 14px;
       border-radius: 10px;
       border: 1px solid var(--land-card-border);
       background: var(--land-input-bg);
       color: var(--land-fg);
-      font-size: 14.5px;
+      /* 16px и больше: мельче — iOS Safari зумит страницу при фокусе. */
+      font-size: 16px;
       outline: none;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .land-field input:focus { border-color: #6ea0ff; box-shadow: 0 0 0 3px rgba(110, 160, 255, .28); }
-    .land-err { color: #ffb4b4; font-size: 13px; min-height: 17px; margin-top: 4px; }
-    html[data-theme="light"] .land-err { color: #c62828; }
+    .land-field input:focus { border-color: var(--land-azure); box-shadow: 0 0 0 3px rgba(9, 122, 174, .22); }
+    .land-err { color: var(--land-err); font-size: 13.5px; min-height: 17px; margin-top: 4px; }
 
-    .land-hint { font-size: 12px; color: var(--land-fg-dim); margin-top: 12px; line-height: 1.5; }
-    .land-hint code { background: rgba(127,127,127,.18); padding: 1px 6px; border-radius: 6px; }
+    .land-hint { font-size: 13px; color: var(--land-fg-dim); margin-top: 12px; line-height: 1.5; }
+    .land-hint code { background: rgba(127,127,127,.14); padding: 1px 6px; border-radius: 6px; }
 
     .land-welcome { font-size: 14px; margin-bottom: 14px; color: var(--land-fg); }
-    .land-welcome b { color: #7dffbb; }
-    html[data-theme="light"] .land-welcome b { color: #0b7a41; }
+    .land-welcome b { color: var(--land-ok); }
+    .land-link { color: var(--land-link); }
+    .land-link-out { color: var(--land-link-out); }
 
     .land-foot {
       position: relative; z-index: 2;
@@ -189,6 +227,7 @@
       .land-cards { flex-direction: column; align-items: stretch; }
       .land-card { max-width: none; }
       .land-top { padding: 14px 16px; }
+      .land-brand { padding: 30px 20px 26px; border-radius: 20px; }
     }
   </style>
 </head>
@@ -208,9 +247,10 @@
   <!-- Центр: бренд + карточки-действия -->
   <main class="land-main">
     <div class="land-brand">
+      <div class="land-eyebrow">ЧОУ ВО «Южный университет (ИУБиП)»</div>
       <img class="land-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
       <h1>Дашборд ректора</h1>
-      <p>ЧОУ ВО «Южный университет (ИУБиП)» — показатели университета, аналитика на данных
+      <p>Показатели университета, аналитика на данных
          и приём файлов от подразделений в единую базу знаний.</p>
     </div>
 
@@ -220,8 +260,8 @@
         <div class="icon">📈</div>
         <h2>Лента показателей</h2>
         <p class="desc">Метрики и графики университета, детализация по блокам,
-           экспорт и ИИ-аналитик «Агент ректора». Вход не нужен.</p>
-        <a class="land-btn primary" href="dashboard.html">Открыть дашборд →</a>
+           экспорт и ИИ-аналитик «Аналитик ректора». Вход не нужен.</p>
+        <a class="land-btn call" href="dashboard.html">Открыть дашборд →</a>
       </section>
 
       <!-- Карточка 2: вход подразделения для загрузки данных -->
@@ -296,8 +336,8 @@
         welcome.hidden = false;
         form.hidden = true;
         welcome.innerHTML = "Вы вошли: <b>" + esc(me.division_title) + "</b> · " +
-          '<a href="upload.html" style="color:#9ec3ff">перейти к загрузке →</a> ' +
-          '<a href="#" id="lnkLogout" style="color:#ffb4b4">(выйти)</a>';
+          '<a href="upload.html" class="land-link">перейти к загрузке →</a> ' +
+          '<a href="#" id="lnkLogout" class="land-link-out">(выйти)</a>';
         document.getElementById("lnkLogout").addEventListener("click", function (e) {
           e.preventDefault();
           fetch("/api/logout", { method: "POST" }).then(function () { location.reload(); });
@@ -317,12 +357,20 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ login: login, password: pass })
         }).then(function (r) {
-          if (!r.ok) throw new Error("bad");
+          if (!r.ok) {
+            // 401/403 — не угадали пароль; 500 и прочее — сбой сервера.
+            // Одно сообщение на обе причины врёт человеку, вводившему
+            // пароль правильно.
+            err.textContent = (r.status === 401 || r.status === 403)
+              ? "Неверный логин или пароль"
+              : "Сервер не ответил (HTTP " + r.status + ") — попробуйте позже";
+            throw new Error("login http " + r.status);
+          }
           return r.json();
         }).then(function () {
           location.href = "upload.html";
         }).catch(function () {
-          err.textContent = "Неверный логин или пароль";
+          if (!err.textContent) err.textContent = "Нет связи с сервером";
         });
       });
 

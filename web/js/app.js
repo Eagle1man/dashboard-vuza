@@ -62,10 +62,10 @@
     return "без порога";
   }
   function colorForStatus(s) {
-    if (s === "green") return "#16a34a";
-    if (s === "yellow") return "#d97706";
-    if (s === "red") return "#dc2626";
-    return "#64748b";
+    if (s === "green") return "#0f7a38";
+    if (s === "yellow") return "#a8801a";
+    if (s === "red") return "#c8102e";
+    return "#4b688b";
   }
   // Значение показателя по выбранному подразделению.
   //
@@ -212,6 +212,22 @@ function updateStamp() {
       grid.appendChild(card);
     });
     enableDrag();
+    updateFooterNote();
+  }
+
+  // Сколько в ленте настоящих и демонстрационных цифр. Подвал обещает
+  // «часть показателей демонстрационная и помечена», но не говорит
+  // сколько каких — приходится считать самому. Считаем по флагу source.
+  function updateFooterNote() {
+    var el = $("footerCounts");
+    if (!el || !state.data || !state.data.metrics) return;
+    var ms = state.data.metrics;
+    var official = 0;
+    for (var i = 0; i < ms.length; i++) {
+      if (ms[i].source === "official") official++;
+    }
+    el.textContent = official + " из " + ms.length + " — из документов, " +
+      (ms.length - official) + " — демонстрационных";
   }
 
   // ---------- Справочник образовательных программ ----------
@@ -343,6 +359,7 @@ function updateStamp() {
       var full0 = (p0.title ? p0.title + " · " : "") + p0.division +
         (p0.period ? " · период: " + p0.period : "") +
         ((p0.uploaded_at || "") ? " · загружено " + p0.uploaded_at : "") +
+        (p0.responsible ? " · ответственный: " + p0.responsible : "") +
         (p0.next_expected ? " · обновить до " + p0.next_expected : "") +
         (overdue ? " · ПРОСРОЧЕНО" : "");
       var short0 = "📥 " + esc(p0.division) +
@@ -352,10 +369,18 @@ function updateStamp() {
     } else if (m.source === "official" && m.srcNote) {
       srcLine = '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
         esc(shortSource(m.srcNote)) + "</div>";
+    } else if (m.source !== "official") {
+      // Подвал обещает «часть демонстрационная и помечена» — на самой
+      // карточке пометки быть иначе негде: цифра выглядит настоящей.
+      srcLine = '<div class="widget-src">демонстрационные данные — источник не подтверждён загрузкой</div>';
     }
+    var demoTag = m.source !== "official"
+      ? '<span class="tag-demo" title="Цифра демонстрационная, не подтверждена документом">демо</span>'
+      : "";
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
-      '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></div>" +
+      '<span class="widget-badges">' + demoTag +
+      '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></span></div>" +
       '<div class="widget-value">' + fmtFull(value) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
       srcLine +
       '<div class="widget-footer">' + foot +
@@ -412,7 +437,7 @@ function updateStamp() {
         '<div class="label">' + esc(m.title) + '</div>' +
         '<div class="value">' + fmtFull(value) + ' <small>' + esc(m.unit) + "</small></div>" +
         '<div><span class="delta ' + dc + '" style="font-size:12px">' + ds.s + "</span> " +
-        '<span class="status-pill ' + statusClass(st) + '" style="font-size:10px">' + statusTxt(st) + "</span></div></div>";
+        '<span class="status-pill ' + statusClass(st) + '" style="font-size:11px">' + statusTxt(st) + "</span></div></div>";
     });
     h += "</div>";
 
@@ -493,11 +518,22 @@ function updateStamp() {
     if (deptId && deptId !== "all") rows = (m.drill[deptId] || []).slice();
     else state.data.dept.forEach(function (d) { rows = rows.concat((m.drill[d.id] || []).slice()); });
 
+    // Ответственный из анкеты — обязательное поле: без него непонятно,
+    // с кем поговорить про цифру, а поле есть в каждой загрузке.
+    var provCell = "";
+    if (m.prov && m.prov.length) {
+      var pp = m.prov[0];
+      provCell = '<div class="metric-cell"><div class="label">Источник · ответственный</div>' +
+        '<div class="value" style="font-size:14px;line-height:1.35">' + esc(pp.division) +
+        (pp.responsible ? "<br><small>" + esc(pp.responsible) + "</small>" : "") +
+        "</div></div>";
+    }
     var h = '<div class="section-card"><div class="metric-row">' +
       '<div class="metric-cell"><div class="label">Текущее</div><div class="value">' + fmtFull(m.current) + " <small>" + esc(m.unit) + "</small></div></div>" +
       '<div class="metric-cell"><div class="label">Динамика</div><div class="value">' + deltaStr(m).s + "</div></div>" +
       '<div class="metric-cell"><div class="label">Записей-источников</div><div class="value">' + rows.length + "</div></div>" +
       '<div class="metric-cell"><div class="label">Статус</div><div class="value"><span class="status-pill ' + statusClass(m.status) + '">' + statusTxt(m.status) + "</span></div></div>" +
+      provCell +
       "</div>";
     h += "<h3 style='margin:6px 0'>Записи-источники (" + rows.length + ")</h3>";
     if (rows.length) {
@@ -606,7 +642,12 @@ $("btnExportPdf").addEventListener("click", function () {
   showToast("Открылся диалог печати. Выберите «Сохранить как PDF».", "ok");
   window.print();
 });
-    $("btnExportXlsx").addEventListener("click", function () { showToast("Excel-экспорт (в production подключится openpyxl)", "warn"); });
+    $("btnExportXlsx").addEventListener("click", function () {
+      // Сервер собирает книгу из той же витрины, что и карточки
+      // (включая провенанс и пометку «демо») и отдаёт файлом.
+      window.location.href = "/api/export/xlsx";
+      showToast("Excel собирается на сервере — начнётся загрузка файла", "ok");
+    });
 
     $("filterPeriod").addEventListener("change", function () {
       state.period = this.value;
@@ -623,6 +664,31 @@ $("btnExportPdf").addEventListener("click", function () {
       visibleBlocks().forEach(function (b) { active += D.metricsOfBlock(state.data, b.id).filter(metricMatches).length; });
       badge.hidden = state.search.length === 0;
       badge.textContent = active + "";
+      // Пустая выдача: без надписи ноль совпадений выглядит как поломка —
+      // блоки висят на месте, а внутри них ничего нет.
+      var grid = $("widgetGrid");
+      var empty = $("searchEmpty");
+      if (!empty) {
+        empty = document.createElement("div");
+        empty.id = "searchEmpty";
+        empty.className = "section-card";
+        empty.style.display = "none";
+        grid.parentNode.insertBefore(empty, grid);
+      }
+      var noMatch = state.search.length > 0 && active === 0;
+      grid.style.display = noMatch ? "none" : "";
+      empty.style.display = noMatch ? "block" : "none";
+      if (noMatch) {
+        empty.innerHTML = "<b>Ничего не найдено.</b> " +
+          '<span class="muted">По запросу «' + esc(state.search) +
+          '» показателей нет. </span><button class="mini-btn" id="clearSearch">Сбросить поиск</button>';
+        $("clearSearch").addEventListener("click", function () {
+          var s = $("globalSearch");
+          s.value = "";
+          s.dispatchEvent(new Event("input"));
+          s.focus();
+        });
+      }
       renderDashboard();
     });
 
@@ -644,9 +710,9 @@ $("btnExportPdf").addEventListener("click", function () {
 // ---------- Роли ----------
   function applyRole() {
     var role = state.role;
-    var hint = role === "rector" ? "Ректор — полный доступ"
-      : role === "prorector" ? "Проректор — финансовый блок скрыт (зона ответственности)"
-      : "Администратор — полный доступ + настройка порогов";
+    var hint = role === "rector" ? "Ректор — полный доступ (демо-переключатель, реальных прав не даёт)"
+      : role === "prorector" ? "Проректор — финансовый блок скрыт (зона ответственности; демо-переключатель)"
+      : "Администратор — полный доступ + настройка порогов (демо-переключатель)";
     var el = document.createElement("div");
     el.className = "toast";
     el.textContent = "Роль: " + hint;
@@ -756,17 +822,36 @@ $("btnExportPdf").addEventListener("click", function () {
     $("aiForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       var text = $("aiInput").value.trim();
-      if (!text) return;
+      if (!text) {
+        showToast("Напишите вопрос — отправлять нечего", "warn");
+        return;
+      }
+      // Защита от двойной отправки: пока идёт запрос, второй Enter
+      // подряд давал два параллельных запроса экипажу, два индикатора
+      // и «перетирал» кнопку отмены — останавливался только последний.
+      if (aiBusy) return;
+      aiBusy = true;
       addAiMessage("user", esc(text));
       $("aiInput").value = "";
       setAiTyping(true, true);
+      // Запрос к экипажу живёт до десяти минут по таймауту — без
+      // кнопки отмены пауза выглядит как зависание. AbortController
+      // рвёт сетевой вызов, а не только «прячет» ответ.
+      aiAbort = new AbortController();
       try {
         var ctx = { periodLabels: periodLabels(state.period).labels, currentBlockId: state.blockId };
-        var res = await AI.ask(text, state.data, ctx);
+        var res = await AI.ask(text, state.data, ctx, aiAbort.signal);
         renderAiAnswer(res, text);
       } catch (err) {
-        addAiMessage("ai", "⚠️ Ошибка: " + esc(err.message));
-      } finally { setAiTyping(false); }
+        if (err && err.name === "AbortError") {
+          addAiMessage("ai", "⏹ Остановлено по вашей команде — ответ не дождался.");
+        } else {
+          addAiMessage("ai", "⚠️ Ошибка: " + esc(err.message));
+        }
+        // Набранное возвращается в поле: после отмены или сбоя писать
+        // вопрос заново — самая неприятная часть такой ошибки.
+        $("aiInput").value = text;
+      } finally { setAiTyping(false); aiAbort = null; aiBusy = false; }
     });
     setSuggestions();
   }
@@ -891,6 +976,13 @@ $("btnExportPdf").addEventListener("click", function () {
     return h;
   }
 
+  // Ожидание ответа: сколько секунд идёт запрос и возможность его
+  // остановить. Текст «обычно 1–2 минуты» без счётчика не отличается
+  // от зависшей страницы, а вопрос к экипажу по таймауту живёт 600 с.
+  var aiAbort = null;
+  var aiTick = null;
+  var aiBusy = false;
+
   function setAiTyping(on, crewMode) {
     if (on) {
       var t = document.createElement("div");
@@ -901,13 +993,38 @@ $("btnExportPdf").addEventListener("click", function () {
       // начинает отправлять вопрос ещё раз. Сколько агентов сработает —
       // решает сервер по типу вопроса, поэтому обещать конкретный
       // состав здесь нельзя: на простой факт критик не зовётся.
-      t.textContent = crewMode
+      var base = crewMode
         ? "Агент работает: подбираю специалиста и источники. Обычно 1–2 минуты."
         : "Анализирую данные...";
+      t.textContent = base + " ";
+      var span = document.createElement("span");
+      span.className = "ai-elapsed";
+      span.id = "aiElapsed";
+      t.appendChild(span);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mini-btn ai-cancel";
+      btn.id = "aiCancel";
+      btn.textContent = "⏹ Остановить";
+      btn.addEventListener("click", function () {
+        if (aiAbort) aiAbort.abort();
+      });
+      t.appendChild(btn);
       $("aiMessages").appendChild(t);
+      $("aiMessages").scrollTop = $("aiMessages").scrollHeight;
+      var s = 0;
+      aiTick = setInterval(function () {
+        s += 1;
+        var el = document.getElementById("aiElapsed");
+        if (el) {
+          el.textContent = "· " + s + " с" +
+            (s >= 60 ? " · долго, можно остановить" : "");
+        }
+      }, 1000);
     } else {
-      var el = $("aiTyping");
-      if (el) el.remove();
+      if (aiTick) { clearInterval(aiTick); aiTick = null; }
+      var el2 = $("aiTyping");
+      if (el2) el2.remove();
     }
   }
 
@@ -960,7 +1077,7 @@ $("btnExportPdf").addEventListener("click", function () {
     if (res.charts && res.charts.length) {
       h += '<br/><br/><b>Предлагаемая визуализация:</b>';
       res.charts.slice(0, 1).forEach(function (ch) {
-        h += '<div style="margin-top:6px">' + C.lineChart(ch.labels, [{ name: ch.title, data: ch.data, color: "#2758c2" }]) + "</div>";
+        h += '<div style="margin-top:6px">' + C.lineChart(ch.labels, [{ name: ch.title, data: ch.data, color: "#097aae" }]) + "</div>";
       });
     }
 
@@ -998,6 +1115,7 @@ $("btnExportPdf").addEventListener("click", function () {
   }
 
   function setStatus(h) {
+    updateAiStatus(h);
     var el = $("sysStatus");
     if (!el) return;
     el.className = "sys-status";
@@ -1027,6 +1145,31 @@ $("btnExportPdf").addEventListener("click", function () {
     } else {
       el.classList.add("is-warn");
       el.textContent = "документы не загружены · положите файлы в папку knowledge";
+    }
+  }
+
+  // Статус ассистента в панели чата. Раньше «Онлайн» стояло в HTML
+  // жёстко и кодом никогда не обновлялось — это не измерение, а
+  // надпись. Теперь текст считается по /api/health в момент загрузки:
+  // если модель не отвечает, это видно до первого вопроса, а не после
+  // десяти минут ожидания.
+  function updateAiStatus(h) {
+    var el = $("aiStatus");
+    if (!el) return;
+    var o = (h && h.ollama) || {};
+    if (h && !h.demo && o.available && o.llm_installed) {
+      el.textContent = "Онлайн · " + (o.llm_model || "модель");
+      el.title = "Проверено по /api/health: Ollama отвечает, модель " +
+        (o.llm_model || "") + " установлена";
+      el.style.color = "";
+    } else if (h && !h.demo) {
+      el.textContent = o.available ? "Модель не скачана" : "Модель недоступна";
+      el.title = "Проверено по /api/health при загрузке страницы";
+      el.style.color = "var(--red)";
+    } else {
+      el.textContent = "Нет связи";
+      el.title = "Сервер дашборда не отвечает — чат работать не будет";
+      el.style.color = "var(--red)";
     }
   }
 

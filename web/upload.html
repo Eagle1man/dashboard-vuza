@@ -67,17 +67,17 @@
         </div>
         <div class="form-group">
           <label>Что это за данные <span class="muted" style="font-weight:normal">обязательно</span></label>
-          <input type="text" id="titleInput" placeholder="например, Отчёт по успеваемости за I семестр 2025/26" />
+          <input type="text" id="titleInput" maxlength="300" placeholder="например, Отчёт по успеваемости за I семестр 2025/26" />
           <p class="hint">Краткое название, которое будет видно в списке загрузок.</p>
         </div>
         <div class="form-group">
           <label>Зачем данные / какое решение помогают принять <span class="muted" style="font-weight:normal">обязательно</span></label>
-          <textarea id="purposeInput" rows="3" placeholder="например, увидеть динамику отсева и решить, нужны ли дополнительные занятия"></textarea>
+          <textarea id="purposeInput" rows="3" maxlength="2000" placeholder="например, увидеть динамику отсева и решить, нужны ли дополнительные занятия"></textarea>
           <p class="hint">Без ответа на этот вопрос число в карточке дашборда — просто цифра, а не основа для решения.</p>
         </div>
         <div class="form-group">
           <label>Период <span class="muted" style="font-weight:normal">обязательно</span></label>
-          <input type="text" id="periodInput" placeholder="например, I квартал 2026, 01.04.2026, 2026" />
+          <input type="text" id="periodInput" maxlength="200" placeholder="например, I квартал 2026, 01.04.2026, 2026" />
           <p class="hint">За какой период собраны данные. Будет показан в карточке показателя.</p>
         </div>
         <div class="form-group">
@@ -98,7 +98,7 @@
         </div>
         <div class="form-group">
           <label>Ответственный <span class="muted" style="font-weight:normal">обязательно</span></label>
-          <input type="text" id="respInput" placeholder="ФИО, должность, телефон или почта" />
+          <input type="text" id="respInput" maxlength="200" placeholder="ФИО, должность, телефон или почта" />
           <p class="hint">Кто отвечает за эти данные и ответит на вопросы ректора.</p>
         </div>
         <div class="form-group">
@@ -166,6 +166,9 @@
       // спрятаны, и показываются только после клика по кнопке, которую
       // не видно. Проверяем сессию: вошли — сразу форма, нет — вход.
       (function init() {
+        // Кнопка «Выйти» без сессии ничего не делает, кроме молчаливой
+        // перезагрузки — показываем её только вошедшему.
+        btnLogout.hidden = true;
         fetch("/api/me").then(function (r) {
           if (!r.ok) throw new Error("no session");
           return r.json();
@@ -173,6 +176,7 @@
           currentDivision = me.division_id;
           loginBox.style.display = "none";
           formBox.style.display = "block";
+          btnLogout.hidden = false;
           divInput.value = me.division_title + " (" + me.division_id + ")";
           uploadMsg.textContent = "Вошли как " + me.division_title;
           setupMetrics();
@@ -192,15 +196,31 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ login: login, password: pass }),
           });
-          if (!res.ok) { loginErr.textContent = "Неверный логин или пароль"; return; }
+          if (!res.ok) {
+            // 401/403 — не угадали пароль. Всё остальное (500, 502,
+            // таймаут) — не про пароль: называть его неверным здесь
+            // значит врать человеку, который ввёл его правильно.
+            loginErr.textContent = (res.status === 401 || res.status === 403)
+              ? "Неверный логин или пароль"
+              : "Сервер не ответил (HTTP " + res.status + ") — попробуйте через минуту";
+            return;
+          }
           var data = await res.json();
           currentDivision = data.division_id;
           loginBox.style.display = "none";
           formBox.style.display = "block";
+          btnLogout.hidden = false;
           divInput.value = data.division_title + " (" + data.division_id + ")";
           uploadMsg.textContent = "Вошли как " + data.division_title;
           setupMetrics();
         } catch (e) { loginErr.textContent = "Ошибка связи с сервером"; }
+      });
+      // Enter в полях входа: без этого приходилось отрывать руки
+      // от клавиатуры и брать мышь ради кнопки.
+      ["loginInput", "passInput"].forEach(function (id) {
+        document.getElementById(id).addEventListener("keydown", function (e) {
+          if (e.key === "Enter") document.getElementById("btnLogin").click();
+        });
       });
 
       btnLogout.addEventListener("click", async function () {
@@ -270,8 +290,21 @@
       // --- Загрузка --------------------------------------------------
       document.getElementById("uploadForm").addEventListener("submit", async function (e) {
         e.preventDefault();
+        function fail(text) { uploadMsg.style.color = "var(--red)"; uploadMsg.textContent = text; }
         var file = document.getElementById("fileInput").files[0];
-        if (!file) { uploadMsg.textContent = "Выберите файл"; return; }
+        if (!file) { fail("Выберите файл"); return; }
+
+        // Анкета обязательна целиком — и на форме, и на сервере.
+        // Без ответов «зачем/за какой период/кто отвечает» число в
+        // карточке останется без источника и ответственного.
+        var missing = [];
+        if (!document.getElementById("titleInput").value.trim()) missing.push("«Что это за данные»");
+        if (!document.getElementById("purposeInput").value.trim()) missing.push("«Зачем данные»");
+        if (!document.getElementById("periodInput").value.trim()) missing.push("«Период»");
+        if (!document.getElementById("respInput").value.trim()) missing.push("«Ответственный»");
+        if (missing.length) { fail("Анкета обязательна — заполните: " + missing.join(", ")); return; }
+
+        uploadMsg.style.color = "";
 
         var formData = new FormData();
         formData.append("file", file);
@@ -300,6 +333,7 @@
           var res = await fetch("/api/upload", { method: "POST", body: formData });
           if (!res.ok) {
             var err = await res.json().catch(function () { return { detail: res.statusText }; });
+            uploadMsg.style.color = "var(--red)";
             uploadMsg.textContent = "Ошибка: " + (err.detail || "неизвестная");
             btn.disabled = false;
             return;
@@ -316,6 +350,7 @@
             (data.next_expected ? '<p><strong>Ожидаемое следующее обновление:</strong> ' + data.next_expected + '</p>' : "") +
             (data.confirmed ? '<p style="color:var(--green)"><strong>Числа подтверждены</strong> и записаны в витрину показателей.</p>' : '<p class="muted">Числа не подтверждены — документ в базе знаний, но не в карточках метрик.</p>');
         } catch (err) {
+          uploadMsg.style.color = "var(--red)";
           uploadMsg.textContent = "Ошибка связи: " + err.message;
         } finally {
           btn.disabled = false;

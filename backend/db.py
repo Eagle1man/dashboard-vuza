@@ -1090,7 +1090,8 @@ def load_vitrine(conn):
     prov_by_metric = {}
     for r in conn.execute(
             "SELECT ms.metric_id, ms.confirmed, dm.title, dm.period,"
-            " dm.uploaded_at, dm.next_expected, d.title AS div_title"
+            " dm.uploaded_at, dm.next_expected, dm.responsible,"
+            " d.title AS div_title"
             " FROM metric_source ms"
             " JOIN doc_meta dm ON dm.doc_id = ms.doc_id"
             " JOIN division d ON d.division_id = dm.division_id"
@@ -1099,6 +1100,7 @@ def load_vitrine(conn):
             "division": r["div_title"], "title": r["title"],
             "period": r["period"], "uploaded_at": r["uploaded_at"],
             "next_expected": r["next_expected"],
+            "responsible": r["responsible"],
             "confirmed": bool(r["confirmed"])})
 
     metrics = []

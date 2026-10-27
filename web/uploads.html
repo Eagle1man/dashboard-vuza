@@ -20,7 +20,7 @@
       <div class="header-controls">
         <a href="/dashboard.html" class="btn btn-outline">← К ленте показателей</a>
         <a href="upload.html" class="btn btn-outline">Загрузить ещё</a>
-        <button id="btnLogout" class="btn btn-outline">Выйти</button>
+        <button id="btnLogout" class="btn btn-outline" hidden>Выйти</button>
       </div>
     </div>
   </header>
@@ -35,6 +35,18 @@
     </div>
 
     <div id="msg" class="muted" style="margin-bottom:10px"></div>
+
+    <!-- Без входа список недоступен: раньше страница показывала пустую
+         таблицу с ошибкой и кнопку «Выйти», выйти не из чего. -->
+    <div id="authHint" class="section-card" style="display:none">
+      <div class="card-head"><h3>Войдите подразделением</h3></div>
+      <p class="muted" style="font-size:13px">Список файлов виден после входа — так
+      подразделение видит только свои загрузки. Логин и пароль выдаёт администратор.</p>
+      <div class="page-actions" style="margin-top:12px">
+        <a href="/" class="btn btn-primary">Войти на главной →</a>
+        <a href="/upload.html" class="btn btn-outline">Страница загрузки</a>
+      </div>
+    </div>
 
     <div class="table-wrap" id="uploadsTableWrap">
       <table class="data">
@@ -64,13 +76,24 @@
       async function load() {
         try {
           var res = await fetch("/api/uploads");
+          if (res.status === 401) {
+            document.getElementById("authHint").style.display = "block";
+            document.getElementById("uploadsTableWrap").style.display = "none";
+            msg.textContent = "";
+            return;
+          }
           if (!res.ok) { msg.textContent = "Не удалось загрузить список"; return; }
+          document.getElementById("btnLogout").hidden = false;
           var data = await res.json();
           render(data.uploads || []);
         } catch (e) { msg.textContent = "Ошибка связи с сервером"; }
       }
 
       function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+      // Уровни доступа — те же слова, что на форме загрузки: сырой
+      // open/internal/confidential из базы человек не читает.
+      var ACCESS = { open: "Открыто", internal: "Служебное", confidential: "Конфиденциальное" };
 
       function render(list) {
         tbody.innerHTML = "";
@@ -91,9 +114,25 @@
             "<td><span class='" + freshClass + "'>" + freshLabel + "</span>" +
             (u.next_expected ? " · до " + esc(u.next_expected) : "") + "</td>" +
             "<td>" + (u.status === "ok" ? "ОК" : u.status) + "</td>" +
-            "<td>" + esc(u.access_level || "open") + "</td>" +
-            "<td style='white-space:nowrap'><button class='btn btn-ghost btn-small' style='padding:4px 8px;font-size:12px'>Детали</button></td>";
+            "<td>" + esc(ACCESS[u.access_level] || u.access_level || "Открыто") + "</td>" +
+            "<td style='white-space:nowrap'><button class='btn btn-ghost btn-small detail-btn'>Детали</button></td>";
           tbody.appendChild(tr);
+
+          // Строка деталей: то, что подразделение указало в анкете —
+          // зачем данные, кто отвечает, как часто обновлять.
+          var det = document.createElement("tr");
+          det.hidden = true;
+          det.innerHTML =
+            "<td colspan='9' class='muted' style='font-size:12.5px;padding:8px 12px;background:var(--surface-2)'>" +
+            "<b>Зачем:</b> " + esc(u.purpose || "—") +
+            " · <b>Ответственный:</b> " + esc(u.responsible || "—") +
+            " · <b>Частота:</b> " + esc(u.frequency || "разово") +
+            " · <b>Числа подтверждены:</b> " + (u.confirmed ? "да" : "нет") +
+            "</td>";
+          tbody.appendChild(det);
+          tr.querySelector(".detail-btn").addEventListener("click", function () {
+            det.hidden = !det.hidden;
+          });
         });
       }
 

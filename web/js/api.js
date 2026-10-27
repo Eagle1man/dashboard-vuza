@@ -40,12 +40,13 @@
       ms || 8000, path);
   }
 
-  function post(path, body, ms) {
+  function post(path, body, ms, signal) {
     return withTimeout(
       fetch(BASE + path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body || {})
+        body: JSON.stringify(body || {}),
+        signal: signal
       }).then(function (r) {
         if (!r.ok) throw new Error(path + ": HTTP " + r.status);
         return r.json();
@@ -75,9 +76,9 @@
     // сервер выбирает сам по типу вопроса (crew.plan_agents). Таймаут
     // заведомо большой: цикл — роутер, специалист и, когда он нужен,
     // критик, то есть до четырёх обращений к локальной модели подряд.
-    askCrew: function (question) {
+    askCrew: function (question, signal) {
       return post("/api/ask/crew",
-        { question: question, mode: "auto" }, 600000);
+        { question: question, mode: "auto" }, 600000, signal);
     },
 
     // Состав экипажа: кто есть, за что отвечает, сколько документов видит

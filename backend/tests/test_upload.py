@@ -206,6 +206,32 @@ def test_razovo_has_no_next_expected():
           res.get("next_expected") is None, str(res.get("next_expected")))
 
 
+def test_empty_questionnaire_rejected():
+    """Анкета обязательна на сервере, а не только на форме."""
+    _setup()
+    try:
+        uploads.handle_upload(
+            "buhgalteria", FakeUpload("a.txt", "текст".encode("utf-8")),
+            _form(title="", purpose="", period="", responsible=""))
+        check("пустая анкета -> 400", False, "исключение не брошено")
+    except Exception as e:  # noqa: BLE001
+        check("пустая анкета -> 400", getattr(e, "status_code", None) == 400,
+              str(getattr(e, "status_code", None)))
+        check("в ошибке перечислены пустые поля",
+              "Анкета обязательна" in str(getattr(e, "detail", "")),
+              str(getattr(e, "detail", "")))
+    try:
+        uploads.handle_upload(
+            "buhgalteria", FakeUpload("b.txt", "текст-2".encode("utf-8")),
+            _form(purpose="   "))
+        check("непустая только по названию анкета -> 400", False,
+              "исключение не брошено")
+    except Exception as e:  # noqa: BLE001
+        check("непустая только по названию анкета -> 400",
+              getattr(e, "status_code", None) == 400,
+              str(getattr(e, "status_code", None)))
+
+
 def main():
     print("Проверки конвейера загрузки (временная база, фейковая индексация)")
     try:
@@ -213,6 +239,7 @@ def main():
         test_duplicate_rejected()
         test_bad_extension_rejected()
         test_no_file_rejected()
+        test_empty_questionnaire_rejected()
         test_unconfirmed_stays_out_of_vitrine()
         test_razovo_has_no_next_expected()
     finally:

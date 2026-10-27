@@ -14,8 +14,9 @@ from pathlib import Path
 
 from fastapi import Cookie, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 
 from . import autoconfig
@@ -84,9 +85,52 @@ async def no_stale_assets(request, call_next):
     """
     response = await call_next(request)
     path = request.url.path
-    if path.startswith(("/css/", "/js/", "/img/")) or path in ("/", "/index.html"):
+    # .html тоже сюда: страницы дашборда без no-cache отдавали старую
+    # разметку после правки — проверяющий видел прежний интерфейс и
+    # считал, что правка не применилась.
+    if path.startswith(("/css/", "/js/", "/img/")) or path == "/" or path.endswith(".html"):
         response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+_NOT_FOUND_PAGE = """<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Страница не найдена · Дашборд ректора ИУБиП</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+ body { font-family: "Segoe UI", Arial, sans-serif; background: #ebf7ff;
+        color: #06172d; display: flex; align-items: center; justify-content: center;
+        min-height: 100vh; margin: 0; }
+ .box { background: #fff; border: 1px solid #cfe0ed; border-radius: 16px;
+        padding: 32px 36px; max-width: 460px; text-align: center;
+        box-shadow: 0 6px 24px rgba(6,23,45,.08); }
+ h1 { font-family: Georgia, serif; font-size: 26px; margin: 0 0 8px; color: #0c5f97; }
+ p { color: #4b688b; font-size: 14px; line-height: 1.5; margin: 0 0 18px; }
+ a { display: inline-block; background: #0c5f97; color: #fff; text-decoration: none;
+     padding: 11px 22px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+ a:hover { background: #063d6b; }
+</style></head>
+<body><div class="box">
+ <h1>404 · Страница не найдена</h1>
+ <p>Возможно, ссылка устарела или в адресе опечатка. Откройте главную —
+    там вход, лента показателей и загрузка данных.</p>
+ <a href="/">← На главную</a>
+</div></body></html>"""
+
+
+@app.exception_handler(StarletteHTTPException)
+async def page_not_found(request, exc):
+    """404: человеку — страница с кнопкой «на главную», клиентам API — JSON.
+
+    Раньше оба получали JSON {"detail":"Not Found"}: для браузера это
+    белый экран без единой понятной кнопки, а старая ссылка на дашборд
+    выглядела как поломка системы, а не как 404.
+    """
+    if exc.status_code == 404 and not request.url.path.startswith("/api/"):
+        return HTMLResponse(_NOT_FOUND_PAGE, status_code=404)
+    return JSONResponse(status_code=exc.status_code,
+                        content={"detail": exc.detail},
+                        headers=getattr(exc, "headers", None))
 
 
 class AskRequest(BaseModel):
@@ -371,6 +415,8 @@ async def upload(request: Request,
             detail="Нельзя загружать от имени другого подразделения")
     division_id = did
 
+    # Пустая анкета отклоняется внутри handle_upload — там же, где
+    # остальные проверки, чтобы правило не зависело от роута.
     form = {
         "title": title, "purpose": purpose, "period": period,
         "frequency": frequency, "responsible": responsible,
@@ -388,10 +434,14 @@ async def upload(request: Request,
 @app.get("/api/uploads")
 def uploads_list(request: Request, division_id: str | None = None):
     did = _session_division(request)
-    if division_id and division_id != did and did != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Нельзя смотреть загрузки другого подразделения")
+    if did == "admin":
+        # Администратор может и посмотреть чужое — но только явно запросив.
+        pass
+    else:
+        # Не-админ всегда видит только своё подразделение: параметр
+        # клиента не может расширить выборку (иначе подзаголовок
+        # «файлы вашего подразделения» врал бы).
+        division_id = did
     return {"uploads": uploads.list_uploads(division_id)}
 
 
@@ -405,6 +455,60 @@ def upload_detail(request: Request, upload_id: int):
         raise HTTPException(status_code=403,
                             detail="Нельзя смотреть загрузку другого подразделения")
     return detail
+
+
+@app.get("/api/export/xlsx")
+def export_xlsx():
+    """Выгрузка витрины показателей в Excel.
+
+    Кнопка «XLSX» на ленте раньше отдавала тост-заглушку («подключится
+    в production»). Строится из той же витрины, что и карточки, вместе
+    с провенансом: источник, подразделение, период и пометка «демо».
+    """
+    from io import BytesIO
+
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        raise HTTPException(
+            status_code=500, detail="openpyxl не установлен — экспорт недоступен")
+
+    status_ru = {"none": "нет цели", "green": "зелёный",
+                 "yellow": "жёлтый", "red": "красный"}
+    c = conn()
+    vit = db.load_vitrine(c)
+    blocks = {b["id"]: b["title"] for b in vit["blocks"]}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Показатели"
+    ws.append(["Блок", "Показатель", "Значение", "Единица", "Статус",
+               "Цель", "Природа", "Подразделение", "Период", "Документ",
+               "Обновлено", "Демо"])
+    for m in vit["metrics"]:
+        p0 = (m["prov"] or [{}])[0]
+        ws.append([
+            blocks.get(m["block"], m["block"]),
+            m["title"],
+            m["current"],
+            m["unit"] or "",
+            status_ru.get(m["status"], m["status"]),
+            m["target"] if m["target"] is not None else "",
+            "официальный документ" if m["source"] == "official" else "демонстрационный",
+            p0.get("division", ""),
+            p0.get("period", ""),
+            p0.get("title", ""),
+            p0.get("uploaded_at", ""),
+            "нет" if m["source"] == "official" else "да",
+        ])
+    ws.freeze_panes = "A2"
+
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="pokazateli.xlsx"'})
 
 
 @app.exception_handler(500)

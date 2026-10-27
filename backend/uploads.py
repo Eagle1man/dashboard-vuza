@@ -81,7 +81,23 @@ def handle_upload(division_id: str, file: UploadFile, form: dict) -> dict:
     if not row:
         raise HTTPException(status_code=403, detail="Подразделение не найдено")
 
-    # --- 2. Проверка файла --------------------------------------------
+    # --- 2. Анкета обязательна ------------------------------------------
+    # Проверка здесь, а не только на форме: иначе файл без ответов
+    # «зачем/за какой период/кто отвечает» ляжет в базу, и число в
+    # карточке останется без источника и ответственного. Форма и так
+    # спрашивает эти поля — сервер просто не принимает пустые.
+    missing = [label for label, key in (
+        ("что это за данные", "title"),
+        ("зачем данные", "purpose"),
+        ("период", "period"),
+        ("ответственный", "responsible"),
+    ) if not str(form.get(key, "")).strip()]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="Анкета обязательна — заполните: " + ", ".join(missing))
+
+    # --- 3. Проверка файла --------------------------------------------
     if not file.filename:
         raise HTTPException(status_code=400, detail="Файл не выбран")
     ext = Path(file.filename).suffix.lower()
@@ -98,7 +114,7 @@ def handle_upload(division_id: str, file: UploadFile, form: dict) -> dict:
                             detail=f"Файл слишком велик: {size_mb:.1f} МБ "
                                    f"(лимит {MAX_FILE_MB} МБ)")
 
-    # --- 3. Сохранение файла ------------------------------------------
+    # --- 4. Сохранение файла ------------------------------------------
     year = time.strftime("%Y")
     save_dir = config.KNOWLEDGE_DIR / division_id / year
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -120,7 +136,7 @@ def handle_upload(division_id: str, file: UploadFile, form: dict) -> dict:
 
     rel_path = f"{division_id}/{year}/{safe_name}"
 
-    # --- 4. Индексация ------------------------------------------------
+    # --- 5. Индексация ------------------------------------------------
     try:
         res = ingest_mod.index_file(
             db.connect(), save_path, is_demo=False, force=True)
@@ -145,7 +161,7 @@ def handle_upload(division_id: str, file: UploadFile, form: dict) -> dict:
     doc_id = db.connect().execute(
         "SELECT doc_id FROM doc WHERE rel_path = ?", (rel_path,)).fetchone()["doc_id"]
 
-    # --- 5. Запись загрузки и метаданных ------------------------------
+    # --- 6. Запись загрузки и метаданных ------------------------------
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     title = form.get("title") or safe_name
     purpose = form.get("purpose", "")
@@ -179,7 +195,7 @@ def handle_upload(division_id: str, file: UploadFile, form: dict) -> dict:
          frequency, responsible, access_level, next_exp,
          json.dumps(metric_ids, ensure_ascii=False), int(confirmed), now))
 
-    # --- 6. metric_source + fact_metric -------------------------------
+    # --- 7. metric_source + fact_metric -------------------------------
     metric_values_raw = form.get("metric_values", "{}")
     try:
         metric_values = json.loads(metric_values_raw) if metric_values_raw else {}

@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    charts.js — самописные SVG-графики (без внешних библиотек)
    lineChart, barChart, donutChart, sparkline.
    ============================================================ */
@@ -32,7 +32,7 @@
     });
     const d = pts.map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
     return '<svg class="spark" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
-      '<path d="' + d + '" fill="none" stroke="' + (color || "#2758c2") + '" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+      '<path d="' + d + '" fill="none" stroke="' + (color || "#097aae") + '" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
   }
 
   // Линейный график с несколькими сериями
@@ -67,16 +67,16 @@
 
     series.forEach((s) => {
       const d = s.data.map((v, i) => (i === 0 ? "M" : "L") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
-      g += '<path d="' + d + '" fill="none" stroke="' + (s.color || "#2758c2") + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
+      g += '<path d="' + d + '" fill="none" stroke="' + (s.color || "#097aae") + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
       s.data.forEach((v, i) => {
-        g += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="3" fill="' + (s.color || "#2758c2") + '" data-val="' + esc(v) + '" data-label="' + esc(labels[i]) + '" class="pt"/>';
+        g += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="3" fill="' + (s.color || "#097aae") + '" data-val="' + esc(v) + '" data-label="' + esc(labels[i]) + '" class="pt"/>';
       });
     });
 
     let leg = '<g>';
     let lx = PL;
     series.slice(0, 6).forEach((s) => {
-      leg += '<rect x="' + lx + '" y="' + (PT - 14) + '" width="10" height="10" rx="2" fill="' + (s.color || "#2758c2") + '"/>';
+      leg += '<rect x="' + lx + '" y="' + (PT - 14) + '" width="10" height="10" rx="2" fill="' + (s.color || "#097aae") + '"/>';
       leg += '<text x="' + (lx + 14) + '" y="' + (PT - 5) + '" font-size="11" fill="var(--muted)">' + esc(s.name) + "</text>";
       lx += 14 + s.name.length * 7.2 + 20;
     });
@@ -115,7 +115,7 @@
       const bx = PL + slot * i + (slot - bw) / 2;
       const bh = (v / max) * ih;
       const by = PT + ih - bh;
-      const color = (opts.colors && opts.colors[i]) || "#2758c2";
+      const color = (opts.colors && opts.colors[i]) || "#097aae";
       g += '<rect data-val="' + esc(v) + '" data-label="' + esc(labels[i]) + '" data-idx="' + i + '" class="bar datab" x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="3" fill="' + color + '"/>';
       if (i % 2 === 0) {
         g += '<text x="' + (bx + bw / 2).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="10" fill="var(--muted)">' + esc(labels[i]) + "</text>";
@@ -130,7 +130,7 @@
     const total = values.reduce((a, b) => a + b, 0) || 1;
     const C = 150, R = 90, r = 60;
     const cx = C, cy = C;
-    const palette = ["#2758c2", "#7b2ff7", "#0ea5e9", "#16a34a", "#d97706", "#dc2626", "#64748b", "#0891b2", "#a16207"];
+    const palette = ["#097aae", "#0c5f97", "#e5b02a", "#0f7a38", "#c8102e", "#4b688b", "#0891b2", "#a16207", "#7b2ff7"];
     let acc = 0;
     let g = "";
     values.forEach((v, i) => {

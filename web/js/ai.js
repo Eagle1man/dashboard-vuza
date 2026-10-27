@@ -309,10 +309,10 @@
   // сервер по типу вопроса (backend/crew.py, plan_agents). Переключатель
   // в интерфейсе стоял, но обещал неправду — «Один агент: без роутера и
   // критики», хотя роутер и аналитик витрины работали в обоих режимах.
-  async function askServer(question) {
+  async function askServer(question, signal) {
     const api = global.DashboardAPI;
     if (!api) return null;
-    var out = await api.askCrew(question);
+    var out = await api.askCrew(question, signal);
     if (!out || typeof out.answer !== "string") return null;
 
     // В ответе без модели сервер сам объясняет, что не смог ответить,
@@ -348,15 +348,16 @@
     }
   }
 
-  // Публичный API
-  async function ask(question, data, ctx) {
+  // Публичный API. signal — сигнал отмены из интерфейса: без него
+  // остановить долгий запрос экипажу можно было только закрыв вкладку.
+  async function ask(question, data, ctx, signal) {
     // Приоритет 0: локальный сервер с корпусом документов (RAG).
     // Если сервер поднят, он и источник истины, и генератор ответа:
     // документы вуза полезнее демо-цифр, которые всё равно выдуманы.
     const api = global.DashboardAPI;
     if (api) {
       try {
-        const srv = await askServer(question);
+        const srv = await askServer(question, signal);
         if (srv) {
           const loc = matchMetrics(question, data);
           if (loc.length) srv.charts.push(
@@ -364,6 +365,9 @@
           return srv;
         }
       } catch (e) {
+        // Отмена — не ошибка: пробрасываем наверх, иначе вместо
+        // «остановлено» человек увидит запасной ответ с эмодзи ошибки.
+        if (e && e.name === "AbortError") throw e;
         return {
           text: "⚠️ Локальный сервер ответил с ошибкой (" + e.message + ")." +
             "\n\nНиже — встроенная аналитика по демо-данным.\n\n" +

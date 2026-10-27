@@ -11,21 +11,21 @@
   <!-- Шапка -->
   <header class="app-header">
     <div class="header-inner">
-      <div class="brand">
+      <a class="brand" href="/" title="На главную страницу">
         <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" title="Южный университет (ИУБиП)" />
         <div class="brand-text">
           <strong>Дашборд ректора</strong>
           <span>ЧОУ ВО «Южный университет (ИУБиП)»</span>
         </div>
-      </div>
+      </a>
       <div class="header-controls">
         <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
         <div class="search-wrap">
           <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
           <span id="searchBadge" class="search-badge" hidden></span>
         </div>
-        <div class="role-switch" title="Демонстрация ролевого доступа">
-          <label for="roleSelect">Роль</label>
+        <div class="role-switch" title="Демонстрация ролевого доступа: переключатель фильтрует блоки на этой странице и не даёт реальных прав">
+          <label for="roleSelect">Роль <span class="tag-demo">демо</span></label>
           <select id="roleSelect">
             <option value="rector">Ректор</option>
             <option value="prorector">Проректор</option>
@@ -48,7 +48,7 @@
           <p class="sub" id="updateStamp">Обновлено: —</p>
         </div>
         <div class="page-actions">
-          <button id="btnRefresh" class="btn btn-primary">⟳ Обновить все данные</button>
+          <button id="btnRefresh" class="btn btn-primary" title="Перечитать витрину показателей из базы сервера (в демо-режиме — сгенерировать новый срез). С внешними системами не синхронизирует — подключение внешних источников делает владелец.">⟳ Обновить показатели</button>
           <button id="btnExportCsv" class="btn btn-outline" title="Экспорт сводки в CSV">⬇ CSV</button>
         </div>
       </div>
@@ -145,7 +145,7 @@
         <img src="img/iubip-logo.svg" alt="" class="ai-logo" />
         <div>
           <strong>Аналитик ректора</strong>
-          <span class="ai-status" id="aiStatus">Онлайн</span>
+          <span class="ai-status" id="aiStatus" title="Проверяется по /api/health при загрузке страницы">проверяю…</span>
         </div>
       </div>
       <button id="aiClose" class="btn btn-outline ai-close-btn" aria-label="Закрыть чат">✕ Закрыть</button>
@@ -153,7 +153,7 @@
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-actions" id="aiSuggestions"></div>
     <form id="aiForm" class="ai-input">
-      <input id="aiInput" type="text" placeholder="Например: почему выросло отчисление на 1 курсе?" autocomplete="off" />
+      <input id="aiInput" type="text" maxlength="2000" placeholder="Например: почему выросло отчисление на 1 курсе?" autocomplete="off" />
       <button type="submit" class="btn btn-primary">➤</button>
     </form>
   </aside>
@@ -166,7 +166,7 @@
 
   <footer class="app-footer">
     <img src="img/iubip-logo.svg" alt="Южный университет (ИУБиП)" class="footer-logo" />
-    <span class="footer-note">ЧОУ ВО «Южный университет (ИУБиП)» · Дашборд ректора · часть показателей — из документов университета (отчёт о самообследовании на 01.04.2026, план ФХД на 2026 год), часть — демонстрационная и помечена · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
+    <span class="footer-note">ЧОУ ВО «Южный университет (ИУБиП)» · Дашборд ректора · показателей: <span id="footerCounts">—</span> · документы университета в ленте — отчёт о самообследовании на 01.04.2026 и план ФХД на 2026 год · документы в ответах ИИ — настоящие, из папки knowledge · персональные данные обезличены (152-ФЗ)</span>
   </footer>
 
   <script src="js/data.js"></script>

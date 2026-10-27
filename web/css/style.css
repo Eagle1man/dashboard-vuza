@@ -1,30 +1,58 @@
 /* ============ Сброс и база ============ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ---------- Палитра ----------
+   Взята из дизайн-системы eagle1man (iuubip-career-hub-modern):
+   светлая azure-подложка, белые карточки, navy-акцент, янтарь для
+   главных действий, серифные заголовки, капсульные контролы. */
 :root {
-  --bg: #f3f5f9;
+  --bg: #ebf7ff;                /* его --surface: светлый бирюзовый тон */
   --surface: #ffffff;
-  --surface-2: #f7f8fb;
-  --border: #e2e6ee;
-  --text: #1c2333;
-  --muted: #6b7280;
-  --primary: #1f3d7a;
-  --primary-hover: #16305f;
-  --green: #16a34a;
-  --yellow: #d97706;
-  --red: #dc2626;
-  --shadow: 0 1px 3px rgba(16, 24, 40, .08), 0 1px 2px rgba(16, 24, 40, .06);
-  --shadow-lg: 0 10px 30px rgba(16, 24, 40, .14);
-  --radius: 14px;
+  --surface-2: #f4fafd;
+  --border: #cfe0ed;            /* его --line */
+  --text: #06172d;              /* его --ink */
+  --muted: #4b688b;             /* его --ink-soft */
+  --primary: #097aae;           /* его --azure */
+  --primary-hover: #065d89;
+  --navy: #0c5f97;
+  --navy-deep: #063d6b;
+  --azure-soft: #dbf1ff;
+  --amber: #e5b02a;
+  --amber-soft: #fbf4e0;
+  --amber-deep: #b8860b;
+  --green: #0f7a38;
+  --yellow: #a8801a;
+  --red: #c8102e;
+  --shadow: 0 1px 3px rgba(6, 61, 107, .08), 0 2px 8px rgba(6, 61, 107, .06);
+  --shadow-lg: 0 12px 32px rgba(6, 61, 107, .16);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font-display: Georgia, "Times New Roman", serif;
+  --fab-bg: #0c5f97;            /* пилюля чата: navy днём, белая ночью */
+  --fab-fg: #ffffff;
+  --fab-shadow: 0 10px 26px rgba(6, 61, 107, .38);
 }
 html[data-theme="dark"] {
-  --bg: #0f1420;
-  --surface: #1a2233;
-  --surface-2: #202a3f;
-  --border: #2b3650;
-  --text: #e8ecf4;
-  --muted: #9aa6bd;
+  --bg: #0f0f0f;                /* его тёмная подложка */
+  --surface: #1f1f1f;
+  --surface-2: #262626;
+  --border: #383838;
+  --text: #f5f5f5;
+  --muted: #adadad;
+  --primary: #0b78ab;
+  --primary-hover: #0e8dcc;
+  --navy: #141414;
+  --navy-deep: #0b0b0b;
+  --azure-soft: #2e2e2e;
+  --amber: #e5b02a;
+  --amber-soft: #2a2417;
+  --green: #2fa363;
+  --yellow: #d9a441;
+  --red: #e35d6a;
   --shadow: 0 1px 3px rgba(0,0,0,.4);
-  --shadow-lg: 0 10px 30px rgba(0,0,0,.5);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.55);
+  --fab-bg: #ffffff;
+  --fab-fg: #141414;
+  --fab-shadow: 0 10px 26px rgba(0,0,0,.6);
 }
 html { font-size: 15px; }
 /* Без overflow-x: hidden — он создаёт прокручивающийся контейнер и
@@ -39,26 +67,51 @@ body {
   min-height: 100vh;
   transition: background .25s, color .25s;
 }
+/* Серифный дисплейный шрифт — подпись его стиля: заголовки набраны
+   Georgia, цифры-итоги — тоже. */
+h1, h2, h3, h4, .brand-text strong, .page-head h1, .page-head h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
 button { font-family: inherit; cursor: pointer; }
-input, select { font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+:focus-visible { outline: 3px solid rgba(9, 122, 174, .55); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 
 /* ============ Шапка ============ */
 .app-header { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
 .header-inner { max-width: 1280px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 12px; }
-.brand-logo { height: 46px; width: auto; flex-shrink: 0; }
-.brand-mark { width: 42px; height: 42px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), #7b2ff7); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
-.brand-text strong { font-size: 16px; }
-.brand-text span { font-size: 12px; color: var(--muted); }
+/* Бренд-блок — ссылка на главную: с ленты иначе не вернуться,
+   кроме «назад» браузера. */
+a.brand { text-decoration: none; color: inherit; }
+a.brand:hover strong { color: var(--primary); }
+/* Плитка под логотип: белый квадрат со скруглением — как logo-tile
+   в его шапке. Знак рассчитан на белый фон, поэтому всегда на белом. */
+.brand-logo {
+  height: 42px; width: auto; flex-shrink: 0;
+  background: #fff; border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px 7px;
+}
+.brand-mark { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, var(--navy), var(--primary)); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-text strong { font-size: 17px; color: var(--navy-deep); }
+html[data-theme="dark"] .brand-text strong { color: #fff; }
+.brand-text span {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted);
+}
 .header-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .search-wrap { position: relative; }
-.search-wrap input { width: 260px; max-width: 70vw; padding: 8px 34px 8px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text); }
-.search-wrap input:focus { outline: 2px solid var(--primary); }
-.search-badge { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--primary); color: #fff; font-size: 11px; border-radius: 8px; padding: 1px 6px; }
+.search-wrap input { width: 260px; max-width: 70vw; padding: 9px 34px 9px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); }
+.search-wrap input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,122,174,.18); }
+.search-badge { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--primary); color: #fff; font-size: 11px; border-radius: 999px; padding: 1px 7px; }
 .role-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.role-switch select { padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
-.icon-btn { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 16px; }
+.role-switch select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); }
+.icon-btn { width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn:hover { border-color: var(--primary); color: var(--primary); }
 
 /* ============ Основная область ============ */
@@ -66,58 +119,114 @@ input, select { font-family: inherit; }
 .view { display: none; }
 .view.active { display: block; }
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
-.page-head h1, .page-head h2 { font-size: 24px; }
+/* Янтарная засечка перед заголовком раздела — его фирменный акцент. */
+.page-head h1, .page-head h2 { font-size: 25px; position: relative; padding-left: 16px; }
+.page-head h1::before, .page-head h2::before {
+  content: ""; position: absolute; left: 0; top: .16em; bottom: .1em;
+  width: 5px; border-radius: 3px; background: var(--amber);
+}
 .sub { color: var(--muted); font-size: 13px; }
 .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
 /* ============ Кнопки ============ */
-.btn { padding: 8px 14px; border-radius: 9px; border: 1px solid transparent; font-size: 13px; font-weight: 600; transition: .15s; white-space: nowrap; }
+/* Капсула (radius-control) — его фирменная форма контролов. */
+.btn { padding: 9px 18px; border-radius: 999px; border: 1px solid transparent; font-size: 13px; font-weight: 600; transition: .15s; white-space: nowrap; min-height: 40px; }
 .btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: var(--primary-hover); }
+.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
 .btn-outline { background: var(--surface); color: var(--text); border-color: var(--border); }
 .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+/* Главное действие — янтарная капсула с тёмно-navy текстом (его btn-call). */
+.btn-amber { background: var(--amber); color: var(--navy-deep); }
+.btn-amber:hover { background: var(--amber-deep); color: #fff; transform: translateY(-1px); }
 .btn-ghost { background: transparent; color: var(--primary); border-color: transparent; padding-left: 0; }
 .btn-ghost:hover { text-decoration: underline; }
-.btn-small { font-size: 12px; padding: 4px 8px; }
+.btn-small { font-size: 12px; padding: 5px 14px; min-height: 30px; }
+/* ============ Формы (страница загрузки и вход) ============ */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px 18px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.form-group label .muted { font-size: 12px; }
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(9, 122, 174, .16);
+}
+.form-group input[readonly] { background: var(--surface-2) !important; color: var(--muted); }
+.form-group textarea { resize: vertical; min-height: 74px; line-height: 1.45; }
+.form-group select[multiple] { padding: 8px; min-height: 170px; }
+/* Поле файла выделено пунктиром: это не текст, а вложение. */
+.form-group input[type="file"] {
+  padding: 12px 13px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+.form-group input[type="file"]:hover { border-color: var(--primary); color: var(--primary); }
+.form-group input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--primary); }
+.form-group .hint { margin-top: 0; }
+.confirm-box { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--amber-soft); padding: 12px 14px; }
+.metric-val { margin-top: 4px; }
+
 /* ============ Фильтры ============ */
 .filter-bar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin: 12px 0 20px; box-shadow: var(--shadow); }
 .filter-group { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-.filter-group select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); min-width: 140px; }
+.filter-group select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); min-width: 140px; }
 .filter-tip span { align-self: center; font-size: 12px; color: var(--muted); }
 
 /* ============ Сетка виджетов ============ */
 .widget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.widget { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: grab; transition: box-shadow .15s, transform .1s; position: relative; }
+.widget { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: grab; transition: box-shadow .18s, transform .18s, border-color .18s; position: relative; }
+.widget:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .widget:active { cursor: grabbing; }
 .widget.dragging { opacity: .6; transform: scale(.98); }
 .widget.with-alert::after { content: "🔔"; position: absolute; top: 12px; right: 12px; font-size: 13px; }
 .widget-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.widget-badges { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .widget-title { font-weight: 600; font-size: 13px; color: var(--muted); }
-.widget-value { font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
+/* Итоговая цифра — серифная и navy, как KPI в его карточках. */
+.widget-value { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--navy-deep); margin: 6px 0 2px; }
+html[data-theme="dark"] .widget-value { color: #fff; }
 /* Источник числа прямо на карточке: решение, принятое по цифре,
    должно быть подписано, а источник — рядом с цифрой, а не за
    кликом в детализацию. */
-.widget-src { font-size: 10.5px; line-height: 1.3; color: var(--muted); margin-top: 4px; }
+.widget-src { font-size: 11.5px; line-height: 1.35; color: var(--muted); margin-top: 4px; }
 /* Имя файла источника под названием: в нём — дата документа
    («01_Отчёт о самообследовании на 01.04.2026.pdf»). Без даты ответ
    выглядит как описание нынешнего положения, хотя документ может
    описывать прошлое. */
-.src-file { font-size: 10.5px; color: var(--muted); margin: 2px 0 4px; word-break: break-all; }
+.src-file { font-size: 11.5px; color: var(--muted); margin: 2px 0 4px; word-break: break-all; }
 .widget-unit { font-size: 14px; font-weight: 500; color: var(--muted); }
 .widget-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
 .spark { width: 100%; height: 40px; }
 .delta { font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
 .delta.up { color: var(--green); }
 .delta.down { color: var(--red); }
-.status-pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .3px; }
-.status-green { background: rgba(22,163,74,.14); color: var(--green); }
-.status-yellow { background: rgba(217,119,6,.16); color: var(--yellow); }
-.status-red { background: rgba(220,38,38,.14); color: var(--red); }
+.status-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .3px; }
+.status-green { background: rgba(15,122,56,.14); color: var(--green); }
+.status-yellow { background: rgba(229,176,42,.20); color: var(--yellow); }
+.status-red { background: rgba(200,16,46,.13); color: var(--red); }
 .trend { display: inline-flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .mini-actions { display: flex; gap: 6px; }
-.mini-btn { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
+.mini-btn { font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); min-height: 30px; }
 .mini-btn:hover { color: var(--primary); border-color: var(--primary); }
 
 /* ============ Детализация блока ============ */
@@ -163,6 +272,10 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .msg.ai table { margin-top: 8px; border-collapse: collapse; font-size: 12px; width: 100%; }
 .msg.ai table th, .msg.ai table td { border: 1px solid var(--border); padding: 4px 6px; text-align: left; }
 .typing { color: var(--muted); font-style: italic; }
+/* Счётчик ожидания и кнопка отмены внутри индикатора «печатает». */
+.ai-elapsed { font-variant-numeric: tabular-nums; font-style: italic; }
+.ai-cancel { margin-left: 8px; font-style: normal; vertical-align: middle; }
+.ai-cancel:hover { color: var(--red); border-color: var(--red); }
 /* Подсказки — одна прокручиваемая строка, а не перенос по одной на
    строку. В панели шириной 380px пять подсказок переносились каждая на
    свою строку и съедали 163px — треть высоты панели, а на сообщения
@@ -182,17 +295,17 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .ai-actions .chip { font-size: 11px; padding: 5px 9px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
 .ai-actions .chip:hover { color: var(--primary); border-color: var(--primary); }
 .ai-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
-.ai-input input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text); }
+.ai-input input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--text); }
 /* Пилюля-кнопка чата: заметная, с подписью — значка 🤖 одного мало,
-   чтобы её нашли. */
+   чтобы её нашли. Днём — navy, ночью — белая капсула (его orb). */
 .ai-fab {
   position: fixed; right: 20px; bottom: 20px;
   display: inline-flex; align-items: center; gap: 9px;
-  padding: 14px 22px;
+  padding: 15px 24px;
   border-radius: 999px; border: none;
-  background: linear-gradient(135deg, var(--primary), #7b2ff7);
-  color: #fff; font-size: 15px; font-weight: 600;
-  box-shadow: 0 10px 30px rgba(31, 61, 122, .45);
+  background: var(--fab-bg);
+  color: var(--fab-fg); font-size: 15px; font-weight: 600;
+  box-shadow: var(--fab-shadow);
   z-index: 39; cursor: pointer;
   transition: transform .15s ease, filter .15s ease;
 }
@@ -212,21 +325,72 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 
 /* ============ Адаптив ============ */
 @media (max-width: 720px) {
-  .header-inner { flex-direction: column; align-items: flex-start; }
-  .search-wrap input { width: 100%; }
+  .header-inner { flex-direction: column; align-items: flex-start; padding: 8px 14px; gap: 10px; }
+  /* Липкая шапка на 390px складывается в 4–5 строк и занимает ~30%
+     высоты экрана, всегда вися над лентой. На телефоне она обычной. */
+  .app-header { position: static; }
+  /* clip на телефоне молча обрезал всё, что вылезло за экран:
+     дочитать обрезанное было нельзя — пусть будет прокрутка вбок. */
+  html, body { overflow-x: auto; }
+  .brand-logo { height: 34px; }
+  .search-wrap input { width: 100%; max-width: none; font-size: 16px; }
   .ai-panel { width: 94vw; height: 80vh; }
   .metric-row { grid-template-columns: 1fr; }
   /* Фильтры на телефоне: каждый занимает строку целиком, иначе три
      выпадающих списка в 140 пикселей каждый не влезают в 390. */
   .filter-group { flex: 1 1 100%; }
-  .filter-group select { min-width: 0; width: 100%; }
+  /* 16px и высота 40px: мельче — iOS зумит при фокусе, а 34px
+     промахиваются пальцем. */
+  .filter-group select { min-width: 0; width: 100%; min-height: 40px; font-size: 16px; }
   /* Подсказка про перетаскивание на сенсорном экране бессмысленна:
      перетаскивание мышью на телефоне не работает. */
   .filter-tip { display: none; }
+
+  /* Статус сервера: на 335px «nowrap» молча обрезал текст — пусть
+     переносится на несколько строк. */
+  .sys-status { white-space: normal; max-width: 100%; }
+
+  /* Поля формы и поиск — 16px: мельче iOS Safari зумит страницу
+     при фокусе, вёрстка уезжает. */
+  .form-group input[type="text"],
+  .form-group input[type="password"],
+  .form-group textarea,
+  .form-group select,
+  .search-wrap input,
+  .role-switch select,
+  /* Чат и числовые поля: тот же автозум iOS, и чипы-подсказки
+     промахивались пальцем при 29px высоты. */
+  .ai-input input,
+  .metric-val { font-size: 16px; }
+  .ai-actions .chip { min-height: 40px; }
+
+  /* График был 360px при контейнере ~335px — всегда обрезанный край. */
+  .chart-svg { min-width: 280px; }
+
+  /* Подсказка, что таблица шире экрана: без неё правые колонки
+     выглядят просто исчезнувшими. */
+  .table-wrap::before {
+    content: "↔ таблица шире экрана — прокрутка вбок";
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  /* Тосты не должны прятаться под пилюлей чата. */
+  .toasts { bottom: 88px; }
+  /* Пилюля чата перекрывает правый нижний угол подвала — подвал
+     получает место под неё. */
+  .app-footer { padding-bottom: 76px; }
+
+  /* Цели пальцем на телефоне — не меньше 40px. */
+  .mini-btn { min-height: 40px; padding: 8px 14px; }
+  .btn-small { min-height: 40px; padding: 8px 16px; }
 }
 
 /* ============ Группы виджетов по блокам ============ */
-.widget-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: grab; }
+.widget-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); cursor: grab; transition: border-color .18s, box-shadow .18s, transform .18s; }
+.widget-block:hover { border-color: var(--primary); box-shadow: var(--shadow-lg); }
 .widget-block.dragging { opacity: .55; }
 .widget-block-head { display: flex; align-items: center; gap: 12px; }
 .widget-block-icon { font-size: 26px; }
@@ -281,9 +445,9 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .src-sec  { font-weight: 400; color: var(--text-muted); }
 .src-snip { margin-top: 3px; color: var(--text-muted); line-height: 1.4; }
 .tag-demo {
-  display: inline-block; font-size: 10px; font-weight: 500;
-  padding: 1px 6px; border-radius: 999px;
-  border: 1px solid #c2554f; color: #a33b36;
+  display: inline-block; font-size: 11px; font-weight: 500;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--red); color: var(--red);
 }
 
 
@@ -307,13 +471,12 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
   color: var(--text-muted);
   cursor: pointer;
 }
-.seg-btn:hover { background: rgba(39, 88, 194, .09); }
+.seg-btn:hover { background: rgba(9, 122, 174, .10); }
 .seg-btn.is-on {
   background: var(--primary);
   color: #fff;
   font-weight: 600;
 }
-[data-theme="dark"] .seg-btn.is-on { color: #0d1220; }
 
 /* ---------- Ход работы экипажа ---------- */
 /* Слева важен не сам факт шага, а успех или сбой: экипаж специально
@@ -358,12 +521,10 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 
 
 /* ---------- Логотип в тёмной теме ----------
-   Знак синий (#3D5074) и рассчитан на белый фон: в тёмной теме он
-   почти не виден. Варианта «перекрасить» нет — это официальный знак,
-   и менять его цвета без разрешения нельзя. Поэтому в тёмной теме
-   логотип убирается, а название остаётся: интерфейс не теряет смысла
-   и не получает неразборчивый знак. */
-html[data-theme="dark"] .brand-logo,
+   Знак синий (#3D5074) рассчитан на белый фон. В тёмной теме он лежит
+   на белой плитке (см. .brand-logo), поэтому остаётся видимым;
+   перекрашивать официальный знак нельзя. Панель-ассистент и футер
+   остаются без логотипа — там белой плитки нет. */
 html[data-theme="dark"] .ai-logo,
 html[data-theme="dark"] .footer-logo {
   display: none;
@@ -391,7 +552,7 @@ html[data-theme="dark"] .footer-logo {
 }
 .metrics-title { font-weight: 600; font-size: 12.5px; }
 .metrics-demo {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: #9a6c14;
   border: 1px solid #d9a441;
   border-radius: 999px;
@@ -401,11 +562,14 @@ html[data-theme="dark"] .footer-logo {
 [data-theme="dark"] .metrics-demo { color: #e8bd6a; }
 
 .metrics-value {
-  font-size: 26px;
+  font-family: var(--font-display);
+  font-size: 28px;
   font-weight: 700;
+  color: var(--navy-deep);
   line-height: 1.15;
   margin-top: 6px;
 }
+html[data-theme="dark"] .metrics-value { color: #fff; }
 .metrics-row { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .metrics-row .up { color: #2e9e6b; }
 .metrics-row .down { color: #c2554f; }
