@@ -72,6 +72,11 @@ JUDGE_NARROW_PENALTY = float(os.environ.get("RECTOR_JUDGE_NARROW", "0.8"))
 MODELS_TINY = ["qwen2.5:1.5b"]
 MODELS_SMALL = ["qwen2.5:3b"]
 MODELS_MEDIUM = ["qwen2.5:7b"]
+# Большая модель для объяснений (ТЗ §13). По договорённости с заказчиком
+# подключается при размещении проекта на ВМ: MODEL_LARGE=<тег> либо
+# meta('llm_model_large'). Пока не подключена — объяснения честно
+# сообщают об этом, детерминированные проверки работают без неё.
+MODELS_LARGE = ["qwen2.5:14b"]
 
 EMBED_TINY = ["nomic-embed-text"]
 EMBED_MEDIUM = ["bge-m3"]
@@ -80,6 +85,20 @@ EMBED_MEDIUM = ["bge-m3"]
 # чтобы числа на экране и в базе совпадали.
 DEMO_SEED = 2026
 
-SUPPORTED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".md", ".txt", ".html", ".htm"}
+SUPPORTED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".md", ".txt",
+                 ".html", ".htm", ".csv"}
+
+# --- Конвейер загрузки (ТЗ 2.0) ----------------------------------------
+# Лимит размера файла: проверяется по ходу чтения, не после (ТЗ §6).
+MAX_UPLOAD_MB = int(os.environ.get("RECTOR_MAX_UPLOAD_MB", "50"))
+# Сколько строк сырых значений хранится на одну загрузку (ТЗ §5.1).
+MAX_RAW_ROWS = int(os.environ.get("RECTOR_MAX_RAW_ROWS", "6000"))
+# Допуск проверки «сумма частей = итог» (ТЗ §10), доля от суммы.
+SUM_TOLERANCE = float(os.environ.get("RECTOR_SUM_TOLERANCE", "0.01"))
+# Ограничение числа неудачных попыток входа (ТЗ §12).
+# Выключается RECTOR_LOGIN_LIMIT=0 — решение остаётся за владельцем.
+LOGIN_LIMIT_ON = os.environ.get("RECTOR_LOGIN_LIMIT", "1") != "0"
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("RECTOR_LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_WINDOW_MIN = int(os.environ.get("RECTOR_LOGIN_WINDOW_MIN", "15"))
 
 DEMO_BANNER = "демонстрационные данные"

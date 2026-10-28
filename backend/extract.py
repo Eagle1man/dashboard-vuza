@@ -14,8 +14,9 @@ import re
 # Расширения, из которых умеем читать
 _PDF = {".pdf"}
 _DOCX = {".docx"}
-_XLSX = {".xlsx", ".xls"}
-_MD = {".md", ".txt"}
+_XLSX = {".xlsx"}
+_XLS = {".xls"}          # старый формат — читается через xlrd, не openpyxl
+_MD = {".md", ".txt", ".csv"}
 _HTML = {".html", ".htm"}
 
 
@@ -184,6 +185,40 @@ def read_xlsx(path: Path) -> str:
     return "\n\n".join(parts).strip()
 
 
+def read_xls(path: Path) -> str:
+    """Старый формат Excel (BIFF) — через xlrd.
+
+    openpyxl читает только .xlsx, поэтому раньше .xls в списке
+    поддерживаемых значил «файл примут и не смогут прочитать» —
+    ошибка всплывала уже при индексации. Теперь формат читается,
+    а если xlrd не установлен, _require даёт понятную инструкцию.
+    """
+    xlrd = _require("xlrd", "нужен для чтения XLS")
+    book = xlrd.open_workbook(str(path))
+    parts = []
+    for sheet in book.sheets():
+        rows = []
+        for r in range(min(sheet.nrows, 2000)):
+            cells = []
+            for c in range(sheet.ncols):
+                v = sheet.cell_value(r, c)
+                if isinstance(v, float) and v.is_integer():
+                    v = int(v)
+                cells.append(str(v).strip().replace("|", "/"))
+            if not any(cells):
+                continue
+            rows.append("| " + " | ".join(cells) + " |")
+        if not rows:
+            continue
+        ncols = max(rows[0].count("|") - 1, 1)
+        header = "| " + " | ".join(["---"] * ncols) + " |"
+        parts.append(f"\n\n## Лист «{sheet.name}»\n\n{header}\n"
+                     + "\n".join(rows[:300]))
+        if len(rows) > 300:
+            parts.append(f"\n_Показаны первые 300 строк из {len(rows)}._")
+    return "\n\n".join(parts).strip()
+
+
 def read_text(path: Path) -> str:
     raw = path.read_bytes()
     for enc in ("utf-8", "utf-8-sig", "cp1251", "koi8-r"):
@@ -229,6 +264,8 @@ def extract_text_with_pages(path):
         return read_pdf(path)
     if ext in _DOCX:
         return read_docx(path), []
+    if ext in _XLS:
+        return read_xls(path), []
     if ext in _XLSX:
         return read_xlsx(path), []
     if ext in _MD:

@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS upload (
 );
 CREATE INDEX IF NOT EXISTS upload_division ON upload(division_id);
 CREATE INDEX IF NOT EXISTS upload_sha ON upload(sha256);
+CREATE INDEX IF NOT EXISTS upload_status ON upload(status);
 
 CREATE TABLE IF NOT EXISTS doc_meta (
   doc_id         INTEGER PRIMARY KEY REFERENCES doc(doc_id) ON DELETE CASCADE,
@@ -248,6 +249,145 @@ CREATE TABLE IF NOT EXISTS metric_source (
   PRIMARY KEY (metric_id, doc_id)
 );
 CREATE INDEX IF NOT EXISTS metric_source_metric ON metric_source(metric_id);
+
+-- 6. Конвейер разбора: сырое содержимое, карточка, проверки, решение ----
+--
+-- Правило ТЗ: сырое содержимое файла хранится отдельно и НЕ перезаписывается
+-- при исправлении. Цепочка «сырое значение → нормализованное → витрина»
+-- восстанавливается из upload_raw + parse_card + fact_provenance.
+CREATE TABLE IF NOT EXISTS upload_raw (
+  raw_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  upload_id INTEGER NOT NULL REFERENCES upload(upload_id) ON DELETE CASCADE,
+  kind      TEXT NOT NULL,      -- page | block | cell | row
+  label     TEXT,               -- 'стр. 12' | 'лист/строка/адрес'
+  text      TEXT,
+  page_no   INTEGER,
+  sheet     TEXT,
+  row_no    INTEGER,
+  col_no    INTEGER,
+  cell_ref  TEXT,
+  seq       INTEGER
+);
+CREATE INDEX IF NOT EXISTS upload_raw_upload ON upload_raw(upload_id);
+
+-- Карточка разбора: что модель предложила (тип, период, сопоставления).
+-- `values`/`mapping`/`unmapped` — JSON-массивы, форма проверяется в Python.
+CREATE TABLE IF NOT EXISTS parse_card (
+  upload_id   INTEGER PRIMARY KEY REFERENCES upload(upload_id) ON DELETE CASCADE,
+  doc_type    TEXT,                    -- предложенный тип документа
+  division_id TEXT,
+  period      TEXT,                    -- как период записан в файле
+  period_id   TEXT,                    -- сопоставленный период витрины (или NULL)
+  values_json TEXT NOT NULL DEFAULT '[]',
+  mapping_json TEXT NOT NULL DEFAULT '[]',
+  unmapped_json TEXT NOT NULL DEFAULT '[]',
+  status      TEXT NOT NULL DEFAULT 'draft',   -- draft | corrected
+  confidence  REAL,
+  model       TEXT,                    -- роль+имя модели, например 'small:qwen2.5:1.5b'
+  attempts    INTEGER DEFAULT 1,
+  parse_ms    INTEGER,
+  parse_error TEXT,
+  edited_at   TEXT,
+  edited_by   TEXT,
+  -- Объяснение проверок большой моделью (ТЗ §13): хранится здесь же,
+  -- чтобы экран проверки не пересчитывал его при каждом открытии.
+  explanation   TEXT,
+  expl_model    TEXT,
+  expl_ms       INTEGER,
+  explained_at  TEXT
+);
+
+-- Результаты детерминированных проверок (ТЗ §10). severity: warning | error.
+CREATE TABLE IF NOT EXISTS upload_check (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  upload_id  INTEGER NOT NULL REFERENCES upload(upload_id) ON DELETE CASCADE,
+  check_code TEXT NOT NULL,
+  severity   TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  field      TEXT,
+  value_a    TEXT,
+  value_b    TEXT
+);
+CREATE INDEX IF NOT EXISTS upload_check_upload ON upload_check(upload_id);
+
+-- Решение человека по загрузке. Может быть несколько строк на загрузку
+-- (reject → загрузка не публикуется; повторное решение идемпотентно —
+-- оно апдейтит провенанс, а не плодит дубли).
+CREATE TABLE IF NOT EXISTS upload_decision (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  upload_id  INTEGER NOT NULL REFERENCES upload(upload_id) ON DELETE CASCADE,
+  actor      TEXT NOT NULL,
+  action     TEXT NOT NULL,          -- accept | reject
+  comment    TEXT,
+  decided_at TEXT NOT NULL,
+  published  INTEGER DEFAULT 0       -- сколько значений ушло в витрину
+);
+CREATE INDEX IF NOT EXISTS upload_decision_upload ON upload_decision(upload_id);
+
+-- Провенанс каждого опубликованного значения (ТЗ §5.5).
+-- UNIQUE по (период, метрика, орг, загрузка): повторное «принять» той же
+-- загрузки обновляет строку, дублей не появляется.
+CREATE TABLE IF NOT EXISTS fact_provenance (
+  prov_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  period_id         TEXT NOT NULL,
+  metric_id         TEXT NOT NULL,
+  org_id            TEXT NOT NULL,
+  source_upload_id  INTEGER REFERENCES upload(upload_id) ON DELETE SET NULL,
+  source_doc_id     INTEGER REFERENCES doc(doc_id) ON DELETE SET NULL,
+  source_file_name  TEXT,
+  sha256            TEXT,
+  extracted_value   TEXT,             -- как число записано в источнике
+  value_exact       TEXT,             -- каноническое десятичное представление
+  extraction_method TEXT,             -- xlsx_cell | pdf_page | docx_block | text_block
+  parser_version    TEXT,
+  parser_model      TEXT,
+  confirmed_by      TEXT,
+  confirmed_at      TEXT,
+  note              TEXT,
+  UNIQUE (period_id, metric_id, org_id, source_upload_id)
+);
+CREATE INDEX IF NOT EXISTS fact_provenance_metric ON fact_provenance(metric_id, period_id, org_id);
+CREATE INDEX IF NOT EXISTS fact_provenance_upload ON fact_provenance(source_upload_id);
+
+-- 7. Журнал событий аудита (ТЗ §11): кто и что сделал.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id     INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts     TEXT NOT NULL,
+  actor  TEXT,                 -- логин
+  role   TEXT,                 -- division_id
+  action TEXT NOT NULL,        -- login | login_fail | logout | upload | decide | publish | reindex | export
+  entity TEXT,                 -- 'upload:12', 'metric:contingent'
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS audit_log_ts ON audit_log(ts);
+CREATE INDEX IF NOT EXISTS audit_log_action ON audit_log(action, ts);
+
+-- Попытки входа — для ограничения числа неудач (ТЗ §12).
+CREATE TABLE IF NOT EXISTS login_attempt (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts    TEXT NOT NULL,
+  login TEXT,
+  ip    TEXT,
+  ok    INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS login_attempt_login ON login_attempt(login, ts);
+
+-- Трассировка вызовов LLM (ТЗ §13): роль, модель, длительность, статус.
+-- Текст документов и ответы модели здесь НЕ хранятся — только метаданные.
+CREATE TABLE IF NOT EXISTS llm_trace (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts          TEXT NOT NULL,
+  purpose     TEXT NOT NULL,    -- parse_card | consistency | ask | test
+  role        TEXT NOT NULL,    -- small | large
+  model       TEXT,
+  resolved    TEXT,             -- env | meta | auto | fixed
+  duration_ms INTEGER,
+  ok          INTEGER DEFAULT 0,
+  error_code  TEXT,
+  prompt_chars INTEGER,
+  response_chars INTEGER
+);
+CREATE INDEX IF NOT EXISTS llm_trace_ts ON llm_trace(ts);
 """
 
 
@@ -261,6 +401,9 @@ def connect(path=None, create=True):
     conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Ожидание блокировки: без него параллельный запрос (страница + загрузка)
+    # при WAL падает сразу, вместо того чтобы дождаться освобождения записи.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -291,15 +434,50 @@ def _migrate(conn):
     новый столбец просто не появился бы, и документы молча получили бы
     block_id = NULL, а специалисты агентов потеряли бы фильтр.
     """
+    # Таблицы, которых нет на этой базе (новая схема ещё не создана),
+    # миграция пропускает: ALTER по несуществующей таблице падает
+    # целиком и оставляет базу без всех остальных правок.
+    existing = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
     for table, column, decl in (
         ("doc", "block_id", "TEXT"),
         ("dim_org", "parent_id", "TEXT"),
         ("dim_org", "kind", "TEXT"),
         ("dim_metric", "source", "TEXT DEFAULT 'demo'"),
         ("dim_metric", "src_note", "TEXT"),
+        # Конвейер загрузки (ТЗ 2.0): исходное имя, найденный формат,
+        # кто загрузил, текст ошибки без путей сервера.
+        ("upload", "original_name", "TEXT"),
+        ("upload", "mime_detected", "TEXT"),
+        ("upload", "extension", "TEXT"),
+        ("upload", "uploaded_by", "TEXT"),
+        ("upload", "note", "TEXT"),
+        ("upload", "error_code", "TEXT"),
+        ("upload", "error_message", "TEXT"),
+        ("upload", "parsed_at", "TEXT"),
+        ("upload", "decided_at", "TEXT"),
+        # Точное десятичное представление: REAL удобен для графиков,
+        # но денежные значения им округляются. value_exact хранит
+        # каноническую десятичную строку как источник истины.
+        ("fact_metric", "value_exact", "TEXT"),
+        # Каталог показателей: диапазоны и допуск заполняет владелец
+        # каталога (ТЗ §19). NULL = не задано, проверка не выполняется.
+        ("dim_metric", "min_val", "REAL"),
+        ("dim_metric", "max_val", "REAL"),
+        ("dim_metric", "tolerance", "REAL"),
+        ("dim_metric", "periodicity", "TEXT"),
+        # Объяснение проверок большой моделью (ТЗ §13). Колонок нет в
+        # базах, где таблица parse_card успела появиться до того, как
+        # в схему добавили explanation: CREATE TABLE IF NOT EXISTS
+        # существующую таблицу не дописывает, а кэш объяснения в старой
+        # базе падал бы с "no such column".
+        ("parse_card", "explanation", "TEXT"),
+        ("parse_card", "expl_model", "TEXT"),
+        ("parse_card", "expl_ms", "INTEGER"),
+        ("parse_card", "explained_at", "TEXT"),
     ):
         cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in cols:
+        if table in existing and column not in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 

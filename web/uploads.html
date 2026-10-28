@@ -95,6 +95,36 @@
       // open/internal/confidential из базы человек не читает.
       var ACCESS = { open: "Открыто", internal: "Служебное", confidential: "Конфиденциальное" };
 
+      // Статус приёма: файл принят и лежит в очереди на проверку (needs_review),
+      // опубликован, отклонён или не принят вовсе. Цветом — те же токены,
+      // что и в статусах свежести ниже.
+      var STATUS = {
+        needs_review: ["Ждёт проверки", "var(--yellow)", "rgba(229,176,42,.20)"],
+        accepted:     ["Опубликовано",  "var(--green)",  "rgba(15,122,56,.14)"],
+        rejected:     ["Отклонено",     "var(--muted)",  "var(--surface-2)"],
+        failed:       ["Ошибка",        "var(--red)",    "rgba(200,16,46,.13)"],
+        ok:           ["Принято",       "var(--green)",  "rgba(15,122,56,.14)"]
+      };
+      // 'ok' — загрузки, сделанные до перехода на новый конвейер: у них
+      // разбора и проверок нет, но карточку посмотреть всё равно можно.
+      var REVIEWABLE = { needs_review: 1, accepted: 1, rejected: 1, ok: 1 };
+
+      function statusCell(u) {
+        var s = STATUS[u.status];
+        var pill = s
+          ? "<span class='status-pill' style='background:" + s[2] + ";color:" + s[1] + "'>" +
+            s[0] + "</span>"
+          : "<span class='muted'>" + esc(u.status || "—") + "</span>";
+        // Сколько проверок висит на загрузке: предупреждения — жёлтые,
+        // блокирующие ошибки — красные. Пустые счётчики не показываем.
+        var badges = [];
+        if (u.warnings) badges.push("<span style='color:var(--yellow);font-weight:700'>⚠ " + u.warnings + "</span>");
+        if (u.errors) badges.push("<span style='color:var(--red);font-weight:700'>✖ " + u.errors + "</span>");
+        return pill + (badges.length
+          ? " <span style='font-size:12px;white-space:nowrap'>" + badges.join(" / ") + "</span>"
+          : "");
+      }
+
       function render(list) {
         tbody.innerHTML = "";
         if (!list.length) {
@@ -104,18 +134,24 @@
         list.forEach(function (u) {
           var freshClass = u.freshness === "overdue" ? "overdue" : "ok";
           var freshLabel = u.freshness === "overdue" ? "ПРОСРОЧЕНО" : "актуально";
+          var canOpen = !!REVIEWABLE[u.status];
           var tr = document.createElement("tr");
           tr.innerHTML =
-            "<td>" + esc(u.filename) + "</td>" +
-            "<td>" + esc(u.title || u.filename) + "</td>" +
+            "<td>" + esc(u.original_name || u.filename) + "</td>" +
+            "<td>" + esc(u.title || u.original_name || u.filename) + "</td>" +
             "<td>" + esc(u.division_title || u.division_id) + "</td>" +
             "<td>" + esc(u.period || "—") + "</td>" +
             "<td><span class='muted' style='font-size:12px'>" + esc(u.uploaded_at || "") + "</span></td>" +
             "<td><span class='" + freshClass + "'>" + freshLabel + "</span>" +
             (u.next_expected ? " · до " + esc(u.next_expected) : "") + "</td>" +
-            "<td>" + (u.status === "ok" ? "ОК" : u.status) + "</td>" +
+            "<td style='white-space:nowrap'>" + statusCell(u) + "</td>" +
             "<td>" + esc(ACCESS[u.access_level] || u.access_level || "Открыто") + "</td>" +
-            "<td style='white-space:nowrap'><button class='btn btn-ghost btn-small detail-btn'>Детали</button></td>";
+            "<td style='white-space:nowrap'>" +
+            (canOpen
+              ? "<a class='btn btn-ghost btn-small' style='display:inline-block' href='review.html?id=" +
+                encodeURIComponent(u.upload_id) + "'>Открыть</a> "
+              : "") +
+            "<button class='btn btn-ghost btn-small detail-btn'>Детали</button></td>";
           tbody.appendChild(tr);
 
           // Строка деталей: то, что подразделение указало в анкете —

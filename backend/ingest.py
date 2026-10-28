@@ -57,7 +57,9 @@ def _delete_doc(conn, doc_id: int):
     conn.execute("DELETE FROM doc WHERE doc_id = ?", (doc_id,))
 
 
-def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
+def index_file(conn, path: Path, is_demo: bool, force=False,
+               extracted=None) -> dict:
+    """extracted — готовая пара (текст, страницы), чтобы не разбирать файл дважды."""
     rel = path.relative_to(config.KNOWLEDGE_DIR).as_posix()
     sha = _sha256(path)
 
@@ -66,7 +68,12 @@ def index_file(conn, path: Path, is_demo: bool, force=False) -> dict:
     if existing and existing["sha256"] == sha and not force:
         return {"path": rel, "status": "unchanged", "chunks": 0}
 
-    text, page_info = extract.extract_text_with_pages(path)
+    # Текст можно передать снаружи: приём файла извлекает его один раз
+    # и для индексации, и для upload_raw — двойной разбор PDF дорог,
+    # а разные разборы могли бы дать разный текст у индекса и у сырья.
+    if extracted is None:
+        extracted = extract.extract_text_with_pages(path)
+    text, page_info = extracted
     if not text or not text.strip():
         if existing:
             _delete_doc(conn, int(existing["doc_id"]))

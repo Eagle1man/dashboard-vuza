@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Проверка загрузки · Дашборд ректора ИУБиП</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+        <div class="brand-text">
+          <strong>Дашборд ректора</strong>
+          <span>ЧОУ ВО «Южный университет (ИУБиП)» · Проверка загрузки</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <a href="/dashboard.html" class="btn btn-outline">← Лента показателей</a>
+        <a href="uploads.html" class="btn btn-outline">Мои загрузки</a>
+        <button id="btnLogout" class="btn btn-outline" hidden>Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" style="max-width: 1000px">
+    <div class="page-head">
+      <div>
+        <h1>Проверка загрузки</h1>
+        <p class="sub">Машина разобрала файл и прогнала проверки — здесь человек
+        решает, становятся ли эти числа витриной дашборда. Пока кнопка
+        «Принять» не нажата, числа видны только здесь.</p>
+      </div>
+      <div class="page-actions">
+        <a href="uploads.html" class="btn btn-outline">← К списку загрузок</a>
+      </div>
+    </div>
+
+    <div id="msg" class="muted" style="margin-bottom:10px"></div>
+
+    <!-- Без входа эндпоинты проверки отвечают 401 — вход обязателен. -->
+    <div id="authBox" class="section-card" style="display:none">
+      <div class="card-head"><h3>Вход подразделения</h3></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Логин подразделения</label>
+          <input type="text" id="loginInput" placeholder="например, buhgalteria" />
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="passInput" placeholder="••••••••" />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1">
+          <button class="btn btn-primary" id="btnLogin">Войти</button>
+          <span id="loginErr" class="muted" style="color:var(--red);margin-left:10px"></span>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:8px">
+        Логин и пароль выдаёт администратор дашборда. Проверка видна только
+        своему подразделению (или администратору).
+      </p>
+    </div>
+
+    <div id="reviewBox" style="display:none">
+      <div id="uploadCard" class="section-card" style="display:none"></div>
+      <div id="qnCard" class="section-card" style="display:none"></div>
+      <div id="cardCard" class="section-card" style="display:none"></div>
+      <div id="checksCard" class="section-card" style="display:none"></div>
+      <div id="explCard" class="section-card" style="display:none"></div>
+      <div id="conflictCard" class="section-card" style="display:none"></div>
+      <div id="rawCard" class="section-card" style="display:none"></div>
+      <div id="decideCard" class="section-card" style="display:none"></div>
+    </div>
+  </main>
+
+  <script src="js/review.js"></script>
+</body>
+</html>

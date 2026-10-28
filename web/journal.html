@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Журнал событий · Дашборд ректора ИУБиП</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+        <div class="brand-text">
+          <strong>Дашборд ректора</strong>
+          <span>ЧОУ ВО «Южный университет (ИУБиП)» · Журнал событий</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <a href="/dashboard.html" class="btn btn-outline">← К ленте показателей</a>
+        <button id="btnLogout" class="btn btn-outline" hidden>Выйти</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" style="max-width: 1100px">
+    <div class="page-head">
+      <div>
+        <h1>Журнал событий</h1>
+        <p class="sub">Кто входил, что загружал, что опубликовано и что выгружено.
+        Записи пишутся автоматически; пароли и содержимое документов в журнал не
+        попадают — только идентификаторы и короткие пояснения.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn btn-outline" id="btnCsv" href="/api/journal/export/csv">⬇ Выгрузить CSV</a>
+      </div>
+    </div>
+
+    <div id="authBox" class="section-card" style="display:none">
+      <div class="card-head"><h3>Вход</h3></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Логин подразделения</label>
+          <input type="text" id="loginInput" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" id="passInput" autocomplete="current-password" />
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1">
+          <button class="btn btn-primary" id="btnLogin">Войти</button>
+          <span id="loginErr" class="muted" style="color:var(--red);margin-left:10px"></span>
+        </div>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:8px">
+        Журнал читается только под сессией. Показать его целиком тому, кто не вошёл,
+        значит выдать список действий всех подразделений.
+      </p>
+    </div>
+
+    <div id="mainBox" style="display:none">
+      <div class="section-card">
+        <div class="card-head"><h3>Фильтры</h3></div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Событие</label>
+            <select id="actionFilter">
+              <option value="">Все события</option>
+              <option value="login">Вход</option>
+              <option value="login_fail">Неудачный вход</option>
+              <option value="login_block">Вход заблокирован</option>
+              <option value="logout">Выход</option>
+              <option value="upload">Загрузка файла</option>
+              <option value="upload_dup">Дубликат загрузки</option>
+              <option value="decide_fix">Исправление карточки</option>
+              <option value="decide_reject">Отклонено</option>
+              <option value="decide_accept">Принято</option>
+              <option value="publish">Публикация значений</option>
+              <option value="reindex">Переиндексация</option>
+              <option value="export">Выгрузка файла</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Кто (логин)</label>
+            <input type="text" id="actorFilter" placeholder="например, admin" />
+          </div>
+          <div class="form-group" style="align-self:end">
+            <button class="btn btn-primary" id="btnApply">Показать</button>
+          </div>
+        </div>
+        <p class="hint" id="totalLine" style="margin-top:10px"></p>
+      </div>
+
+      <div class="section-card">
+        <div class="card-head"><h3>События</h3></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Время</th><th>Кто</th><th>Подразделение</th><th>Событие</th><th>Объект</th><th>Подробность</th></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <p class="muted" id="emptyLine" style="display:none">Событий по этому фильтру нет.</p>
+        <div class="page-actions" style="margin-top:12px">
+          <button class="btn btn-outline" id="btnMore" style="display:none">Показать ещё 50</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+      var ACTION_LABELS = {
+        login: "вход", login_fail: "неудачный вход", login_block: "вход заблокирован",
+        logout: "выход", upload: "загрузка файла", upload_dup: "дубликат загрузки",
+        decide_fix: "исправление карточки", decide_reject: "отклонено",
+        decide_accept: "принято", publish: "публикация значений",
+        reindex: "переиндексация", export: "выгрузка файла"
+      };
+      var offset = 0, total = 0;
+
+      function esc(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+
+      function qs() {
+        var p = [];
+        p.push("limit=50&offset=" + offset);
+        var a = document.getElementById("actionFilter").value;
+        var who = document.getElementById("actorFilter").value.trim();
+        if (a) p.push("action=" + encodeURIComponent(a));
+        if (who) p.push("actor=" + encodeURIComponent(who));
+        return p.join("&");
+      }
+
+      function load(reset) {
+        if (reset) offset = 0;
+        return fetch("/api/journal?" + qs())
+          .then(function (r) {
+            if (r.status === 401) { showAuth(); throw new Error("401"); }
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            total = data.total;
+            document.getElementById("totalLine").textContent =
+              "Всего записей по фильтру: " + total +
+              (offset ? " · показаны первые " + (offset + data.items.length) : "");
+            var body = document.getElementById("rows");
+            if (reset) body.innerHTML = "";
+            data.items.forEach(function (it) {
+              var tr = document.createElement("tr");
+              tr.innerHTML = "<td class='mono'>" + esc(it.ts) + "</td>" +
+                "<td>" + esc(it.actor || "—") + "</td>" +
+                "<td>" + esc(it.role || "—") + "</td>" +
+                "<td>" + esc(ACTION_LABELS[it.action] || it.action) + "</td>" +
+                "<td>" + esc(it.entity || "—") + "</td>" +
+                "<td>" + esc(it.detail || "") + "</td>";
+              body.appendChild(tr);
+            });
+            offset += data.items.length;
+            document.getElementById("emptyLine").style.display =
+              body.children.length ? "none" : "block";
+            document.getElementById("btnMore").style.display =
+              offset < total ? "inline-block" : "none";
+            document.getElementById("btnCsv").href =
+              "/api/journal/export/csv?limit=" + Math.min(total || 100, 5000);
+          })
+          .catch(function (e) {
+            if (String(e.message) !== "401") {
+              document.getElementById("emptyLine").style.display = "block";
+              document.getElementById("emptyLine").textContent =
+                "Не удалось получить журнал: " + e.message;
+            }
+          });
+      }
+
+      function showAuth() {
+        document.getElementById("authBox").style.display = "block";
+        document.getElementById("mainBox").style.display = "none";
+        document.getElementById("btnLogout").hidden = true;
+      }
+      function showMain() {
+        document.getElementById("authBox").style.display = "none";
+        document.getElementById("mainBox").style.display = "block";
+        document.getElementById("btnLogout").hidden = false;
+      }
+
+      fetch("/api/me").then(function (r) {
+        if (!r.ok) throw new Error("no session");
+        return r.json();
+      }).then(function () {
+        showMain();
+        return load(true);
+      }).catch(function () { showAuth(); });
+
+      document.getElementById("btnApply").addEventListener("click", function () { load(true); });
+      document.getElementById("btnMore").addEventListener("click", function () { load(false); });
+      document.getElementById("actionFilter").addEventListener("change", function () { load(true); });
+
+      document.getElementById("btnLogin").addEventListener("click", async function () {
+        var login = document.getElementById("loginInput").value.trim();
+        var pass = document.getElementById("passInput").value;
+        var err = document.getElementById("loginErr");
+        if (!login || !pass) { err.textContent = "Введите логин и пароль"; return; }
+        try {
+          var res = await fetch("/api/login", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ login: login, password: pass })
+          });
+          if (!res.ok) {
+            var d = await res.json().catch(function () { return {}; });
+            err.textContent = res.status === 429
+              ? (d.detail || "Слишком много попыток")
+              : (res.status === 401 ? "Неверный логин или пароль"
+                : "Сервер не ответил (HTTP " + res.status + ")");
+            return;
+          }
+          err.textContent = "";
+          showMain();
+          load(true);
+        } catch (e) { err.textContent = "Ошибка связи с сервером"; }
+      });
+      ["loginInput", "passInput"].forEach(function (id) {
+        document.getElementById(id).addEventListener("keydown", function (e) {
+          if (e.key === "Enter") document.getElementById("btnLogin").click();
+        });
+      });
+      document.getElementById("btnLogout").addEventListener("click", async function () {
+        await fetch("/api/logout", { method: "POST" });
+        location.reload();
+      });
+    })();
+  </script>
+</body>
+</html>

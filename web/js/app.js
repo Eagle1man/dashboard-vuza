@@ -134,6 +134,75 @@
     if (m.source === "official") return m.srcNote || "документы университета";
     return "демонстрационные данные витрины";
   }
+  // Перевод способа извлечения значения на человеческий язык (ТЗ §5.5):
+  // провенанс обязан быть читаемым, а не набором кодов из базы.
+  function extractMethodLabel(m) {
+    var map = {
+      questionnaire: "введено на форме анкеты",
+      model_extract: "нашла модель (без адреса ячейки)",
+      xlsx_cell: "ячейка Excel",
+      xls_cell: "ячейка Excel, старый формат",
+      csv_cell: "ячейка CSV",
+      xlsx_row: "строка Excel",
+      xls_row: "строка Excel, старый формат",
+      csv_row: "строка CSV",
+      docx_table: "таблица Word",
+      docx_block: "абзац Word",
+      pdf_page: "страница PDF",
+      text_block: "фрагмент текста"
+    };
+    return map[m] || m || "—";
+  }
+
+  // Провенанс числа: /api/metrics/{id}/sources отдаёт, какое значение
+  // за какой период пришло из какого файла, кем и каким способом
+  // подтверждено. Тянем отдельным запросом и рисуем в drill-down —
+  // в самой витрине этих полей нет, а обещать связь «число → документ»
+  // без показа документов нельзя.
+  function loadSources(metricId) {
+    var box = document.getElementById("drillSources");
+    if (!box) return;
+    box.innerHTML = '<p class="muted">Загружаю источник числа…</p>';
+    fetch("/api/metrics/" + encodeURIComponent(metricId) + "/sources")
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        // Значения без загрузки — демонстрационные или внесённые руками:
+        // цепочка до документа у них честно отсутствует.
+        var vals = (data.values || []).filter(function (v) {
+          return v.upload_id || v.source_file_name;
+        });
+        if (!vals.length) {
+          box.innerHTML = '<p class="muted">За этот показатель пока нет значений, ' +
+            'опубликованных из документов: в витрине демонстрационные или ' +
+            'внесённые вручную числа. Цепочка «число → документ → подразделение» ' +
+            'появится после загрузки файла и кнопки «Принять» на экране проверки.</p>';
+          return;
+        }
+        var h = "<div class='table-wrap'><table class='data'><thead><tr>" +
+          "<th>Период</th><th>Значение</th><th>Документ</th><th>Подразделение</th>" +
+          "<th>Как извлечено</th><th>Подтвердил</th></tr></thead><tbody>";
+        vals.forEach(function (v) {
+          h += "<tr><td>" + esc(v.period || v.period_id) + "</td>" +
+            "<td><b>" + esc(String(v.value_exact != null ? v.value_exact : v.value)) + "</b></td>" +
+            "<td>" + esc(v.source_file_name || "—") + "</td>" +
+            "<td>" + esc(v.division_title || "—") + "</td>" +
+            "<td>" + esc(extractMethodLabel(v.extraction_method)) +
+            (v.parser_model ? "<br><small>модель: " + esc(v.parser_model) + "</small>" : "") + "</td>" +
+            "<td>" + esc(v.confirmed_by || "—") +
+            (v.confirmed_at ? "<br><small>" + esc(v.confirmed_at) + "</small>" : "") + "</td></tr>";
+        });
+        h += "</tbody></table></div>";
+        box.innerHTML = h;
+      })
+      .catch(function (e) {
+        box.innerHTML = '<p class="muted">Не удалось получить источник числа: ' +
+          esc(e.message) + "</p>";
+      });
+  }
+
   function periodLabels(period) {
     switch (period) {
       case "month": return { labels: D.MONTHS.slice(-8), count: 8 };
@@ -558,9 +627,12 @@ function updateStamp() {
     // строке, подтверждения ему в проекте нет, а решение по такой
     // формулировке за владельцем.
     h += '<p class="muted" style="margin-top:10px">Источник: ' + esc(metricSourceNote(m)) + ".</p>";
+    h += "<h3 style='margin:12px 0 6px'>Провенанс числа</h3>";
+    h += '<div id="drillSources"></div>';
     h += "</div>";
 
     $("drillBody").innerHTML = h;
+    loadSources(metricId);
     showView("drilldown");
   }
 // ---------- Обработчики ----------

@@ -82,8 +82,8 @@
         </div>
         <div class="form-group">
           <label>Файл <span class="muted" style="font-weight:normal">обязательно</span></label>
-          <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.md,.txt,.html,.htm" />
-          <p class="hint">PDF, DOCX, XLSX, MD, TXT, HTML. До 50 МБ. Повторная загрузка того же файла (по содержимому) не допускается.</p>
+          <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.txt,.html,.htm" />
+          <p class="hint">PDF, DOCX, XLSX, CSV, MD, TXT, HTML. До 50 МБ. Повторная загрузка того же файла (по содержимому) не допускается — откроется уже существующая проверка.</p>
         </div>
         <div class="form-group">
           <label>Как часто обновляются данные</label>
@@ -135,7 +135,7 @@
     </form>
 
     <div id="resultBox" class="section-card" style="display:none">
-      <div class="card-head"><h3>Загрузка успешна</h3></div>
+      <div class="card-head"><h3 id="resultTitle">Файл принят</h3></div>
       <div id="resultBody"></div>
       <div class="page-actions" style="margin-top:12px">
         <button class="btn btn-primary" onclick="location.reload()">Загрузить ещё</button>
@@ -341,14 +341,53 @@
           var data = await res.json();
           formBox.style.display = "none";
           resultBox.style.display = "block";
-          document.getElementById("resultBody").innerHTML =
-            '<p><strong>Файл:</strong> ' + esc(data.filename) + '</p>' +
-            '<p><strong>Путь:</strong> ' + esc(data.rel_path) + '</p>' +
-            '<p><strong>Подразделение:</strong> ' + currentDivision + '</p>' +
-            '<p><strong>Кусков в индексе:</strong> ' + data.chunks + '</p>' +
-            (data.blocks.length ? '<p><strong>Блоки дашборда:</strong> ' + data.blocks.join(", ") + '</p>' : "") +
-            (data.next_expected ? '<p><strong>Ожидаемое следующее обновление:</strong> ' + data.next_expected + '</p>' : "") +
-            (data.confirmed ? '<p style="color:var(--green)"><strong>Числа подтверждены</strong> и записаны в витрину показателей.</p>' : '<p class="muted">Числа не подтверждены — документ в базе знаний, но не в карточках метрик.</p>');
+
+          // Результат приёма — два разных исхода: обычный и дубль
+          // (файл того же подразделения уже в системе, сервер вернул
+          // duplicate:true с тем же upload_id). В обоих случаях числа
+          // ждут решения человека на экране проверки.
+          var isDup = data.duplicate === true;
+          var rid = data.upload_id;
+          var reviewHref = rid ? "review.html?id=" + encodeURIComponent(rid) : "";
+          document.getElementById("resultTitle").textContent =
+            isDup ? "Файл уже загружен" : "Файл принят";
+
+          var html = "";
+          if (data.filename) {
+            html += '<p><strong>Файл:</strong> ' + esc(data.filename) + "</p>";
+          }
+          if (currentDivision) {
+            html += '<p><strong>Подразделение:</strong> ' + esc(currentDivision) + "</p>";
+          }
+
+          if (isDup) {
+            html +=
+              '<p class="muted">Этот файл уже есть в системе — повторно он не загружен. ' +
+              "Числа из него видны на экране проверки.</p>" +
+              '<div class="page-actions" style="margin-top:12px">' +
+              '<a class="btn btn-primary" href="' + reviewHref + '">' +
+              "Этот файл уже загружен — открыть проверку →</a></div>";
+          } else {
+            html +=
+              "<p><strong>Кусков в индексе:</strong> " +
+              (data.chunks != null ? esc(data.chunks) : "—") + "</p>" +
+              (data.blocks && data.blocks.length
+                ? '<p><strong>Блоки дашборда:</strong> ' + esc(data.blocks.join(", ")) + "</p>"
+                : "") +
+              "<p><strong>Проверки:</strong> ошибок " + (data.errors || 0) +
+              " · предупреждений " + (data.warnings || 0) + "</p>" +
+              (data.next_expected
+                ? '<p><strong>Ожидаемое следующее обновление:</strong> ' +
+                  esc(data.next_expected) + "</p>"
+                : "") +
+              '<p style="margin-top:12px;font-weight:600">Файл принят, но числа ещё не ' +
+              "опубликованы. Откройте проверку.</p>" +
+              '<p class="muted">Числа попадут в витрину после кнопки «Принять» на экране проверки.</p>' +
+              '<div class="page-actions" style="margin-top:12px">' +
+              '<a class="btn btn-primary" href="' + reviewHref + '">' +
+              "Проверить и подтвердить →</a></div>";
+          }
+          document.getElementById("resultBody").innerHTML = html;
         } catch (err) {
           uploadMsg.style.color = "var(--red)";
           uploadMsg.textContent = "Ошибка связи: " + err.message;

@@ -22,12 +22,16 @@ from pydantic import BaseModel
 from . import autoconfig
 from . import auth
 from . import config
+from . import consistency
 from . import crew
 from . import db
 from . import embed
 from . import ingest as ingest_mod
+from . import intake
+from . import journal
 from . import llm
 from . import retrieve
+from . import review
 from . import uploads
 
 _conn = None
@@ -68,6 +72,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def csrf_guard(request, call_next):
+    """CSRF: изменяющий запрос с нашей cookie приходит только с нашего источника.
+
+    SameSite=Lax режет большинство кросс-сайтовых отправок, но этого
+    мало для форм: сверяем Origin/Referer с Host для всех
+    cookie-сессионных POST/PUT/PATCH/DELETE. Если Origin и Referer
+    нет вовсе — запрос не браузерный (curl), куку туда не подкладывают.
+    """
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        token = request.cookies.get("dashboard_session")
+        if token and auth.validate_session(token):
+            host = (request.headers.get("host") or "").lower()
+            origin = (request.headers.get("origin") or "").lower()
+            referer = (request.headers.get("referer") or "").lower()
+            src = origin or referer
+            if src and host and host not in src:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Запрос отклонён: недопустимый "
+                                       "источник (CSRF)"})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -163,9 +191,10 @@ def health():
     ollama_up, installed = embed._tags()
     return {
         "ok": True,
-        "database": str(config.DB_PATH),
+        # Пути файловой системы наружу не отдаются (ТЗ §11): раньше
+        # здесь стояли database и knowledge_dir, и любой мог прочитать
+        # структуру сервера. Размер базы — без пути, он и так нужен.
         "db_bytes": config.DB_PATH.stat().st_size if config.DB_PATH.exists() else 0,
-        "knowledge_dir": str(config.KNOWLEDGE_DIR),
         "totals": totals,
         "vector_backend": backends[0] if len(backends) == 1 else backends,
         "ollama": {
@@ -176,6 +205,13 @@ def health():
             "llm_installed": llm.model_installed(llm_m, installed),
             "embed_installed": llm.model_installed(emb_m, installed),
             "installed_models": installed,
+        },
+        # Роли конвейера (ТЗ §13): какая модель на какую роль назначена
+        # и скачана ли она. «installed: false» у large — это и есть
+        # состояние «большую подключим на ВМ».
+        "roles": {
+            "small": llm.role_status("small"),
+            "large": llm.role_status("large"),
         },
         "profile": profile,
         "hardware": hw,
@@ -251,6 +287,7 @@ def reindex(force: bool = False, prune: bool = True):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     rep["seconds"] = round(time.time() - t0, 1)
+    journal.log(conn(), "reindex", detail=f"force={force}, docs={rep.get('docs')}")
     return rep
 
 
@@ -325,11 +362,27 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/api/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
+    ip = request.client.host if request.client else None
+
+    # Лимит неудачных попыток (ТЗ §12): считается до проверки пароля,
+    # иначе перебор не замедлялся бы.
+    reason = auth.login_blocked(req.login)
+    if reason:
+        journal.log(conn(), "login_block", actor=str(req.login)[:80],
+                    detail=reason)
+        raise HTTPException(status_code=429, detail=reason)
+
     division_id = auth.verify_login(req.login, req.password)
+    auth.record_login(req.login, ip, bool(division_id))
     if not division_id:
+        journal.log(conn(), "login_fail", actor=str(req.login)[:80],
+                    detail="неверный логин или пароль")
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+
+    auth.clear_attempts(req.login)
     token = auth.create_session(division_id)
+    journal.log(conn(), "login", actor=str(req.login)[:80], role=division_id)
     c = db.connect()
     div = c.execute(
         "SELECT division_id, title FROM division WHERE division_id = ?",
@@ -356,8 +409,11 @@ def _session_division(request: Request) -> str:
 @app.post("/api/logout")
 def logout(request: Request):
     token = request.cookies.get("dashboard_session")
+    division_id = auth.validate_session(token)
     if token:
         auth.delete_session(token)
+    if division_id:
+        journal.log(conn(), "logout", role=division_id)
     response = JSONResponse(content={"ok": True})
     response.delete_cookie(key="dashboard_session", path="/")
     return response
@@ -457,6 +513,111 @@ def upload_detail(request: Request, upload_id: int):
     return detail
 
 
+# ------------------------------------------------------------------
+# Экран проверки: карточка, проверки, решение человека (ТЗ §10)
+# ------------------------------------------------------------------
+@app.get("/api/upload/{upload_id}/review")
+def upload_review(request: Request, upload_id: int):
+    """Состояние загрузки для экрана проверки (своё подразделение или admin)."""
+    did = _session_division(request)
+    return review.payload(conn(), upload_id, did)
+
+
+@app.get("/api/upload/{upload_id}/raw")
+def upload_raw(request: Request, upload_id: int,
+               offset: int = 0, limit: int = 300):
+    """Сырые строки файла: страница либо лист/строка/адрес ячейки."""
+    did = _session_division(request)
+    review.load_upload(conn(), upload_id, did)
+    limit = max(1, min(int(limit), 2000))
+    offset = max(0, int(offset))
+    rows = [dict(r) for r in conn().execute(
+        "SELECT raw_id, kind, label, text, page_no, sheet, row_no, col_no,"
+        " cell_ref FROM upload_raw WHERE upload_id = ? ORDER BY seq"
+        " LIMIT ? OFFSET ?", (upload_id, limit, offset)).fetchall()]
+    total = conn().execute(
+        "SELECT COUNT(*) FROM upload_raw WHERE upload_id = ?",
+        (upload_id,)).fetchone()[0]
+    return {"items": rows, "total": total, "offset": offset, "limit": limit}
+
+
+@app.post("/api/upload/{upload_id}/decide")
+async def upload_decide(request: Request, upload_id: int):
+    """Решение человека: accept (опубликовать), fix (исправить), reject."""
+    did = _session_division(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400,
+                            detail="Ожидается JSON с полем action")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400,
+                            detail="Тело запроса должно быть объектом")
+    return review.decide(conn(), upload_id, did, did, body)
+
+
+@app.post("/api/upload/{upload_id}/explain")
+def upload_explain(request: Request, upload_id: int):
+    """Объяснение проверок большой моделью; если её нет — честная причина."""
+    did = _session_division(request)
+    review.load_upload(conn(), upload_id, did)
+    return consistency.explain_sync(upload_id)
+
+
+# ------------------------------------------------------------------
+# Журнал событий (ТЗ §11) и провенанс показателей (ТЗ §5.5)
+# ------------------------------------------------------------------
+@app.get("/api/journal")
+def journal_view(request: Request, limit: int = 50, offset: int = 0,
+                 action: str | None = None, actor: str | None = None):
+    """Журнал аудита. Читается только под сессией: видно, кто входил."""
+    _session_division(request)
+    return journal.query(limit=limit, offset=offset, action=action,
+                         actor=actor)
+
+
+@app.get("/api/journal/export/csv")
+def journal_export(request: Request, limit: int = 1000):
+    """CSV-выгрузка журнала: ячейки-формулы экранированы (ТЗ §11)."""
+    did = _session_division(request)
+    rows = journal.query(limit=min(int(limit), 5000), offset=0)
+    data = journal.to_csv(rows["items"])
+    journal.log(conn(), "export", actor=did, role=did,
+                detail=f"журнал CSV, {len(rows['items'])} строк")
+    return Response(content=data, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":
+                             'attachment; filename="journal.csv"'})
+
+
+@app.get("/api/metrics/{metric_id}/sources")
+def metric_sources(metric_id: str):
+    """Провенанс значений показателя: от числа — к документу (ТЗ §5.5)."""
+    c = conn()
+    met = c.execute(
+        "SELECT metric_id, title, unit, source, src_note FROM dim_metric"
+        " WHERE metric_id = ?", (metric_id,)).fetchone()
+    if not met:
+        raise HTTPException(status_code=404, detail="Показатель не найден")
+    rows = c.execute(
+        """SELECT f.period_id, f.value, f.value_exact, p.label AS period,
+                  prov.source_upload_id AS upload_id, prov.source_file_name,
+                  prov.extraction_method, prov.parser_model,
+                  prov.confirmed_by, prov.confirmed_at, prov.note,
+                  d.title AS division_title
+             FROM fact_metric f
+             JOIN dim_period p ON p.period_id = f.period_id
+             LEFT JOIN fact_provenance prov ON prov.prov_id = (
+                 SELECT MAX(p2.prov_id) FROM fact_provenance p2
+                  WHERE p2.period_id = f.period_id
+                    AND p2.metric_id = f.metric_id
+                    AND p2.org_id = f.org_id)
+             LEFT JOIN upload u ON u.upload_id = prov.source_upload_id
+             LEFT JOIN division d ON d.division_id = u.division_id
+            WHERE f.metric_id = ?
+            ORDER BY p.ord""", (metric_id,)).fetchall()
+    return {"metric": dict(met), "values": [dict(r) for r in rows]}
+
+
 @app.get("/api/export/xlsx")
 def export_xlsx():
     """Выгрузка витрины показателей в Excel.
@@ -502,6 +663,7 @@ def export_xlsx():
             "нет" if m["source"] == "official" else "да",
         ])
     ws.freeze_panes = "A2"
+    journal.log(conn(), "export", detail=f"XLSX, {len(vit['metrics'])} показателей")
 
     buf = BytesIO()
     wb.save(buf)
