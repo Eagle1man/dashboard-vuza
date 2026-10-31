@@ -31,6 +31,7 @@ import time
 
 from . import config
 from . import db
+from . import grounding
 from . import llm
 from . import retrieval_judge
 from . import retrieve
@@ -619,6 +620,26 @@ def run(question, conn, mode="auto", model=None, top_k=0):
 def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
           notes, verdict, metrics_data, stats, degraded, started):
     """Собирает единый ответ экипажа."""
+    # Проверка на выдуманные числа и ссылки — та же, что в одиночном
+    # пути (grounding). Критик проверяет смысл, а не сверяет цифры с
+    # фрагментами, поэтому без этого шага выдуманное число доходило до
+    # человека даже после «ответ подтверждён».
+    grounding_report = None
+    if answer and config.STRICT_NUMBERS:
+        inside = chunks[:config.CONTEXT_CHUNKS]
+        answer, grounding_report = grounding.verify(
+            answer, " ".join(c["text"] for c in inside), len(inside))
+        if not answer.strip():
+            nums = (grounding_report.get("unsupported_numbers") or [])
+            notes.append("проверка сняла ответ: числа не найдены во фрагментах"
+                         + (": " + ", ".join(nums[:5]) if nums else ""))
+            answer = ""
+        elif grounding_report.get("removed") or \
+                grounding_report.get("bad_citations") or \
+                grounding_report.get("repeated") or \
+                not grounding_report.get("cited"):
+            answer += grounding.note(grounding_report)
+
     found = "\n".join(
         f"- «{c['doc_title']}»" + (f", раздел {c['heading']}" if c.get("heading") else "")
         for c in chunks[:5]
@@ -648,6 +669,7 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
         "metrics": _metrics_public(metrics_data),
         "degraded": degraded,
         "llm": bool(answer) and not degraded,
+        "grounding": grounding_report,
         "search": stats or {},
         "latency_ms": int((time.time() - started) * 1000),
     }

@@ -27,6 +27,7 @@ import urllib.request
 
 from . import config
 from . import embed
+from . import grounding
 from . import prompts
 
 # Переменные окружения, которыми владелец подключает модель на ВМ.
@@ -254,9 +255,32 @@ def build_context(chunks, limit: int = None) -> str:
 
 
 def answer(question: str, chunks, model: str = None):
-    """Возвращает (текст_ответа, метаданные) + запись в трассу (purpose='ask')."""
+    """Возвращает (текст_ответа, метаданные) + запись в трассу (purpose='ask').
+
+    После генерации ответ проверяется на выдуманные числа и ссылки
+    (grounding.verify): модели 1.5B просьба «не выдумывай» не мешает
+    назвать «35–45 %», которых в документе нет. Если после чистки не
+    осталось ни одного утверждения, показываем найденные фрагменты и
+    честную причину вместо выдуманного ответа.
+    """
     started = time.time()
     text, meta = _answer_inner(question, chunks, model)
+
+    if meta.get("llm") and chunks and config.STRICT_NUMBERS:
+        inside = chunks[:config.CONTEXT_CHUNKS]
+        context = " ".join(ch["text"] for ch in inside)
+        text, report = grounding.verify(text, context, len(inside))
+        meta["grounding"] = report
+        if not text.strip():
+            meta["llm"] = False
+            nums = report.get("unsupported_numbers") or []
+            meta["reason"] = ("модель назвала числа, которых нет в найденных "
+                              "документах" + (": " + ", ".join(nums[:5]) if nums else ""))
+            text = fallback_answer(chunks, meta)
+        elif (report.get("removed") or report.get("bad_citations")
+              or report.get("repeated") or not report.get("cited")):
+            text += grounding.note(report)
+
     trace("ask", "small", meta.get("model") or "", "meta", started,
           bool(meta.get("llm")), None if meta.get("llm") else "no_llm",
           len(question), len(text))
