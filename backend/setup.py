@@ -95,10 +95,16 @@ def main():
     print(line())
     print("  Установка завершена.")
     print()
-    print("  Запуск                    start.bat")
-    print("  Резервная копия базы     backup.bat")
-    print("  Новые документы          положите файлы в папку knowledge")
-    print("                            и запустите start.bat заново")
+    if sys.platform == "win32":
+        print("  Запуск                    start.bat")
+        print("  Резервная копия базы     backup.bat")
+    else:
+        print("  Запуск                    ./start.sh")
+        print("  Служба (автозапуск)      deploy/systemd/README.md")
+    print("  Проверка готовности      python -m backend.smoke")
+    print("  Пароли подразделений     python -m backend.users list")
+    print("  Новые документы          загрузка на странице /upload.html")
+    print("                            либо файлы в папке knowledge")
     print(line())
     pause()
     return 0

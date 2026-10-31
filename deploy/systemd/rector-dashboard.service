@@ -1,0 +1,33 @@
+[Unit]
+Description=Дашборд ректора: витрина показателей и ИИ-ассистент по документам
+Documentation=file:///opt/rector-dashboard/docs/DEPLOY.md
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Пользователь и путь замените на свои (см. README рядом с этим файлом).
+User=rector
+Group=rector
+WorkingDirectory=/opt/rector-dashboard
+
+# 0.0.0.0 — чтобы дашборд был доступен с других машин вуза.
+# Если сервер должен слушать только себя, поставьте 127.0.0.1.
+Environment=RECTOR_API_HOST=0.0.0.0
+Environment=RECTOR_API_PORT=8765
+# Порт открыт в сеть — данные (витрина, документы, чат) только после входа.
+Environment=RECTOR_REQUIRE_LOGIN=1
+# Большая модель на процессоре отвечает минутами; 300 с не хватает.
+Environment=RECTOR_OLLAMA_TIMEOUT=600
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/rector-dashboard/.venv/bin/python -m backend.app
+Restart=always
+RestartSec=5
+
+# Журнал: journalctl -u rector-dashboard -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

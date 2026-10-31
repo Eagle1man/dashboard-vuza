@@ -1,16 +1,8 @@
-# Пакетные файлы Windows обязаны быть с CRLF: с LF cmd.exe местами
-# ведёт себя непредсказуемо, а переносы строк в .bat — часть синтаксиса.
+# Единые переводы строк независимо от машины, на которой сделали checkout.
+# Без этого .sh, сохранённый на Windows, приезжает на Linux с CRLF и
+# падает с «bad interpreter: /usr/bin/env bash^M».
+* text=auto
+*.sh text eol=lf
 *.bat text eol=crlf
-
-# Python и веб — LF, это их обычная форма на всех платформах.
-*.py text eol=lf
-*.js text eol=lf
-*.css text eol=lf
-*.html text eol=lf
-*.txt text eol=lf
-*.md text eol=lf
-
-# Двоичные
-*.png binary
-*.jpg binary
-*.db binary
+*.ps1 text eol=crlf
+*.service text eol=lf

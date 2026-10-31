@@ -35,7 +35,14 @@ def set_console_utf8():
 
 
 def pause():
-    """Аналог pause в .bat — чтобы окно не закрылось, не спросив."""
+    """Аналог pause в .bat — чтобы окно не закрылось, не спросив.
+
+    RECTOR_NO_PAUSE=1 отключает ожидание: установка с сервера или из
+    скрипта не должна зависнуть на вопросе, на который никто не ответит.
+    """
+    import os
+    if os.environ.get("RECTOR_NO_PAUSE") == "1":
+        return
     try:
         input("\n  Нажмите Enter, чтобы закрыть окно...")
     except (EOFError, KeyboardInterrupt):

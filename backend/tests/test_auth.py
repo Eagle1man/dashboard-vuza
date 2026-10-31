@@ -41,6 +41,19 @@ def _fresh_db():
     return conn
 
 
+def _passwords() -> dict:
+    """Пароли, выданные сидом: логин -> пароль (файл рядом с базой)."""
+    path = Path(config.DB_PATH).parent / "initial_passwords.txt"
+    out = {}
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0] and not parts[0].startswith("Логины"):
+            out[parts[0]] = parts[1]
+    return out
+
+
 def test_seed_creates_admin_and_divisions():
     conn = _fresh_db()
     rows = conn.execute("SELECT * FROM division").fetchall()
@@ -51,20 +64,54 @@ def test_seed_creates_admin_and_divisions():
           len({r["login"] for r in rows}) == len(rows))
     check("все пароли захэшированы, не голым текстом",
           all(r["pass_hash"] != r["login"] and len(r["pass_hash"]) >= 32 for r in rows))
+    pw = _passwords()
+    check("пароли выданы и записаны рядом с базой",
+          len(pw) == len(rows), f"паролей {len(pw)}, учёток {len(rows)}")
+    check("пароль не совпадает с логином",
+          all(pw.get(r["login"]) != r["login"] for r in rows),
+          "пароль по умолчанию равен логину")
 
 
 def test_verify_login():
     conn = _fresh_db()
+    pw = _passwords()
+    admin_pw = pw.get("admin", "")
     check("верный пароль admin",
-          auth.verify_login("admin", "admin") == "admin")
+          bool(admin_pw) and auth.verify_login("admin", admin_pw) == "admin")
+    check("старый пароль «admin» больше не принимается",
+          auth.verify_login("admin", "admin") is None)
     check("неверный пароль отклонён",
           auth.verify_login("admin", "wrong") is None)
-    check("подразделение входит под своим логином",
-          auth.verify_login("buhgalteria", "buhgalteria") == "buhgalteria")
+    check("подразделение входит под своим паролем",
+          auth.verify_login("buhgalteria", pw.get("buhgalteria", ""))
+          == "buhgalteria")
+    check("пароль-логин подразделения отклонён",
+          auth.verify_login("buhgalteria", "buhgalteria") is None)
     check("неизвестный логин отклонён",
           auth.verify_login("nouser", "nouser") is None)
-    check("админский флаг", auth.admin_login_ok("admin", "admin"))
-    check("чужой вход — не админ", not auth.admin_login_ok("buhgalteria", "buhgalteria"))
+    check("админский флаг", auth.admin_login_ok("admin", admin_pw))
+    check("чужой вход — не админ",
+          not auth.admin_login_ok("buhgalteria", pw.get("buhgalteria", "")))
+
+
+def test_seed_does_not_overwrite_changed_password():
+    """Смена пароля должна жить после перезапуска сервера.
+
+    Сид вызывается при каждом старте. Пока в нём стоял INSERT OR REPLACE,
+    пароль возвращался к прежнему на каждом запуске — то есть смена
+    пароля не работала вовсе.
+    """
+    conn = _fresh_db()
+    new_hash = auth._ph.hash("Novyy-Parol-2026") if auth.ARGON2 else "x" * 64
+    conn.execute("UPDATE division SET pass_hash = ? WHERE login = 'admin'",
+                 (new_hash,))
+    conn.commit()
+    db.seed_divisions(conn)
+    check("пароль после повторного сида прежний",
+          auth.verify_login("admin", "Novyy-Parol-2026") == "admin")
+    check("пароль из файла после сида не подходит",
+          auth.verify_login("admin", _passwords().get("admin", "")) is None
+          or not _passwords().get("admin"))
 
 
 def test_sessions():
@@ -100,6 +147,7 @@ def main():
     try:
         test_seed_creates_admin_and_divisions()
         test_verify_login()
+        test_seed_does_not_overwrite_changed_password()
         test_sessions()
         test_require_auth()
     finally:

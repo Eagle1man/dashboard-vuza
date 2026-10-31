@@ -1112,27 +1112,78 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
 
 
 def seed_divisions(conn):
-    """Заводит подразделения с логином и паролем по умолчанию.
+    """Заводит подразделения, которых ещё нет в базе.
 
-    Пароль — тот же, что логин (честно, как в старой системе). Каждое
-    подразделение заходит под своим логином, видит и правит только свои
-    загрузки. Админ — отдельный логин `admin`, права на всё.
+    Раньше здесь стоял INSERT OR REPLACE с паролем, равным логину, и
+    вызывался при каждом запуске сервера. Для боевой установки это две
+    проблемы сразу:
+
+      - смена пароля жила до ближайшей перезагрузки — строка
+        перезаписывалась прежним хэшем;
+      - пароль подразделения совпадал с логином, а логин — это id
+        подразделения, он виден в интерфейсе. То есть любой, кто дошёл
+        до порта, входил под любым подразделением.
+
+    Теперь существующие строки не трогаются, а новым выдаётся случайный
+    пароль. Он один раз печатается установщиком и складывается в
+    data/initial_passwords.txt, чтобы администратор раздал его людям.
+    Дальше пароль меняется командой backend.users.
     """
     import hashlib
+    import secrets
     now = time.strftime("%Y-%m-%d %H:%M:%S")
-    admin_pass = hashlib.pbkdf2_hmac("sha256", b"admin", b"dashboard-admin", 100_000).hex()
-    conn.execute(
-        "INSERT OR REPLACE INTO division(division_id, title, login, pass_hash, contact, created_at)"
-        " VALUES(?,?,?,?,?,?)",
-        ("admin", "Администратор", "admin", admin_pass, "rector@iubip.ru", now))
-    for did, title, responsible, contact in DIVISIONS:
-        login = did
-        pass_hash = hashlib.pbkdf2_hmac("sha256", login.encode(), f"dashboard-{did}".encode(), 100_000).hex()
+
+    def _hash(password: str) -> str:
+        # Argon2, если установлен; иначе прежний PBKDF2 — auth умеет
+        # читать оба формата и обновляет хэш при первом входе.
+        try:
+            from . import auth
+            if auth.ARGON2:
+                return auth._ph.hash(password)
+        except Exception:
+            pass
+        return hashlib.pbkdf2_hmac("sha256", password.encode(), b"salt",
+                                   100_000).hex()
+
+    created = []
+
+    def _ensure(did, title, login, contact):
+        exists = conn.execute(
+            "SELECT 1 FROM division WHERE division_id = ?", (did,)).fetchone()
+        if exists:
+            return
+        password = secrets.token_urlsafe(9)
         conn.execute(
-            "INSERT OR REPLACE INTO division(division_id, title, login, pass_hash, contact, created_at)"
-            " VALUES(?,?,?,?,?,?)",
-            (did, title, login, pass_hash, responsible, now))
+            "INSERT INTO division(division_id, title, login, pass_hash,"
+            " contact, created_at) VALUES(?,?,?,?,?,?)",
+            (did, title, login, _hash(password), contact, now))
+        created.append((login, password, title))
+
+    _ensure("admin", "Администратор", "admin", "rector@iubip.ru")
+    for did, title, responsible, contact in DIVISIONS:
+        _ensure(did, title, did, responsible)
+
     conn.commit()
+
+    if created:
+        try:
+            # Файл кладём рядом с базой, а не в DATA_DIR: в тестах и при
+            # нестандартном пути к базе пароли не должны оказаться в
+            # рабочем каталоге проекта.
+            base = Path(config.DB_PATH).parent
+            base.mkdir(parents=True, exist_ok=True)
+            path = base / "initial_passwords.txt"
+            new_file = not path.exists()
+            with path.open("a", encoding="utf-8") as f:
+                if new_file:
+                    f.write("Логины и пароли, выданные при первом запуске.\n"
+                            "Смените их: python -m backend.users passwd <логин>\n"
+                            "После смены этот файл можно удалить.\n\n")
+                for login, password, title in created:
+                    f.write(f"{login}\t{password}\t{title}\n")
+        except Exception:
+            pass
+    return created
 
 
 def next_expected_for(frequency: str, from_date=None) -> str | None:

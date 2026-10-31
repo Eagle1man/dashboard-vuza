@@ -14,7 +14,7 @@ from pathlib import Path
 
 from fastapi import Cookie, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
@@ -95,6 +95,40 @@ async def csrf_guard(request, call_next):
                     status_code=403,
                     content={"detail": "Запрос отклонён: недопустимый "
                                        "источник (CSRF)"})
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def require_login_guard(request, call_next):
+    """Публикация в сеть: данные только после входа.
+
+    Включается RECTOR_REQUIRE_LOGIN=1 (см. docs/DEPLOY.md). Пока сервер
+    слушает 127.0.0.1, это не нужно: до него не дотянуться снаружи.
+    Как только порт открыт в сеть, витрина, документы и чат без входа
+    означают, что любой сотрудник сети читает всю базу.
+
+    Что остаётся открытым и почему:
+      - /api/health — по нему страница входа показывает «сервер онлайн»,
+        мониторинг и backend.smoke проверяют готовность;
+      - /api/login, /api/logout — иначе войти неоткуда;
+      - статика (css/js/img) — без неё страница входа не отрисуется.
+    """
+    if not config.REQUIRE_LOGIN:
+        return await call_next(request)
+
+    path = request.url.path
+    if (path in ("/", "/index.html", "/api/health", "/api/login", "/api/logout")
+            or path.startswith(("/css/", "/js/", "/img/"))):
+        return await call_next(request)
+
+    if auth.validate_session(request.cookies.get("dashboard_session")):
+        return await call_next(request)
+
+    if path.startswith("/api/"):
+        return JSONResponse(status_code=401,
+                            content={"detail": "Необходимо войти"})
+    if path.endswith(".html"):
+        return RedirectResponse("/index.html", status_code=302)
     return await call_next(request)
 
 
