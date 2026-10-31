@@ -67,6 +67,20 @@ def _context(conn, upload_id: int) -> str | None:
 
 def explain_sync(upload_id: int) -> dict:
     """Запрашивает объяснение у большой модели и сохраняет результат."""
+    # Не тратим токены на кешированные объяснения
+    conn_c = db.connect()
+    try:
+        cached_res = cached(conn_c, upload_id)
+        if cached_res.get("available"):
+            conn_c.close()
+            return cached_res
+    except Exception:
+        pass
+    try:
+        conn_c.close()
+    except Exception:
+        pass
+
     st = llm.role_status("large")
     if not st.get("installed"):
         reason = (f"большая модель {st['model']} не подключена"
@@ -95,7 +109,7 @@ def _run(upload_id: int, allow_fallback: bool = False) -> dict:
         text, meta = llm.chat(
             SYSTEM,
             "Данные карточки (JSON):\n" + ctx,
-            role="large", purpose="consistency", num_predict=700)
+            role="large", purpose="consistency", num_predict=280)
         if not meta.get("ok"):
             conn.close()
             return {"available": False,

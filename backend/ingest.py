@@ -46,7 +46,14 @@ def iter_documents(root: Path = None):
         yield path
 
 
-def _delete_doc(conn, doc_id: int):
+def _clear_doc_index(conn, doc_id: int):
+    """Очищает индексные таблицы документа, не удаляя саму запись doc.
+
+    При переиндексации (force=True или обновление файла) удалять строку
+    из doc нельзя: из-за PRAGMA foreign_keys = ON каскад уничтожает
+    анкету doc_meta и связи metric_source, а в upload и fact_provenance
+    зануляет doc_id.
+    """
     conn.execute("DELETE FROM doc_block WHERE doc_id = ?", (doc_id,))
     for row in conn.execute(
             "SELECT chunk_id FROM doc_chunk WHERE doc_id = ?", (doc_id,)):
@@ -54,6 +61,10 @@ def _delete_doc(conn, doc_id: int):
         conn.execute("DELETE FROM chunk_vec WHERE chunk_id = ?", (row[0],))
     conn.execute("DELETE FROM doc_chunk WHERE doc_id = ?", (doc_id,))
     conn.execute("DELETE FROM doc_page WHERE doc_id = ?", (doc_id,))
+
+
+def _delete_doc(conn, doc_id: int):
+    _clear_doc_index(conn, doc_id)
     conn.execute("DELETE FROM doc WHERE doc_id = ?", (doc_id,))
 
 
@@ -95,18 +106,28 @@ def index_file(conn, path: Path, is_demo: bool, force=False,
         unique_chunks.append(ch)
     dropped = len(chunks) - len(unique_chunks)
 
-    if existing:
-        _delete_doc(conn, int(existing["doc_id"]))
-
     title = extract.title_from(path, text)
     blocks = db.detect_blocks(rel, title, text)
-    cur = conn.execute(
-        "INSERT INTO doc(rel_path, title, doc_type, sha256, n_pages, n_chunks,"
-        " is_demo, added_at, block_id) VALUES(?,?,?,?,?,?,?,?,?)",
-        (rel, title, extract.doc_type(path), sha, text.count("[стр. ") or None,
-         len(unique_chunks), 1 if is_demo else 0,
-         time.strftime("%Y-%m-%d %H:%M:%S"), blocks[0] if blocks else None))
-    doc_id = int(cur.lastrowid)
+    now_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    n_pages = text.count("[стр. ") or None
+    primary_block = blocks[0] if blocks else None
+    if existing:
+        doc_id = int(existing["doc_id"])
+        _clear_doc_index(conn, doc_id)
+        conn.execute(
+            "UPDATE doc SET title = ?, doc_type = ?, sha256 = ?, n_pages = ?,"
+            " n_chunks = ?, is_demo = ?, added_at = ?, block_id = ?"
+            " WHERE doc_id = ?",
+            (title, extract.doc_type(path), sha, n_pages,
+             len(unique_chunks), 1 if is_demo else 0, now_ts,
+             primary_block, doc_id))
+    else:
+        cur = conn.execute(
+            "INSERT INTO doc(rel_path, title, doc_type, sha256, n_pages, n_chunks,"
+            " is_demo, added_at, block_id) VALUES(?,?,?,?,?,?,?,?,?)",
+            (rel, title, extract.doc_type(path), sha, n_pages,
+             len(unique_chunks), 1 if is_demo else 0, now_ts, primary_block))
+        doc_id = int(cur.lastrowid)
 
     for block_id in blocks:
         conn.execute(

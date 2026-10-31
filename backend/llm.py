@@ -329,6 +329,30 @@ def fallback_answer(chunks, meta) -> str:
             snippet = snippet[:320].rsplit(" ", 1)[0] + "…"
         lines.append(f"{head}\n    {snippet}")
     intro = prompts.NO_LLM.format(reason=meta.get("reason") or "причина неизвестна")
-    return intro + "\n\n" + "\n".join(lines) + (
-        "\n\nКак включить сводные ответы: запустите start.bat и выполните"
-        "\nв терминале  ollama pull " + (meta.get("model") or "qwen2.5:1.5b"))
+    return intro + "\n\n" + "\n".join(lines) + _how_to_enable(meta)
+
+
+def _how_to_enable(meta) -> str:
+    """Подсказка по причине отказа, а не по одной причине на все случаи.
+
+    Раньше здесь всегда стояло «выполните ollama pull <модель>». После
+    переключения на модель побольше это превращалось в ложный совет:
+    модель скачана, ответ не пришёл из-за таймаута, а человек шёл
+    скачивать то, что уже лежит на диске.
+    """
+    reason = (meta.get("reason") or "").lower()
+    model = meta.get("model") or chat_model()
+    if "timed out" in reason or "таймаут" in reason:
+        return ("\n\nМодель не успела ответить за "
+                f"{config.OLLAMA_TIMEOUT:.0f} с. На процессоре большие модели "
+                "отвечают минутами: поднимите RECTOR_OLLAMA_TIMEOUT или "
+                "верните модель поменьше — python -m backend.models small "
+                f"{config.MODELS_TINY[0]}")
+    if "не скачана" in reason:
+        return ("\n\nСкачайте модель и повторите вопрос:\n  ollama pull "
+                + model)
+    if "не отвечает" in reason:
+        return ("\n\nЗапустите Ollama (start.bat делает это сам) и повторите "
+                "вопрос.")
+    return ("\n\nСостояние моделей: python -m backend.models — там видно, "
+            "какая модель выбрана и скачана ли она.")

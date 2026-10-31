@@ -500,9 +500,13 @@ def _catalog(conn) -> dict:
 
 def _sample_rows(raw: list[dict]) -> list[dict]:
     out, used = [], 0
-    # Сначала строки с числами и адресами — в них искомые значения,
-    # потом остальное как контекст подписей.
-    ordered = ([r for r in raw if r.get("kind") in ("row", "cell")]
+    # Если есть полноценные табличные строки (kind == 'row', где уже склеены
+    # название показателя и число), голые ячейки ('cell') в промпт не
+    # дублируем: иначе модель 1.5B выводит каждое число дважды (для строки
+    # и для ячейки без подписи) и переполняет лимит токенов ответа.
+    has_rows = any(r.get("kind") == "row" for r in raw)
+    primary_kinds = ("row",) if has_rows else ("row", "cell")
+    ordered = ([r for r in raw if r.get("kind") in primary_kinds]
                + [r for r in raw if r.get("kind") not in ("row", "cell")])
     for r in ordered:
         if len(out) >= PROMPT_MAX_ROWS or used >= PROMPT_BUDGET:
@@ -517,6 +521,22 @@ def _sample_rows(raw: list[dict]) -> list[dict]:
 
 
 def _prompt_user(form: dict, cat: dict, raw: list[dict]) -> str:
+    try:
+        selected = json.loads(form.get("metric_ids") or "[]")
+        if not isinstance(selected, list):
+            selected = []
+    except Exception:
+        selected = []
+    selected_set = {str(x) for x in selected if str(x) in cat}
+    # Если в анкете отмечены целевые показатели — ставим их первыми,
+    # а общий хвост каталога ограничиваем, чтобы модель 1.5B не пыталась
+    # сгенерировать 47 пустых объектов по всему справочнику.
+    ordered_cat = (
+        [(m, cat[m]) for m in selected if m in cat]
+        + [(m, info) for m, info in cat.items() if m not in selected_set]
+    )
+    cat_limit = max(len(selected_set) + 15, 30) if selected_set else 47
+
     lines = [
         "Анкета загрузки:",
         f"  что это: {form.get('title', '')}",
@@ -525,7 +545,7 @@ def _prompt_user(form: dict, cat: dict, raw: list[dict]) -> str:
         "",
         "Каталог показателей (id — единственный допустимый metric_id):",
     ]
-    for mid, info in list(cat.items())[:60]:
+    for mid, info in ordered_cat[:cat_limit]:
         unit = f", {info['unit']}" if info.get("unit") else ""
         lines.append(f"  {mid}: {info['title']}{unit}")
     lines.append("")
@@ -536,21 +556,65 @@ def _prompt_user(form: dict, cat: dict, raw: list[dict]) -> str:
             t = t[:400] + "…"
         lines.append(f"  {r['raw_id']} | {r.get('label', '')} | {t}")
     lines.append("")
-    lines.append('Ответ — только JSON со схемой из инструкции.')
+    lines.append(
+        "В массив values включи ТОЛЬКО числа, которые реально есть в строках "
+        "сырья (по одной записи на строку сырья). Показатели из каталога, "
+        "которых нет в строках сырья, НЕ выводи. "
+        "Ответ — только JSON со схемой из инструкции."
+    )
     return "\n".join(lines)
 
 
 def _extract_json(text: str) -> dict:
-    """Достаёт первый объект JSON из ответа модели (иногда он в ```)."""
+    """Достаёт первый сбалансированный объект JSON из ответа модели.
+
+    Две защиты для локальных моделей 1.5B–7B:
+    1) Повтор ответа («{...} {...}»): ищем баланс скобок и берём первый
+       объект целиком.
+    2) Обрыв длинного массива values по лимиту num_predict: если внешний
+       объект не успел закрыться, но внутри массива values уже закрыты
+       один или несколько объектов «{...}», отрезаем хвост по последнему
+       закрытому элементу (depth 2 -> 1) и закрываем «]}».
+    """
     t = text.strip()
     if t.startswith("```"):
         t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
         t = re.sub(r"\n?```$", "", t)
     start = t.find("{")
-    end = t.rfind("}")
-    if start < 0 or end <= start:
+    if start < 0:
         raise ValueError("в ответе нет JSON")
-    return json.loads(t[start:end + 1])
+    depth = 0
+    in_str = False
+    esc = False
+    last_item_end = None
+    for i in range(start, len(t)):
+        ch = t[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 1:
+                last_item_end = i
+            elif depth == 0:
+                return json.loads(t[start:i + 1])
+    if last_item_end is not None:
+        try:
+            salvaged = json.loads(t[start:last_item_end + 1] + "]}")
+            if isinstance(salvaged, dict) and isinstance(salvaged.get("values"), list):
+                return salvaged
+        except Exception:
+            pass
+    raise ValueError("JSON не закрыт — нет парной скобки")
 
 
 def _validate_card(data: dict, cat: dict, valid_refs: set[int]) -> dict:
@@ -584,6 +648,86 @@ def _validate_card(data: dict, cat: dict, valid_refs: set[int]) -> dict:
                     "metricId": mid,
                     "rawRef": ref if ref in valid_refs else None})
     return {"docType": doc_type, "period": period, "values": out}
+
+
+def _norm_label(s: str | None) -> str:
+    """Нормализует подпись показателя для точного сопоставления со справочником."""
+    t = (s or "").strip().lower().replace("ё", "е")
+    t = re.sub(r"\s+", " ", t)
+    return t
+
+
+def _label_index(conn, cat: dict) -> dict[str, str]:
+    """Строит индекс «нормализованная подпись / синоним -> metric_id»."""
+    idx: dict[str, str] = {}
+    for mid, info in cat.items():
+        title = info.get("title") or ""
+        if title:
+            idx[_norm_label(title)] = mid
+            # Вариант без скобок на конце («Принято на 1 курс (2025)» -> «принято на 1 курс»)
+            stripped = re.sub(r"\s*\([^)]*\)\s*$", "", title).strip()
+            if stripped:
+                idx.setdefault(_norm_label(stripped), mid)
+    try:
+        for r in conn.execute("SELECT metric_id, alias FROM metric_alias"):
+            mid = r["metric_id"]
+            if mid in cat and r["alias"]:
+                idx.setdefault(_norm_label(r["alias"]), mid)
+    except Exception:
+        pass
+    return idx
+
+
+def _supplement_from_rows(conn, cat: dict, raw_with_ids: list[dict],
+                          values: list[dict]) -> list[dict]:
+    """Добирает строки таблицы, которые малая модель 1.5B пропустила в хвосте.
+
+    Работает только когда модель уже начала разбор документа (values не пуст):
+    1) если модель вернула строку с точной подписью из каталога, но оставила
+       metricId пустым — проставляет metricId по справочнику/синонимам;
+    2) если в upload_raw есть табличные строки (kind == 'row'), чья первая
+       ячейка точно совпадает с показателем каталога, но модель оборвала
+       список раньше конца таблицы — добавляет это значение с его raw_id.
+    Числа никогда не выдумываются: берутся только фактические ячейки сырья.
+    """
+    if not values:
+        return values
+    idx = _label_index(conn, cat)
+    out = list(values)
+    seen_mids: set[str] = set()
+    seen_refs: set[int] = set()
+    for v in out:
+        if not v.get("metricId"):
+            cand = idx.get(_norm_label(v.get("label")))
+            if cand:
+                v["metricId"] = cand
+        if v.get("metricId"):
+            seen_mids.add(v["metricId"])
+        if v.get("rawRef"):
+            seen_refs.add(int(v["rawRef"]))
+
+    for r in raw_with_ids:
+        if r.get("kind") != "row" or r.get("raw_id") in seen_refs:
+            continue
+        cells = [c.strip() for c in str(r.get("text") or "").split(" | ")]
+        if len(cells) < 2 or not cells[0]:
+            continue
+        mid = idx.get(_norm_label(cells[0]))
+        if not mid or mid in seen_mids:
+            continue
+        for cell in cells[1:]:
+            d = numeric.to_decimal(cell)
+            if d is not None:
+                out.append({
+                    "label": cells[0][:200],
+                    "value": numeric.exact(d),
+                    "metricId": mid,
+                    "rawRef": int(r["raw_id"]),
+                })
+                seen_mids.add(mid)
+                seen_refs.add(int(r["raw_id"]))
+                break
+    return out
 
 
 def build_card(conn, upload_id: int, form: dict,
@@ -639,7 +783,8 @@ def build_card(conn, upload_id: int, form: dict,
                 break
             try:
                 card = _validate_card(_extract_json(text), cat, valid_refs)
-                values = card["values"]
+                values = _supplement_from_rows(
+                    conn, cat, raw_with_ids, card["values"])
                 if card["period"]:
                     period = card["period"]
                 doc_type_default = card["docType"] or doc_type_default

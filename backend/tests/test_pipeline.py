@@ -352,6 +352,153 @@ def test_llm_chat_accepts_role_and_traces():
     _teardown()
 
 
+def test_extract_json_tolerates_repeats():
+    """Большие модели повторяют ответ — разбор не должен от этого падать.
+
+    Замер Vikhr-7B на ноутбуке: на запрос parse card модель вернула
+    «{...} {...} {...} {...} {...}». Старый разбор брал от первой до
+    последней скобки и получал слипшийся поток, то есть карточка
+    падала бы в фолбэк на живом показе.
+    """
+    one = '{"mapping": [{"metricId": "continuer-total", "value": "2946"}]}'
+    check("один объект разбирается",
+          intake._extract_json(one)["mapping"][0]["value"] == "2946", "")
+    check("повтор ответа не ломает разбор",
+          intake._extract_json(one + " " + one + " " + one)["mapping"][0]
+          ["value"] == "2946", "")
+    check("пояснение перед JSON не мешает",
+          intake._extract_json("JSON-объект: " + one)["mapping"][0]["value"]
+          == "2946", "")
+    check("блок кода снимается",
+          intake._extract_json("Вот ответ:\n```json\n" + one + "\n```")
+          ["mapping"], "")
+    braces = '{"note": "в фигурных скобках {внутри строки}", "v": 1}'
+    check("скобки внутри строк не путают баланс",
+          intake._extract_json(braces)["v"] == 1, str(intake._extract_json(braces)))
+    trunc_values = (
+        '{"doc_type": "таблица", "period": "2026-03", "values": ['
+        '{"label": "Контингент", "value": "2946", "metric_id": "continuer-total", "raw_ref": 1}, '
+        '{"label": "Приём", "value": "412'
+    )
+    salv = intake._extract_json(trunc_values)
+    check("оборванный массив values сохраняет готовые элементы",
+          len(salv.get("values") or []) == 1 and salv["values"][0]["value"] == "2946",
+          str(salv))
+    try:
+        intake._extract_json('{"mapping": [')
+        check("обрезанный JSON даёт понятную ошибку", False, "")
+    except ValueError as exc:
+        check("обрезанный JSON даёт понятную ошибку",
+              "не закрыт" in str(exc), str(exc))
+    try:
+        intake._extract_json("без единой скобки")
+        check("ответа без JSON отклоняется", False, "")
+    except ValueError as exc:
+        check("ответа без JSON отклоняется", "нет JSON" in str(exc), str(exc))
+
+
+def test_reindex_preserves_doc_meta_and_upload_link():
+    """Переиндексация (force=True) не должна стирать doc_meta и upload.doc_id.
+
+    При PRAGMA foreign_keys = ON удаление строки из doc запускает
+    ON DELETE CASCADE по doc_meta и metric_source и ON DELETE SET NULL
+    по upload.doc_id и fact_provenance.source_doc_id. Обновление существующего
+    документа обязано сохранять его doc_id.
+    """
+    conn, _ = _fresh_db()
+    try:
+        config.KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
+        fpath = config.KNOWLEDGE_DIR / "report_2026.txt"
+        fpath.write_text("Контингент обучающихся составляет 2946 человек.",
+                         encoding="utf-8")
+        res1 = ingest_mod.index_file(conn, fpath, is_demo=False, force=True)
+        check("первичная индексация создала чанки",
+              res1["status"] == "indexed" and res1["chunks"] >= 1, str(res1))
+        doc_row = conn.execute(
+            "SELECT doc_id FROM doc WHERE rel_path = 'report_2026.txt'"
+        ).fetchone()
+        doc_id = int(doc_row["doc_id"])
+
+        cur = conn.execute(
+            "INSERT INTO upload(division_id, doc_id, filename, rel_path, sha256,"
+            " size_bytes, uploaded_at, status) VALUES(?,?,?,?,?,?,?,?)",
+            ("org_control", doc_id, "report_2026.txt", "report_2026.txt",
+             "abc", 48, "2026-10-29 10:00:00", "needs_review"))
+        up_id = int(cur.lastrowid)
+        conn.execute(
+            "INSERT INTO doc_meta(doc_id, upload_id, division_id, title, purpose,"
+            " period, frequency, responsible, access_level, metric_ids,"
+            " confirmed, uploaded_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (doc_id, up_id, "org_control", "Отчёт 2026", "Контроль",
+             "2026-03", "ежемесячно", "Иванов И.И.", "internal",
+             '["continuer-total"]', 1, "2026-10-29 10:00:00"))
+        conn.execute(
+            "INSERT INTO metric_source(metric_id, doc_id, confirmed)"
+            " VALUES(?,?,1)", ("continuer-total", doc_id))
+        conn.commit()
+
+        # Повторная переиндексация с force=True
+        res2 = ingest_mod.index_file(conn, fpath, is_demo=False, force=True)
+        check("повторная индексация прошла",
+              res2["status"] == "indexed", str(res2))
+        doc_row2 = conn.execute(
+            "SELECT doc_id FROM doc WHERE rel_path = 'report_2026.txt'"
+        ).fetchone()
+        check("doc_id сохранён при переиндексации",
+              int(doc_row2["doc_id"]) == doc_id,
+              f"{doc_row2['doc_id']} != {doc_id}")
+        meta_n = conn.execute(
+            "SELECT COUNT(*) FROM doc_meta WHERE doc_id = ?", (doc_id,)
+        ).fetchone()[0]
+        check("анкета doc_meta не удалена каскадом", meta_n == 1, meta_n)
+        up_doc = conn.execute(
+            "SELECT doc_id FROM upload WHERE upload_id = ?", (up_id,)
+        ).fetchone()["doc_id"]
+        check("связь upload.doc_id не занулилась", up_doc == doc_id, up_doc)
+        ms_n = conn.execute(
+            "SELECT COUNT(*) FROM metric_source WHERE doc_id = ?", (doc_id,)
+        ).fetchone()[0]
+        check("связь metric_source не удалена каскадом", ms_n == 1, ms_n)
+    finally:
+        conn.close()
+        _teardown()
+
+
+def test_supplement_from_rows_recovers_tail_metrics():
+    """Если модель 1.5B вернула первые 8 строк таблицы и пропустила хвост,
+    _supplement_from_rows добирает точные совпадения из upload_raw (kind='row').
+    """
+    conn, _ = _fresh_db()
+    try:
+        cat = intake._catalog(conn)
+        raw_rows = [
+            {"raw_id": 1, "kind": "row",
+             "text": "Контингент обучающихся | 2946 | чел.", "seq": 0},
+            {"raw_id": 17, "kind": "row",
+             "text": "Действующие образовательные программы | 38 | шт.", "seq": 1},
+            {"raw_id": 19, "kind": "row",
+             "text": "Трудоустройство выпускников | 91.2 | %", "seq": 2},
+        ]
+        partial = [{"label": "Контингент обучающихся", "value": "2946",
+                    "metricId": "continuer-total", "rawRef": 1}]
+        full = intake._supplement_from_rows(conn, cat, raw_rows, partial)
+        by_mid = {v["metricId"]: v for v in full}
+        check("добраны программы (38, rawRef=17)",
+              by_mid.get("programs", {}).get("value") == "38"
+              and by_mid.get("programs", {}).get("rawRef") == 17,
+              str(full))
+        check("добрано трудоустройство (91.2, rawRef=19)",
+              by_mid.get("trudoustroystvo", {}).get("value") == "91.2"
+              and by_mid.get("trudoustroystvo", {}).get("rawRef") == 19,
+              str(full))
+        check("пустой ответ модели не подменяется",
+              intake._supplement_from_rows(conn, cat, raw_rows, []) == [],
+              "должен остаться пустым")
+    finally:
+        conn.close()
+        _teardown()
+
+
 def main():
     print("Проверки детерминированной части конвейера")
     try:
@@ -365,6 +512,9 @@ def main():
         test_model_availability_is_exact()
         test_apply_card_validates_client()
         test_llm_chat_accepts_role_and_traces()
+        test_extract_json_tolerates_repeats()
+        test_reindex_preserves_doc_meta_and_upload_link()
+        test_supplement_from_rows_recovers_tail_metrics()
     finally:
         _teardown()
     print()

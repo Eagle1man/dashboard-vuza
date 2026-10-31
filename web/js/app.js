@@ -878,17 +878,19 @@ $("btnExportPdf").addEventListener("click", function () {
 
   function initAI() {
     $("aiOpen").addEventListener("click", function () { toggleAI(true); });
-    $("aiClose").addEventListener("click", function () { toggleAI(false); });
+    var aiCloseBtn = $("aiClose");
+    if (aiCloseBtn) aiCloseBtn.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); toggleAI(false); });
     // Закрыть должно быть легко: Esc, клик вне панели или кнопка «Закрыть».
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !$("aiPanel").hidden) toggleAI(false);
+      var p = $("aiPanel");
+      if (e.key === "Escape" && p && !p.hidden) { e.preventDefault(); toggleAI(false); }
     });
     document.addEventListener("click", function (e) {
       if ($("aiPanel").hidden) return;
       if ($("aiPanel").contains(e.target)) return;
       // Кнопка открытия тоже исключается: её клик всплывает до document,
       // и без проверки панель открылась бы и тут же закрылась.
-      if ($("aiOpen").contains(e.target)) return;
+      if ($("aiOpen") && $("aiOpen").contains(e.target)) return;
       toggleAI(false);
     });
     $("aiForm").addEventListener("submit", async function (e) {
@@ -929,9 +931,20 @@ $("btnExportPdf").addEventListener("click", function () {
   }
 
   function toggleAI(open) {
-    $("aiPanel").hidden = !open;
-    $("aiOpen").hidden = open;
-    if (open) $("aiInput").focus();
+    var panel = $("aiPanel");
+    if (!panel) return;
+    if (open) {
+      panel.hidden = false;
+      panel.style.display = "flex";
+      var openBtn = $("aiOpen");
+      if (openBtn) openBtn.hidden = true;
+      setTimeout(function(){ var inp = $("aiInput"); if(inp) inp.focus(); }, 0);
+    } else {
+      panel.hidden = true;
+      panel.style.display = "none";
+      var openBtn2 = $("aiOpen");
+      if (openBtn2) openBtn2.hidden = false;
+    }
   }
 
   function setSuggestions() {
