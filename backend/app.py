@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 
 from . import autoconfig
+from . import assets
 from . import auth
 from . import config
 from . import consistency
@@ -52,6 +53,13 @@ def conn():
 @asynccontextmanager
 async def lifespan(_app):
     conn()
+    # Версия стилей проставляется при старте, а не «когда вспомнят».
+    # Если правили style.css и забыли команду, браузер покажет старую
+    # копию — человек нажмёт F5 и решит, что ничего не изменилось.
+    try:
+        assets.stamp()
+    except Exception as exc:  # версия статики не повод не поднимать сервис
+        print("не удалось обновить версию стилей:", exc)
     # Модель выбирается один раз и дальше живёт в meta: иначе каждый
     # перезапуск на компьютере, где ОЗУ занята, переключал бы модель
     # на слабую и обратно без участия человека.

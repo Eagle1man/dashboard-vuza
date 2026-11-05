@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Дашборд: до и после</title>
+<style>
+  :root { --line:#dde7ef; --ink:#06172d; --muted:#4b688b; }
+  body { margin:0; padding:24px; font:15px "Segoe UI",system-ui,sans-serif; color:var(--ink); background:#f1f6fa; }
+  h1 { font: 600 20px Georgia, serif; margin:0 0 4px; }
+  p.note { color:var(--muted); font-size:13px; margin:0 0 18px; max-width:900px; line-height:1.5; }
+  .pair { display:flex; gap:16px; align-items:flex-start; }
+  .col { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .cap { font-size:12px; font-weight:600; color:var(--muted); padding:2px 4px 8px; letter-spacing:.04em; text-transform:uppercase; }
+  img { display:block; width:100%; height:auto; border-radius:6px; }
+  .hint { margin-top:16px; font-size:13px; color:var(--muted); }
+  .hint b { color:var(--ink); }
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tabs a { padding:6px 12px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); text-decoration:none; font-size:13px; }
+  .tabs a.on { background:#097aae; color:#fff; border-color:#097aae; }
+</style>
+</head>
+<body>
+  <h1>Что изменилось на «Ленте показателей»</h1>
+  <p class="note">Слева — как было до правок, справа — как стало. Смотреть стоит на четыре вещи:
+    форма кнопок в шапке, отсутствие тени у карточек, линия под названием блока,
+    положение кнопки «Открыть».</p>
+
+  <div class="tabs">
+    <a class="on" href="compare.html">Дашборд</a>
+    <a href="compare-index.html">Главная</a>
+    <a href="compare-journal.html">Журнал</a>
+  </div>
+
+  <div class="pair">
+    <div class="col">
+      <div class="cap">До</div>
+      <img src="before/dashboard-1440.png" alt="Дашборд до правок">
+    </div>
+    <div class="col">
+      <div class="cap">После</div>
+      <img src="after/dashboard-1440.png" alt="Дашборд после правок">
+    </div>
+  </div>
+
+  <p class="hint">
+    Проверка в браузере за две строки (Console):<br>
+    <b>getComputedStyle(document.querySelector('.btn')).borderRadius</b> → «6px» — новый стиль, «999px» — старый.<br>
+    <b>getComputedStyle(document.querySelector('.widget-block')).boxShadow</b> → «none» — новый.
+  </p>
+</body>
+</html>
