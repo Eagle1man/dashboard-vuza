@@ -161,7 +161,13 @@ python -m backend.smoke --ask "вопрос по вашим документам
 | Переиндексация после правки `knowledge/` | `python -m backend.ingest --prune` |
 | Полный пересчёт векторов | `python -m backend.ingest --force` |
 | Обновление кода | `git pull`, затем перезапуск службы |
+| Правили `web/css/style.css` | `python -m backend.assets` |
+| Проверить версию стилей | `python -m backend.assets --check` |
 | Журнал действий | `/journal.html` или `/api/journal/export/csv` |
+
+`python -m backend.assets` подставляет в ссылки `style.css?v=<дата
+изменения файла>`. Без этого браузер может показать старую копию стилей:
+человек нажимает F5 и решает, что ничего не изменилось.
 
 Бэкап делать при остановленном сервере или сразу после `--prune`:
 SQLite в режиме WAL иначе требует ещё файлов `-wal` и `-shm`.
