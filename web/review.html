@@ -5,23 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Проверка загрузки · Дашборд ректора ИУБиП</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20261106-0205" />
+  <link rel="stylesheet" href="css/style.css?v=20261106-0215" />
 </head>
 <body>
-  <header class="app-header">
-    <div class="header-inner">
-      <div class="brand">
-        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
-        <div class="brand-text">
-          <strong>Дашборд ректора</strong>
-          <span>ЧОУ ВО «Южный университет (ИУБиП)» · Проверка загрузки</span>
-        </div>
-      </div>
-      <div class="header-controls">
-        <a href="/dashboard.html" class="btn btn-outline">← Лента показателей</a>
-        <a href="uploads.html" class="btn btn-outline">Мои загрузки</a>
-        <button id="btnLogout" class="btn btn-outline" hidden>Выйти</button>
-      </div>
+    <aside class="app-side">
+    <a class="brand" href="/" title="На главную страницу">
+      <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+      <span class="brand-name">Дашборд<br>ректора</span>
+    </a>
+    <nav class="side-nav">
+      <a class="side-link" href="dashboard.html">Лента показателей</a>
+      <a class="side-link" href="upload.html">Загрузка данных</a>
+      <a class="side-link" href="uploads.html">Мои загрузки</a>
+      <a class="side-link" href="journal.html">Журнал событий</a>
+    </nav>
+  </aside>
+
+  <header class="app-top">
+    <div class="header-controls">
+      <a href="/dashboard.html" class="btn btn-outline">← Лента показателей</a>
+      <a href="uploads.html" class="btn btn-outline">Мои загрузки</a>
+      <button id="btnLogout" class="btn btn-outline" hidden>Выйти</button>
     </div>
   </header>
 

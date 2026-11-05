@@ -147,8 +147,7 @@ html[data-theme="dark"] .brand-text strong { color: #fff; }
 /* ============ Кнопки ============ */
 /* Капсула (radius-control) — его фирменная форма контролов. */
 .btn { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid transparent; font-size: 13px; font-weight: 600; transition: .15s; white-space: nowrap; min-height: 40px; }
-.btn-primary { background: var(--primary); color: var(--on-primary); }
-.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+.btn-primary { background: var(--primary); color: var(--on-primary); }.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
 .btn-outline { background: var(--surface); color: var(--text); border-color: var(--border); }
 .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 /* Главное действие — янтарная капсула с тёмно-navy текстом (его btn-call). */
@@ -757,3 +756,65 @@ html[data-theme="dark"] .metrics-value { color: #fff; }
 @media (max-width: 720px) {
   .widget-grid > *, .metric-row > *, .widget-mini-grid > * { min-width: 0; }
 }
+
+/* ============================================================
+   Боковая навигация (как в Tabler и Tremor)
+   ------------------------------------------------------------
+   Две строки шапки занимали 130px и не давали виду рабочей панели.
+   Слева — постоянный список разделов, сверху — одна строка поиска и
+   роль. Все id сохранены: app.js привязан к ним, а не к вёрстке.
+   ============================================================ */
+.app-side {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 30;
+}
+.app-side .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 14px; text-decoration: none; color: inherit; }
+.app-side .brand-logo { height: 34px; width: auto; }
+.brand-name { font: 600 15px/1.2 var(--font-display); color: var(--text); }
+.side-nav { display: flex; flex-direction: column; gap: 2px; }
+.side-link {
+  display: flex; align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13.5px;
+  border: 1px solid transparent;
+}
+.side-link:hover { background: var(--surface-2); color: var(--text); }
+.side-link.on { background: var(--surface-2); color: var(--text); border-color: var(--border); font-weight: 600; }
+.side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; }
+.side-foot .sys-status { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.app-top {
+  position: sticky; top: 0; z-index: 20;
+  margin-left: 232px;
+  height: 56px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.app-top .search-wrap { flex: 1 1 320px; max-width: 420px; }
+.app-top .search-wrap input { width: 100%; }
+.app-main { margin-left: 232px; margin-right: auto; }
+.app-footer { margin-left: 232px; }
+@media (max-width: 900px) {
+  .app-side { position: static; width: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--border); }
+  .side-nav { flex-direction: row; flex-wrap: wrap; }
+  .side-foot { margin-top: 0; margin-left: auto; }
+  .app-top, .app-main, .app-footer { margin-left: 0; }
+  .app-top { height: auto; padding: 8px 14px; flex-wrap: wrap; }
+}
+
+/* Кнопка внутри grid-формы по умолчанию растягивается по колонке, и
+   акцентная кнопка превращалась в полосу на всю ширину. Акцент должен
+   оставаться кнопкой. */
+.btn-primary { max-width: 340px; justify-self: start; }

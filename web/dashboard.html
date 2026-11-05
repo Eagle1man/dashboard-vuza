@@ -5,38 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20261106-0205" />
+  <link rel="stylesheet" href="css/style.css?v=20261106-0215" />
 </head>
 <body>
-  <!-- Шапка -->
-  <header class="app-header">
-    <div class="header-inner">
-      <a class="brand" href="/" title="На главную страницу">
-        <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" title="Южный университет (ИУБиП)" />
-        <div class="brand-text">
-          <strong>Дашборд ректора</strong>
-          <span>ЧОУ ВО «Южный университет (ИУБиП)»</span>
-        </div>
-      </a>
-      <div class="header-controls">
-        <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
-        <div class="search-wrap">
-          <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
-          <span id="searchBadge" class="search-badge" hidden></span>
-        </div>
-        <div class="role-switch" title="Демонстрация ролевого доступа: переключатель фильтрует блоки на этой странице и не даёт реальных прав">
-          <label for="roleSelect">Роль <span class="tag-demo">демо</span></label>
-          <select id="roleSelect">
-            <option value="rector">Ректор</option>
-            <option value="prorector">Проректор</option>
-            <option value="admin">Администратор</option>
-          </select>
-        </div>
-        <button id="themeToggle" class="icon-btn" title="Переключить тему" aria-label="Тема">◐</button>
-        <a href="upload.html" class="btn btn-outline" style="margin-left:8px">Загрузить данные</a>
-        <a href="uploads.html" class="btn btn-outline" style="margin-left:8px">Мои загрузки</a>
-        <a href="journal.html" class="btn btn-outline" style="margin-left:8px"
-           title="Кто входил, что загружало и что опубликовано. Открывается под сессией.">Журнал</a>
+  <aside class="app-side">
+    <a class="brand" href="/" title="На главную страницу">
+      <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+      <span class="brand-name">Дашборд<br>ректора</span>
+    </a>
+    <nav class="side-nav">
+      <a class="side-link on" href="dashboard.html">Лента показателей</a>
+      <a class="side-link" href="upload.html">Загрузка данных</a>
+      <a class="side-link" href="uploads.html">Мои загрузки</a>
+      <a class="side-link" href="journal.html">Журнал событий</a>
+    </nav>
+    <div class="side-foot">
+      <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
+      <button id="themeToggle" class="btn btn-outline btn-small" title="Переключить тему">Тема</button>
+    </div>
+  </aside>
+
+  <header class="app-top">
+    <div class="search-wrap">
+      <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
+      <span id="searchBadge" class="search-badge" hidden></span>
+    </div>
+    <div class="header-controls">
+      <div class="role-switch" title="Демонстрация ролевого доступа: переключатель фильтрует блоки на этой странице и не даёт реальных прав">
+        <label for="roleSelect">Роль <span class="tag-demo">демо</span></label>
+        <select id="roleSelect">
+          <option value="rector">Ректор</option>
+          <option value="prorector">Проректор</option>
+          <option value="admin">Администратор</option>
+        </select>
       </div>
     </div>
   </header>
