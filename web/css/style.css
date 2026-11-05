@@ -684,3 +684,193 @@ html[data-theme="dark"] .metrics-value { color: #fff; }
 
   .spark { max-width: 100%; }
 }
+
+/* ============================================================
+   Слой дизайн-токенов (design/tokens, 2026-11-06)
+   ------------------------------------------------------------
+   Что и откуда взято. Значения — из каталога GradientDeck, стиль
+   linear (https://ui.gradientdeck.com/styles/linear/design.md).
+   Взята только структура, потому что структура и есть то, чего не
+   хватало: лестница поверхностей, границы вместо теней, три
+   радиуса, ограниченный вес шрифта. Палитра и серифные заголовки
+   остались наши — это идентичность ИУБиП, а не заимствование.
+
+   Чего НЕ взято из linear: тёмная тема по умолчанию, кислотный
+   акцент, дисплейная типографика 48-72px. Дашборд смотрят с
+   проектора в кабинете, а не с рекламного лендинга.
+
+   Нормативный документ — DESIGN.md в корне. Этот блок — его
+   исполнение в CSS; при расхождении прав DESIGN.md, а не этот файл.
+   ============================================================ */
+
+:root {
+  /* Лестница поверхностей: четыре ступени вместо двух. Раньше
+     карточки отличались от фона только тенью — из-за этого на
+     проекторе они «плыли». */
+  --bg: #f1f6fa;
+  --surface: #ffffff;
+  --surface-2: #f7fafc;
+  --surface-3: #ffffff;
+
+  /* Hairline вместо тени: граница 1px читается на любом экране,
+     тень на слабом проекторе превращается в грязь. */
+  --line: #dde7ef;
+  --line-strong: #c2d3e1;
+
+  --shadow: none;                                   /* карточки — плоско */
+  --shadow-lg: 0 14px 34px rgba(6, 61, 107, .16);   /* только всплывающее */
+
+  /* Три радиуса на всю систему. Было семь разных значений. */
+  --r-control: 6px;    /* кнопки, поля, селекты */
+  --r-card: 12px;      /* карточки и панели */
+  --r-pill: 999px;     /* только статусы и чипы */
+  --radius: var(--r-card);
+  --radius-sm: var(--r-control);
+
+  --font-num: "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+html[data-theme="dark"] {
+  --bg: #0c0d0e;
+  --surface: #141516;
+  --surface-2: #1b1c1e;
+  --surface-3: #202225;
+  --line: #2a2c30;
+  --line-strong: #3a3d42;
+  --shadow: none;
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, .6);
+}
+
+/* --- Радиусы: капсулы остались только у статусов ---------------- */
+.search-wrap input,
+.role-switch select,
+.filter-group select,
+.icon-btn,
+.btn,
+.mini-btn,
+.ai-input input,
+.ai-actions .chip { border-radius: var(--r-control); }
+
+.status-pill,
+.search-badge { border-radius: var(--r-pill); }
+
+/* --- Плоскость вместо теней ------------------------------------ */
+.widget,
+.widget-block,
+.section-card,
+.filter-bar {
+  box-shadow: none;
+  border-color: var(--line);
+}
+
+.widget:hover,
+.widget-block:hover {
+  border-color: var(--line-strong);
+  box-shadow: none;
+  transform: none;
+}
+
+/* Вложенная карточка в карточке — двойная рамка и двойная «тень»,
+   читается как случайность. Оставляем только линию-разделитель. */
+.metric-cell {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px 0 0;
+}
+
+.metric-widget {
+  background: var(--surface);
+  border-color: var(--line);
+  border-radius: var(--r-card);
+}
+
+/* --- Типографика: вес не выше 600, цифры табличные ------------ */
+h1, h2, h3, h4,
+.brand-text strong,
+.page-head h1,
+.page-head h2 { font-weight: 600; }
+
+/* Крупные числа остаются серифными (Georgia) — это подпись нашей
+   системы, и без неё дашборд становится неотличим от админки.
+   Табличные цифры включаем там, где важно выравнивание по колонке:
+   строки таблиц, а не отдельные карточки. */
+.metrics-value,
+.metric-widget .value,
+table.data td {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Подписи метрик — не капсом вразрядку, а обычным регистром:
+   пять строк капса подряд читаются как крик. */
+.metric-cell .label,
+.metric-widget .label { letter-spacing: 0; text-transform: none; }
+
+/* --- Одно главное действие ------------------------------------- */
+/* Акцент остаётся один — azure. Янтарь больше не красит кнопки:
+   он только метит демонстрационные данные, иначе перестаёт значить. */
+.btn-warning,
+.btn-amber { background: var(--azure-soft); color: var(--navy-deep); border-color: var(--line-strong); }
+
+/* --- Плотность: шкала 8 / 12 / 24 ------------------------------ */
+.section-card { padding: 20px 24px; }
+.metric-row { gap: 10px 24px; }
+.filter-bar { padding: 12px 16px; }
+
+/* ============================================================
+   Телефон: панель ассистента и шапка
+   ------------------------------------------------------------
+   Две настоящие ошибки, найденные на 390px:
+
+   1. Атрибут hidden у панели не работал. Правило .ai-panel задаёт
+      display: flex, а это сильнее умолчания браузера для [hidden],
+      поэтому панель «Аналитик ректора» была раскрыта всегда —
+      и на телефоне, и на большом экране, закрывая правую колонку.
+   2. Шапка не переносилась: поиск имел width:100% внутри контейнера
+      без ширины, из-за чего строка получалась шире экрана.
+
+   Правило про [hidden] действует при любой ширине: скрытое должно
+   быть скрыто, это не косметика.
+   ============================================================ */
+
+.ai-panel[hidden] { display: none !important; }
+
+@media (max-width: 720px) {
+  .header-controls { width: 100%; gap: 8px; }
+  .search-wrap { width: 100%; flex: 1 1 100%; }
+
+  /* На телефоне панель — полноэкранный лист, а не карточка 380px,
+     которая шире экрана и оставляет полоску содержимого под собой. */
+  .ai-panel {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .ai-panel .ai-header { border-radius: 0; }
+}
+
+/* На 390px заголовок карточки не помещался: кнопка «Открыть →» уезжала
+   за правый край, потому что блок с текстом не мог сжаться (min-width
+   у flex-элемента по умолчанию — auto, то есть по содержимому). */
+@media (max-width: 720px) {
+  .widget-block-head { flex-wrap: wrap; }
+  .widget-block-head > div { min-width: 0; flex: 1 1 100%; }
+  .widget-block-head .mini-btn { flex: 0 0 auto; margin-left: auto; }
+  .widget-head, .card-head, .section-head { flex-wrap: wrap; }
+  .widget-head > *, .card-head > * { min-width: 0; }
+  img, svg, canvas, table { max-width: 100%; }
+}
+
+/* Карточка шире своей колонки на 390px: у элемента grid по умолчанию
+   min-width:auto, то есть ширина по содержимому. Из-за этого колонка
+   распирала страницу, и правый край (статус, кнопка «детали») уходил
+   за экран. min-width:0 разрешает элементу сжиматься до колонки. */
+@media (max-width: 720px) {
+  .widget-grid > *, .metric-row > *, .widget-mini-grid > * { min-width: 0; }
+}
