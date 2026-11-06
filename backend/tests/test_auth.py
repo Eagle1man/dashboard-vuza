@@ -114,6 +114,31 @@ def test_seed_does_not_overwrite_changed_password():
           or not _passwords().get("admin"))
 
 
+def test_password_without_argon2():
+    """Машина без argon2-cffi: запасная ветка PBKDF2 должна давать
+    рабочий пароль.
+
+    Проверка появилась после реального случая на Ubuntu: argon2-cffi не
+    стоял в requirements, db.seed_divisions писал PBKDF2 с солью b"salt",
+    а verify_login ждал соль "dashboard-<division_id>". Войти было нельзя
+    ни под кем, и это выяснилось только на живой машине.
+    """
+    was = auth.ARGON2
+    auth.ARGON2 = False
+    try:
+        conn = _fresh_db()
+        pw = _passwords()
+        check("без argon2: пароль из файла принимается",
+              auth.verify_login("admin", pw.get("admin", "")) == "admin")
+        check("без argon2: подразделение входит",
+              auth.verify_login("umo", pw.get("umo", "")) == "umo")
+        check("без argon2: неверный пароль отклонён",
+              auth.verify_login("admin", "wrong") is None)
+        conn.close()
+    finally:
+        auth.ARGON2 = was
+
+
 def test_sessions():
     conn = _fresh_db()
     tok = auth.create_session("buhgalteria")
@@ -147,6 +172,7 @@ def main():
     try:
         test_seed_creates_admin_and_divisions()
         test_verify_login()
+        test_password_without_argon2()
         test_seed_does_not_overwrite_changed_password()
         test_sessions()
         test_require_auth()

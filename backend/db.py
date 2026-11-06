@@ -1133,17 +1133,18 @@ def seed_divisions(conn):
     import secrets
     now = time.strftime("%Y-%m-%d %H:%M:%S")
 
-    def _hash(password: str) -> str:
-        # Argon2, если установлен; иначе прежний PBKDF2 — auth умеет
-        # читать оба формата и обновляет хэш при первом входе.
+    def _hash(password: str, division_id: str) -> str:
+        # Один алгоритм с проверкой входа: см. auth.hash_password.
+        # Собственный PBKDF2 с солью b"salt" давал пароли, которые
+        # verify_login потом не принимал.
         try:
             from . import auth
-            if auth.ARGON2:
-                return auth._ph.hash(password)
+            return auth.hash_password(password, division_id)
         except Exception:
-            pass
-        return hashlib.pbkdf2_hmac("sha256", password.encode(), b"salt",
-                                   100_000).hex()
+            import hashlib
+            return hashlib.pbkdf2_hmac(
+                "sha256", password.encode(),
+                f"dashboard-{division_id}".encode(), 100_000).hex()
 
     created = []
 
@@ -1156,7 +1157,7 @@ def seed_divisions(conn):
         conn.execute(
             "INSERT INTO division(division_id, title, login, pass_hash,"
             " contact, created_at) VALUES(?,?,?,?,?,?)",
-            (did, title, login, _hash(password), contact, now))
+            (did, title, login, _hash(password, did), contact, now))
         created.append((login, password, title))
 
     _ensure("admin", "Администратор", "admin", "rector@iubip.ru")

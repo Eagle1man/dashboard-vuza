@@ -31,12 +31,8 @@ def _conn():
     return conn
 
 
-def _hash(password: str) -> str:
-    if auth.ARGON2:
-        return auth._ph.hash(password)
-    import hashlib
-    return hashlib.pbkdf2_hmac("sha256", password.encode(), b"salt",
-                               100_000).hex()
+def _hash(password: str, division_id: str) -> str:
+    return auth.hash_password(password, division_id)
 
 
 def list_users() -> int:
@@ -103,7 +99,7 @@ def set_password(login: str, password: str | None, random_password: bool,
         return 2
 
     conn.execute("UPDATE division SET pass_hash = ? WHERE login = ?",
-                 (_hash(password), login))
+                 (_hash(password, row["division_id"]), login))
     conn.commit()
     conn.close()
 

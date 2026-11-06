@@ -56,6 +56,20 @@ def _legacy_hash(password: str, division_id: str) -> str:
         f"dashboard-{division_id}".encode(), _PBKDF2_ITERS).hex()
 
 
+def hash_password(password: str, division_id: str) -> str:
+    """Хэш пароля — в одном месте.
+
+    Раньше db.seed_divisions и users._hash считали PBKDF2 с солью b"salt",
+    а verify_login проверял с солью "dashboard-<division_id>". Пока стоял
+    Argon2, расхождение не проявлялось; на машине без argon2-cffi пароль,
+    выданный при первом запуске, не подходил вообще — то есть войти было
+    нельзя ни под кем.
+    """
+    if ARGON2:
+        return _ph.hash(password)
+    return _legacy_hash(password, division_id)
+
+
 def verify_login(login: str, password: str) -> str | None:
     """Проверяет логин/пароль. Возвращает division_id или None."""
     if not login or not password:
