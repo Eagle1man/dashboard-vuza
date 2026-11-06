@@ -878,6 +878,9 @@ $("btnExportPdf").addEventListener("click", function () {
 
   function initAI() {
     $("aiOpen").addEventListener("click", function () { toggleAI(true); });
+    // Ссылка с обзора: /dashboard.html#assistant должна открыть панель,
+    // иначе человек попадает на ленту и ищет кнопку сам.
+    if (location.hash === "#assistant") toggleAI(true);
     var aiCloseBtn = $("aiClose");
     if (aiCloseBtn) aiCloseBtn.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); toggleAI(false); });
     // Закрыть должно быть легко: Esc, клик вне панели или кнопка «Закрыть».
