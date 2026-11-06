@@ -183,6 +183,27 @@ def index_file(conn, path: Path, is_demo: bool, force=False,
                                  if pg.get("kind") == "image")}
 
 
+def embed_model_warning() -> str | None:
+    """Модель эмбеддингов из настроек не скачана — сказать заранее.
+
+    embed_texts при ошибке молча уходит в hash-fallback: векторы есть,
+    смысла в них нет, и понять это можно только по строке «Режим
+    векторов: hash-fallback» в конце длинного вывода установки. Ровно
+    так на живой машине потерялся час: автоконфигуратор выбрал bge-m3,
+    а скачан был nomic-embed-text.
+    """
+    if not embed.ollama_available():
+        return None
+    model = embed._stored_model()
+    if not model:
+        return None
+    installed = embed.installed_models()
+    if any(name == model or name.split(":", 1)[0] == model for name in installed):
+        return None
+    return (f"Модель эмбеддингов «{model}» не скачана — поиск уйдёт\n"
+            f"  в аварийную заглушку без смысла. Скачайте: ollama pull {model}")
+
+
 def ingest(force=False, prune=False, root: Path = None) -> dict:
     root = Path(root or config.KNOWLEDGE_DIR)
     config.KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -252,6 +273,11 @@ def main():
     ap.add_argument("--prune", action="store_true",
                     help="убрать из индекса удалённые файлы")
     args = ap.parse_args()
+
+    warning = embed_model_warning()
+    if warning:
+        print(warning)
+        print()
 
     rep = ingest(force=args.force, prune=args.prune)
     print(f"Папка: {rep['root']}")
