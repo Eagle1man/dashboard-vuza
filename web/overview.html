@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора — Обзор</title>
+
+  <script src="/js/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/css/vendor/inter.css" />
+  <script src="/js/vendor/chart.umd.min.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+
+<body class="overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased">
+  <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
+
+  <!-- Боковое меню -->
+  <aside id="sidebar"
+         class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-out lg:translate-x-0">
+    <div class="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
+      <img src="/img/iubip-logo.svg" alt="ИУБиП" class="h-9 w-auto" />
+      <div class="leading-tight">
+        <p class="text-sm font-semibold tracking-tight">Дашборд ректора</p>
+        <p class="text-xs text-slate-500">Южный университет</p>
+      </div>
+      <button id="closeSidebar" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-5 w-5"></i>
+      </button>
+    </div>
+
+    <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+      <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Рабочее пространство</p>
+
+      <a href="/overview.html" class="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm font-medium text-indigo-700">
+        <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+        Обзор
+      </a>
+
+      <a href="/dashboard.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="chart-line" class="h-5 w-5"></i>
+        Лента показателей
+      </a>
+
+      <a href="/upload.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="upload" class="h-5 w-5"></i>
+        Загрузка данных
+      </a>
+
+      <a href="/uploads.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="inbox" class="h-5 w-5"></i>
+        Мои загрузки
+      </a>
+
+      <a href="/journal.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="history" class="h-5 w-5"></i>
+        Журнал событий
+      </a>
+
+      <p class="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Помощник</p>
+      <a href="/dashboard.html#assistant" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="sparkles" class="h-5 w-5"></i>
+        Спросить ассистента
+      </a>
+    </nav>
+
+    <div class="border-t border-slate-100 p-3">
+      <div class="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-4 text-white">
+        <div class="mb-1 flex items-center gap-2 text-sm font-semibold">
+          <span id="statusDot" class="h-2 w-2 rounded-full bg-white/70"></span>
+          <span id="statusText">Проверка сервера…</span>
+        </div>
+        <p class="mb-3 text-xs text-indigo-100" id="statusDetails">документов и показателей</p>
+        <a href="/dashboard.html" class="block w-full rounded-xl bg-white/15 px-3 py-2 text-center text-xs font-semibold backdrop-blur transition hover:bg-white/25">
+          Открыть ленту
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="lg:pl-72">
+    <!-- Верхняя панель -->
+    <header class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
+      <div class="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <button id="openSidebar" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+
+        <div class="relative hidden max-w-md flex-1 sm:block">
+          <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+          <input id="searchInput" type="search" placeholder="Поиск показателя: контингент, доходы, нагрузка…"
+                 class="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-16 text-sm text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100" />
+          <kbd class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">⌘K</kbd>
+        </div>
+
+        <div class="ml-auto flex items-center gap-1.5 sm:gap-3">
+          <a href="/journal.html" class="relative rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Журнал событий">
+            <i data-lucide="bell" class="h-5 w-5"></i>
+            <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
+          </a>
+
+          <div class="mx-1 hidden h-6 w-px bg-slate-200 sm:block"></div>
+
+          <a href="/index.html" class="flex items-center gap-3 rounded-xl p-1 pr-2 transition hover:bg-slate-100">
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">Р</span>
+            <span class="hidden text-left leading-tight sm:block">
+              <span class="block text-sm font-semibold text-slate-800" id="userName">Ректор</span>
+              <span class="block text-xs text-slate-500" id="userRole">ЮУ ИУБиП</span>
+            </span>
+            <i data-lucide="chevron-down" class="hidden h-4 w-4 text-slate-400 sm:block"></i>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <!-- Заголовок -->
+      <div class="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div class="mb-2 inline-flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+              <span id="updatedAt">данные загружаются…</span>
+            </span>
+            <span id="demoBadge" hidden class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+              <i data-lucide="info" class="h-3.5 w-3.5"></i>
+              демонстрационные данные
+            </span>
+          </div>
+          <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Обзор университета</h1>
+          <p class="mt-1 text-sm text-slate-500" id="subtitle">Ключевые показатели и состояние данных</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="/dashboard.html" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200">
+            <i data-lucide="sparkles" class="h-4 w-4"></i>
+            Спросить ассистента
+          </a>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <section id="kpi" class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели"></section>
+
+      <!-- Графики -->
+      <section class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 lg:grid-cols-3" aria-label="Графики">
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:col-span-2">
+          <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold tracking-tight text-slate-900" id="chartTitle">Динамика показателя</h2>
+              <p class="mt-1 text-sm text-slate-500" id="chartSubtitle">по периодам</p>
+            </div>
+            <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+              <button data-span="7" class="chart-span rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700">7</button>
+              <button data-span="13" class="chart-span rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">13</button>
+            </div>
+          </div>
+          <div class="h-64 sm:h-72">
+            <canvas id="trendChart" aria-label="График динамики показателя" role="img"></canvas>
+          </div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+          <div class="mb-2">
+            <h2 class="text-base font-semibold tracking-tight text-slate-900">Источники данных</h2>
+            <p class="mt-1 text-sm text-slate-500">Откуда взяты числа в витрине</p>
+          </div>
+          <div class="relative mx-auto h-52 w-52">
+            <canvas id="sourceChart" aria-label="Кольцевая диаграмма источников данных" role="img"></canvas>
+            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-2xl font-semibold tracking-tight" id="sourceTotal">—</span>
+              <span class="text-xs text-slate-500">показателей</span>
+            </div>
+          </div>
+          <ul class="mt-4 space-y-2.5" id="sourceLegend"></ul>
+        </article>
+      </section>
+
+      <!-- Блоки показателей -->
+      <section class="mb-6 space-y-5 sm:mb-8" aria-label="Показатели по блокам">
+        <div class="flex flex-wrap items-center gap-2" id="blockChips"></div>
+        <div id="blocks" class="space-y-5"></div>
+        <p id="emptyState" hidden class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+          По запросу ничего не найдено. Измените слово поиска или выберите другой блок.
+        </p>
+      </section>
+
+      <!-- Документы -->
+      <section class="rounded-2xl border border-slate-200/80 bg-white shadow-sm" aria-label="Документы в индексе">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-base font-semibold tracking-tight text-slate-900">Документы в индексе</h2>
+            <p class="mt-1 text-sm text-slate-500" id="docsSubtitle">по ним ассистент отвечает на вопросы</p>
+          </div>
+          <a href="/upload.html" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+            Загрузить документ
+            <i data-lucide="arrow-right" class="h-4 w-4 text-slate-400"></i>
+          </a>
+        </div>
+
+        <div class="hidden overflow-x-auto sm:block">
+          <table class="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-400">
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Документ</th>
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Тип</th>
+                <th scope="col" class="px-3 py-3 text-right font-semibold sm:px-5">Фрагментов</th>
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Источник</th>
+              </tr>
+            </thead>
+            <tbody id="docsTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+
+        <ul id="docsCards" class="divide-y divide-slate-100 sm:hidden"></ul>
+      </section>
+
+      <p class="py-8 text-center text-xs text-slate-400">
+        Дашборд ректора · ЧОУ ВО «Южный университет (ИУБиП)»
+      </p>
+    </main>
+  </div>
+
+  <script src="/js/overview.js"></script>
+</body>
+</html>

@@ -261,7 +261,7 @@
         <h2>Лента показателей</h2>
         <p class="desc">Метрики и графики университета, детализация по блокам,
            экспорт и ИИ-аналитик «Аналитик ректора». Вход не нужен.</p>
-        <a class="land-btn call" href="dashboard.html">Открыть дашборд →</a>
+        <a class="land-btn call" href="overview.html">Открыть дашборд →</a>
       </section>
 
       <!-- Карточка 2: вход подразделения для загрузки данных -->
@@ -366,8 +366,10 @@
             throw new Error("login http " + r.status);
           }
           return r.json();
-        }).then(function () {
-          location.href = "upload.html";
+        }).then(function (data) {
+          // Ректор и администратор попадают на обзор, подразделения — на
+          // загрузку: у них работа начинается с файла, а не с витрины.
+          location.href = (data && data.is_admin) ? "overview.html" : "upload.html";
         }).catch(function () {
           if (!err.textContent) err.textContent = "Нет связи с сервером";
         });
