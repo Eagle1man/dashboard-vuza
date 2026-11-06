@@ -908,9 +908,9 @@ $("btnExportPdf").addEventListener("click", function () {
       addAiMessage("user", esc(text));
       $("aiInput").value = "";
       setAiTyping(true, true);
-      // Запрос к экипажу живёт до десяти минут по таймауту — без
-      // кнопки отмены пауза выглядит как зависание. AbortController
-      // рвёт сетевой вызов, а не только «прячет» ответ.
+      // Ответ модели идёт минутами: без кнопки отмены пауза выглядит как
+      // зависание. AbortController рвёт сетевой вызов, а не только
+      // «прячет» ответ.
       aiAbort = new AbortController();
       try {
         var ctx = { periodLabels: periodLabels(state.period).labels, currentBlockId: state.blockId };

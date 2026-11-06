@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Панель руководителя — СервисПро</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased">
+  <!-- Затемнение под мобильным меню -->
+  <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
+
+  <!-- Боковое меню -->
+  <aside id="sidebar"
+         class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-out lg:translate-x-0">
+    <div class="flex h-16 items-center gap-3 border-b border-slate-100 px-6">
+      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/30">
+        <i data-lucide="gem" class="h-5 w-5"></i>
+      </div>
+      <div class="leading-tight">
+        <p class="text-sm font-semibold tracking-tight">СервисПро</p>
+        <p class="hidden text-xs text-slate-500 sm:block">Панель руководителя</p>
+      </div>
+      <button id="closeSidebar" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-5 w-5"></i>
+      </button>
+    </div>
+
+    <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+      <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Рабочее пространство</p>
+
+      <a href="#" class="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm font-medium text-indigo-700">
+        <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+        Обзор
+        <span class="ml-auto rounded-md bg-indigo-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">7</span>
+      </a>
+
+      <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="chart-line" class="h-5 w-5"></i>
+        Аналитика
+      </a>
+
+      <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="users" class="h-5 w-5"></i>
+        Клиенты
+        <span class="ml-auto rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">342</span>
+      </a>
+
+      <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="settings" class="h-5 w-5"></i>
+        Настройки
+      </a>
+
+      <p class="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Отчёты</p>
+      <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="file-text" class="h-5 w-5"></i>
+        Ежемесячные
+      </a>
+      <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+        <i data-lucide="wallet" class="h-5 w-5"></i>
+        Финансы
+      </a>
+    </nav>
+
+    <div class="border-t border-slate-100 p-3">
+      <div class="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-4 text-white">
+        <div class="mb-1 flex items-center gap-2 text-sm font-semibold">
+          <i data-lucide="sparkles" class="h-4 w-4"></i>
+          Отчёт готов
+        </div>
+        <p class="mb-3 text-xs text-indigo-100">Сводка за октябрь собрана автоматически.</p>
+        <button class="w-full rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur transition hover:bg-white/25">
+          Открыть отчёт
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Контент -->
+  <div class="lg:pl-72">
+    <!-- Верхняя панель -->
+    <header class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
+      <div class="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
+        <button id="openSidebar" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+
+        <!-- Поиск -->
+        <div class="relative hidden max-w-md flex-1 sm:block">
+          <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+          <input type="search" placeholder="Поиск по клиентам, заказам, отчётам…"
+                 class="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-16 text-sm text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100" />
+          <kbd class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">⌘K</kbd>
+        </div>
+
+        <div class="ml-auto flex items-center gap-1.5 sm:gap-3">
+          <button class="relative rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Уведомления">
+            <i data-lucide="bell" class="h-5 w-5"></i>
+            <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
+          </button>
+
+          <button class="hidden rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 sm:block" aria-label="Справка">
+            <i data-lucide="circle-help" class="h-5 w-5"></i>
+          </button>
+
+          <div class="mx-1 hidden h-6 w-px bg-slate-200 sm:block"></div>
+
+          <button class="flex items-center gap-3 rounded-xl p-1 pr-2 transition hover:bg-slate-100">
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">АС</span>
+            <span class="hidden text-left leading-tight sm:block">
+              <span class="block text-sm font-semibold text-slate-800">Александр</span>
+              <span class="block text-xs text-slate-500">Директор</span>
+            </span>
+            <i data-lucide="chevron-down" class="hidden h-4 w-4 text-slate-400 sm:block"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <!-- Заголовок -->
+      <div class="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div class="mb-2 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            Данные обновлены 5 минут назад
+          </div>
+          <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Обзор бизнеса</h1>
+          <p class="mt-1 text-sm text-slate-500">Ключевые показатели за октябрь 2026 года</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
+            <i data-lucide="calendar-days" class="h-4 w-4 text-slate-400"></i>
+            Октябрь 2026
+            <i data-lucide="chevron-down" class="h-4 w-4 text-slate-400"></i>
+          </button>
+          <button class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200">
+            <i data-lucide="download" class="h-4 w-4"></i>
+            Скачать отчёт
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <section class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели">
+        <!-- Выручка -->
+        <article class="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div class="mb-4 flex items-start justify-between">
+            <p class="text-sm font-medium text-slate-500">Общая выручка</p>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <i data-lucide="wallet" class="h-5 w-5"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-semibold tracking-tight tabular-nums">1 248 500 ₽</p>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+              <i data-lucide="arrow-up-right" class="h-3.5 w-3.5 shrink-0"></i>12%
+            </span>
+            <span class="text-xs text-slate-500">к прошлому месяцу</span>
+          </div>
+        </article>
+
+        <!-- Клиенты -->
+        <article class="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div class="mb-4 flex items-start justify-between">
+            <p class="text-sm font-medium text-slate-500">Новые клиенты</p>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+              <i data-lucide="user-plus" class="h-5 w-5"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-semibold tracking-tight tabular-nums">342</p>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+              <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>5%
+            </span>
+            <span class="text-xs text-slate-500">к прошлому месяцу</span>
+          </div>
+        </article>
+
+        <!-- Средний чек -->
+        <article class="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div class="mb-4 flex items-start justify-between">
+            <p class="text-sm font-medium text-slate-500">Средний чек</p>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+              <i data-lucide="receipt" class="h-5 w-5"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-semibold tracking-tight tabular-nums">3 500 ₽</p>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+              <i data-lucide="arrow-down-right" class="h-3.5 w-3.5"></i>2%
+            </span>
+            <span class="text-xs text-slate-500">к прошлому месяцу</span>
+          </div>
+        </article>
+
+        <!-- Конверсия -->
+        <article class="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div class="mb-4 flex items-start justify-between">
+            <p class="text-sm font-medium text-slate-500">Конверсия</p>
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <i data-lucide="target" class="h-5 w-5"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-semibold tracking-tight tabular-nums">4.8%</p>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+              <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>0.5%
+            </span>
+            <span class="text-xs text-slate-500">к прошлому месяцу</span>
+          </div>
+        </article>
+      </section>
+
+      <!-- Графики -->
+      <section class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 lg:grid-cols-3" aria-label="Графики">
+        <!-- Линейный -->
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:col-span-2">
+          <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold tracking-tight text-slate-900">Динамика продаж за 7 дней</h2>
+              <p class="mt-1 text-sm text-slate-500">Выручка по дням, тысяч рублей</p>
+            </div>
+            <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+              <button class="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">7 дней</button>
+              <button class="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700">30 дней</button>
+            </div>
+          </div>
+          <div class="h-64 sm:h-72">
+            <canvas id="salesChart" aria-label="График продаж за 7 дней" role="img"></canvas>
+          </div>
+        </article>
+
+        <!-- Кольцевая -->
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+          <div class="mb-2">
+            <h2 class="text-base font-semibold tracking-tight text-slate-900">Источники трафика</h2>
+            <p class="mt-1 text-sm text-slate-500">Доля визитов за месяц</p>
+          </div>
+          <div class="relative mx-auto h-52 w-52">
+            <canvas id="trafficChart" aria-label="Кольцевая диаграмма источников трафика" role="img"></canvas>
+            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-2xl font-semibold tracking-tight">12.4k</span>
+              <span class="text-xs text-slate-500">визитов</span>
+            </div>
+          </div>
+          <ul class="mt-4 space-y-2.5">
+            <li class="flex items-center gap-2.5 text-sm">
+              <span class="h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
+              <span class="text-slate-600">Поиск</span>
+              <span class="ml-auto font-semibold tabular-nums text-slate-900">52%</span>
+            </li>
+            <li class="flex items-center gap-2.5 text-sm">
+              <span class="h-2.5 w-2.5 rounded-full bg-violet-400"></span>
+              <span class="text-slate-600">Соцсети</span>
+              <span class="ml-auto font-semibold tabular-nums text-slate-900">28%</span>
+            </li>
+            <li class="flex items-center gap-2.5 text-sm">
+              <span class="h-2.5 w-2.5 rounded-full bg-slate-300"></span>
+              <span class="text-slate-600">Прямые заходы</span>
+              <span class="ml-auto font-semibold tabular-nums text-slate-900">20%</span>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- Таблица -->
+      <section class="rounded-2xl border border-slate-200/80 bg-white shadow-sm" aria-label="Последние заказы">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-base font-semibold tracking-tight text-slate-900">Последние заказы</h2>
+            <p class="mt-1 text-sm text-slate-500">5 из 128 за текущий месяц</p>
+          </div>
+          <button class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+            Все заказы
+            <i data-lucide="arrow-right" class="h-4 w-4 text-slate-400"></i>
+          </button>
+        </div>
+
+        <!-- Телефон: карточки вместо таблицы. Горизонтальная прокрутка на
+             узком экране уносит статус и сумму — самое важное в заказе. -->
+        <ul class="divide-y divide-slate-100 sm:hidden">
+          <li class="flex items-start justify-between gap-4 px-5 py-4">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-900">Елена Петрова</p>
+              <p class="truncate text-xs text-slate-500">elena.p@mail.ru</p>
+              <p class="mt-1 text-sm text-slate-600">Годовая поддержка</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="font-semibold tabular-nums">48 000 ₽</p>
+              <span class="mt-1.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Оплачен
+              </span>
+            </div>
+          </li>
+          <li class="flex items-start justify-between gap-4 px-5 py-4">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-900">Иван Соколов</p>
+              <p class="truncate text-xs text-slate-500">i.sokolov@corp.ru</p>
+              <p class="mt-1 text-sm text-slate-600">Настройка интеграции</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="font-semibold tabular-nums">12 500 ₽</p>
+              <span class="mt-1.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>В обработке
+              </span>
+            </div>
+          </li>
+          <li class="flex items-start justify-between gap-4 px-5 py-4">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-900">Анна Ковалёва</p>
+              <p class="truncate text-xs text-slate-500">anna.k@studio.ru</p>
+              <p class="mt-1 text-sm text-slate-600">Аудит безопасности</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="font-semibold tabular-nums">95 000 ₽</p>
+              <span class="mt-1.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Оплачен
+              </span>
+            </div>
+          </li>
+          <li class="flex items-start justify-between gap-4 px-5 py-4">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-900">Дмитрий Морозов</p>
+              <p class="truncate text-xs text-slate-500">d.morozov@biz.ru</p>
+              <p class="mt-1 text-sm text-slate-600">Обучение команды</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="font-semibold tabular-nums">32 000 ₽</p>
+              <span class="mt-1.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span>Согласование
+              </span>
+            </div>
+          </li>
+          <li class="flex items-start justify-between gap-4 px-5 py-4">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-900">Ольга Лебедева</p>
+              <p class="truncate text-xs text-slate-500">o.lebedeva@mail.ru</p>
+              <p class="mt-1 text-sm text-slate-600">Консультация</p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="font-semibold tabular-nums">3 500 ₽</p>
+              <span class="mt-1.5 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>Отменён
+              </span>
+            </div>
+          </li>
+        </ul>
+
+        <div class="hidden overflow-x-auto sm:block">
+          <table class="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-400">
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Клиент</th>
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Услуга</th>
+                <th scope="col" class="px-3 py-3 text-right font-semibold sm:px-5">Сумма</th>
+                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Статус</th>
+                <th scope="col" class="hidden px-3 py-3 text-right font-semibold sm:table-cell sm:px-5">Дата</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="transition hover:bg-slate-50/70">
+                <td class="px-3 py-4 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">ЕП</span>
+                    <div class="leading-tight">
+                      <p class="font-medium text-slate-900">Елена Петрова</p>
+                      <p class="hidden text-xs text-slate-500 sm:block">elena.p@mail.ru</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-4 text-slate-600 sm:px-5">Годовая поддержка</td>
+                <td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">48 000 ₽</td>
+                <td class="px-3 py-4 sm:px-5">
+                  <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Оплачен
+                  </span>
+                </td>
+                <td class="hidden px-3 py-4 text-right text-slate-500 sm:table-cell sm:px-5">24 окт</td>
+              </tr>
+
+              <tr class="transition hover:bg-slate-50/70">
+                <td class="px-3 py-4 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-sky-50 text-xs font-semibold text-sky-700">ИС</span>
+                    <div class="leading-tight">
+                      <p class="font-medium text-slate-900">Иван Соколов</p>
+                      <p class="hidden text-xs text-slate-500 sm:block">i.sokolov@corp.ru</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-4 text-slate-600 sm:px-5">Настройка интеграции</td>
+                <td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">12 500 ₽</td>
+                <td class="px-3 py-4 sm:px-5">
+                  <span class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>В обработке
+                  </span>
+                </td>
+                <td class="hidden px-3 py-4 text-right text-slate-500 sm:table-cell sm:px-5">24 окт</td>
+              </tr>
+
+              <tr class="transition hover:bg-slate-50/70">
+                <td class="px-3 py-4 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-violet-50 text-xs font-semibold text-violet-700">АК</span>
+                    <div class="leading-tight">
+                      <p class="font-medium text-slate-900">Анна Ковалёва</p>
+                      <p class="hidden text-xs text-slate-500 sm:block">anna.k@studio.ru</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-4 text-slate-600 sm:px-5">Аудит безопасности</td>
+                <td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">95 000 ₽</td>
+                <td class="px-3 py-4 sm:px-5">
+                  <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Оплачен
+                  </span>
+                </td>
+                <td class="hidden px-3 py-4 text-right text-slate-500 sm:table-cell sm:px-5">23 окт</td>
+              </tr>
+
+              <tr class="transition hover:bg-slate-50/70">
+                <td class="px-3 py-4 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-xs font-semibold text-amber-700">ДМ</span>
+                    <div class="leading-tight">
+                      <p class="font-medium text-slate-900">Дмитрий Морозов</p>
+                      <p class="hidden text-xs text-slate-500 sm:block">d.morozov@biz.ru</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-4 text-slate-600 sm:px-5">Обучение команды</td>
+                <td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">32 000 ₽</td>
+                <td class="px-3 py-4 sm:px-5">
+                  <span class="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span>Согласование
+                  </span>
+                </td>
+                <td class="hidden px-3 py-4 text-right text-slate-500 sm:table-cell sm:px-5">22 окт</td>
+              </tr>
+
+              <tr class="transition hover:bg-slate-50/70">
+                <td class="px-3 py-4 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-rose-50 text-xs font-semibold text-rose-700">ОЛ</span>
+                    <div class="leading-tight">
+                      <p class="font-medium text-slate-900">Ольга Лебедева</p>
+                      <p class="hidden text-xs text-slate-500 sm:block">o.lebedeva@mail.ru</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-4 text-slate-600 sm:px-5">Консультация</td>
+                <td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">3 500 ₽</td>
+                <td class="px-3 py-4 sm:px-5">
+                  <span class="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>Отменён
+                  </span>
+                </td>
+                <td class="hidden px-3 py-4 text-right text-slate-500 sm:table-cell sm:px-5">21 окт</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="py-8 text-center text-xs text-slate-400">
+        СервисПро · Панель руководителя · данные демонстрационные
+      </p>
+    </main>
+  </div>
+
+  <script>
+    // Иконки
+    lucide.createIcons();
+
+    // Мобильное меню
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("overlay");
+
+    function openSidebar() {
+      sidebar.classList.remove("-translate-x-full");
+      overlay.classList.remove("hidden");
+      document.body.classList.add("overflow-hidden", "lg:overflow-auto");
+    }
+    function closeSidebar() {
+      sidebar.classList.add("-translate-x-full");
+      overlay.classList.add("hidden");
+      document.body.classList.remove("overflow-hidden", "lg:overflow-auto");
+    }
+
+    document.getElementById("openSidebar").addEventListener("click", openSidebar);
+    document.getElementById("closeSidebar").addEventListener("click", closeSidebar);
+    overlay.addEventListener("click", closeSidebar);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSidebar(); });
+
+    // Горячая клавиша поиска
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        document.querySelector('input[type="search"]')?.focus();
+      }
+    });
+
+    // Общие настройки шрифтов Chart.js
+    Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+    Chart.defaults.font.size = 12;
+    Chart.defaults.color = "#64748b";
+
+    // Линейный график
+    const salesCtx = document.getElementById("salesChart").getContext("2d");
+    const salesGradient = salesCtx.createLinearGradient(0, 0, 0, 280);
+    salesGradient.addColorStop(0, "rgba(79, 70, 229, 0.22)");
+    salesGradient.addColorStop(1, "rgba(79, 70, 229, 0)");
+
+    new Chart(salesCtx, {
+      type: "line",
+      data: {
+        labels: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+        datasets: [{
+          label: "Выручка, тыс. ₽",
+          data: [148, 172, 165, 210, 198, 245, 232],
+          borderColor: "#4f46e5",
+          backgroundColor: salesGradient,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: "#ffffff",
+          pointHoverBorderColor: "#4f46e5",
+          pointHoverBorderWidth: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0f172a",
+            padding: 12,
+            cornerRadius: 10,
+            displayColors: false,
+            titleFont: { weight: "600" },
+            callbacks: {
+              label: (ctx) => `${ctx.parsed.y} тыс. ₽`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { padding: 8 },
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: "#f1f5f9", drawTicks: false },
+            border: { display: false },
+            ticks: { padding: 10, stepSize: 60 },
+          },
+        },
+      },
+    });
+
+    // Кольцевая диаграмма
+    new Chart(document.getElementById("trafficChart"), {
+      type: "doughnut",
+      data: {
+        labels: ["Поиск", "Соцсети", "Прямые заходы"],
+        datasets: [{
+          data: [52, 28, 20],
+          backgroundColor: ["#6366f1", "#a78bfa", "#cbd5e1"],
+          borderColor: "#ffffff",
+          borderWidth: 4,
+          hoverOffset: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "72%",
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0f172a",
+            padding: 10,
+            cornerRadius: 10,
+            callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%` },
+          },
+        },
+      },
+    });
+    // Tailwind CDN применяет стили уже после первой отрисовки, и Chart.js
+    // успевает замерить неоформленный контейнер: канвас получается шире
+    // экрана и растягивает страницу (на телефоне это видно как срезанный
+    // правый край). Повторный resize после загрузки возвращает размер.
+    function fitCharts() {
+      Object.values(Chart.instances).forEach(function (chart) { chart.resize(); });
+    }
+    window.addEventListener("load", fitCharts);
+    setTimeout(fitCharts, 300);
+    setTimeout(fitCharts, 900);
+  </script>
+</body>
+</html>
