@@ -5,6 +5,10 @@
 # или вручную: python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
 
 fastapi>=0.110
+# FastAPI без него падает на импорте, как только в маршруте есть Form/File
+# (загрузка документов). Симптом на чистой машине: служба уходит в
+# перезапуск с RuntimeError "Form data requires python-multipart".
+python-multipart>=0.0.9
 uvicorn>=0.27
 pydantic>=2.0
 

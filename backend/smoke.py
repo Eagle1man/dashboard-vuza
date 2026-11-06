@@ -61,6 +61,19 @@ def check_python():
         check(FAIL, "Python", f"{v.major}.{v.minor} — нужен 3.10 или новее")
 
 
+def check_app():
+    """Служба падает на импорте, если не хватает зависимости, которую
+    FastAPI требует для Form/File (python-multipart). На чистой машине
+    это выглядело как «служба активна 5 секунд и умерла», поэтому
+    проверяем импортом сами, а не надеждой."""
+    try:
+        from . import app as _app  # noqa: F401
+    except Exception as exc:
+        check(FAIL, "Приложение", f"не импортируется: {type(exc).__name__}: {exc}")
+        return
+    check(OK, "Приложение", "модуль загружается")
+
+
 def check_db():
     if not config.DB_PATH.exists():
         check(FAIL, "База данных", f"нет файла {config.DB_PATH}")
@@ -212,6 +225,7 @@ def main(argv=None) -> int:
     print("-" * 60)
 
     check_python()
+    check_app()
     conn = check_db()
     check_divisions(conn)
     if conn is not None:
