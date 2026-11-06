@@ -122,14 +122,14 @@
       var icon = ICONS[m.block] || "activity";
       var target = m.target ? '<span class="text-xs text-slate-500">цель ' + num(m.target) + " " + esc(m.unit) + "</span>" : "";
       return '' +
-        '<article class="group flex h-full min-h-[168px] flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:min-h-[190px]">' +
+        '<article class="group flex h-full min-h-[168px] flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:min-h-[190px]">' +
           '<div class="mb-4 flex items-start justify-between">' +
-            '<p class="text-sm font-medium leading-snug text-slate-500">' + esc(m.title) + "</p>" +
-            '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">' +
+            '<p class="min-h-[34px] text-[13px] font-medium leading-snug tracking-[0.01em] text-slate-500">' + esc(m.title) + "</p>" +
+            '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shadow-xs ring-1 ring-inset ring-indigo-100/70">' +
               '<i data-lucide="' + icon + '" class="h-5 w-5"></i>' +
             "</span>" +
           "</div>" +
-          '<p class="text-3xl font-semibold tracking-tight tabular-nums">' + num(m.current) +
+          '<p class="text-[34px] font-semibold leading-none tracking-display tabular-nums">' + num(m.current) +
             ' <span class="text-base font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
           '<div class="mt-auto space-y-2 pt-3">' +
             '<div class="flex flex-wrap items-center gap-2">' + deltaPill(m) + "</div>" +
@@ -286,12 +286,12 @@
     } else {
       progress = '<p class="mt-3 text-[11px] text-slate-400">' + (m.source === "official" ? "официальный документ" : "демонстрационное значение") + "</p>";
     }
-    return '<div class="rounded-xl border border-slate-100 p-4 transition hover:border-slate-200 hover:shadow-sm">' +
+    return '<div class="rounded-xl border border-slate-100 bg-white p-4 shadow-xs transition-all duration-150 hover:border-slate-200 hover:shadow-card">' +
       '<div class="flex items-start justify-between gap-2">' +
-        '<p class="text-sm leading-snug text-slate-600">' + esc(m.title) + "</p>" +
+        '<p class="min-h-[38px] text-[13.5px] leading-snug text-slate-600">' + esc(m.title) + "</p>" +
         statusBadge(m.status) +
       "</div>" +
-      '<p class="mt-2 text-xl font-semibold tabular-nums">' + num(m.current) +
+      '<p class="mt-2 text-[22px] font-semibold tracking-display tabular-nums">' + num(m.current) +
         ' <span class="text-xs font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
       progress +
     "</div>";
@@ -304,7 +304,7 @@
       if (!items.length) return;
       html += '<article class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">' +
         '<div class="flex items-start gap-3 border-b border-slate-100 px-5 py-4">' +
-          '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">' +
+          '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shadow-xs ring-1 ring-inset ring-indigo-100/70">' +
             '<i data-lucide="' + (ICONS[b.id] || "activity") + '" class="h-5 w-5"></i></span>' +
           '<div class="min-w-0">' +
             '<h3 class="text-base font-semibold tracking-tight text-slate-900">' + esc(b.title) + "</h3>" +
@@ -325,8 +325,8 @@
     var chips = [{ id: "all", title: "Все блоки" }].concat(state.blocks);
     $("blockChips").innerHTML = chips.map(function (b) {
       var active = state.block === b.id;
-      return '<button data-block="' + b.id + '" class="rounded-xl border px-3 py-1.5 text-sm font-medium transition ' +
-        (active ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50") +
+      return '<button data-block="' + b.id + '" class="rounded-xl border px-3 py-1.5 text-sm font-medium transition-all duration-150 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 ' +
+        (active ? "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs" : "border-slate-200 bg-white text-slate-600 shadow-xs hover:border-slate-300 hover:bg-slate-50") +
         '">' + esc(b.title) + "</button>";
     }).join("");
   }

@@ -11,13 +11,28 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+            sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+          // Слоистые тени: у shadcn и Tremor это отдельные токены
+          // (shadow-xs, shadow-tremor-card), а не встроенные «размытые».
+          // Две тени вместо одной дают мягкий контур и глубину.
+          boxShadow: {
+            xs: "0 1px 2px 0 rgb(16 24 40 / 0.05)",
+            card: "0 1px 2px rgb(16 24 40 / 0.04), 0 4px 12px -2px rgb(16 24 40 / 0.06)",
+            "card-hover": "0 2px 4px rgb(16 24 40 / 0.05), 0 12px 24px -6px rgb(16 24 40 / 0.10)",
+            btn: "0 1px 2px rgb(16 24 40 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.16)",
+            "btn-primary": "0 1px 2px rgb(79 70 229 / 0.26), 0 6px 16px -8px rgb(79 70 229 / 0.42)",
+            "btn-primary-hover": "0 2px 4px rgb(79 70 229 / 0.30), 0 10px 22px -8px rgb(79 70 229 / 0.50)",
+            "btn-active": "inset 0 1px 3px rgb(16 24 40 / 0.18)",
+          },
+          letterSpacing: {
+            display: "-0.024em",
           },
         },
       },
     };
   </script>
-  <link rel="stylesheet" href="/css/vendor/inter.css" />
+  <link rel="stylesheet" href="/css/vendor/golos.css" />
   <script src="/js/vendor/chart.umd.min.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
@@ -81,7 +96,7 @@
           <span id="statusText">Проверка сервера…</span>
         </div>
         <p class="mb-3 text-xs text-indigo-100" id="statusDetails">документов и показателей</p>
-        <a href="/dashboard.html" class="block w-full rounded-xl bg-white/15 px-3 py-2 text-center text-xs font-semibold backdrop-blur transition hover:bg-white/25">
+        <a href="/dashboard.html" class="block w-full rounded-xl bg-white/15 px-3 py-2 text-center text-xs font-semibold shadow-btn backdrop-blur transition-all duration-150 hover:bg-white/25 active:translate-y-px">
           Открыть ленту
         </a>
       </div>
@@ -137,12 +152,12 @@
               демонстрационные данные
             </span>
           </div>
-          <h1 class="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Обзор университета</h1>
+          <h1 class="text-3xl font-semibold tracking-display text-slate-900 sm:text-[34px] sm:leading-[1.1]">Обзор университета</h1>
           <p class="mt-1 text-sm text-slate-500" id="subtitle">Ключевые показатели и состояние данных</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <a href="/dashboard.html" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200">
+          <a href="/dashboard.html" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-btn-primary ring-1 ring-inset ring-white/15 transition-all duration-150 hover:from-indigo-500 hover:to-indigo-700 hover:shadow-btn-primary-hover active:translate-y-px active:shadow-btn-active focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200">
             <i data-lucide="sparkles" class="h-4 w-4"></i>
             Спросить ассистента
           </a>
@@ -157,7 +172,7 @@
         <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:col-span-2">
           <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 class="text-base font-semibold tracking-tight text-slate-900" id="chartTitle">Динамика показателя</h2>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900" id="chartTitle">Динамика показателя</h2>
               <p class="mt-1 text-sm text-slate-500" id="chartSubtitle">по периодам</p>
             </div>
             <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
@@ -172,7 +187,7 @@
 
         <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <div class="mb-2">
-            <h2 class="text-base font-semibold tracking-tight text-slate-900">Источники данных</h2>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Источники данных</h2>
             <p class="mt-1 text-sm text-slate-500">Откуда взяты числа в витрине</p>
           </div>
           <div class="relative mx-auto h-52 w-52">
@@ -199,10 +214,10 @@
       <section class="rounded-2xl border border-slate-200/80 bg-white shadow-sm" aria-label="Документы в индексе">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
-            <h2 class="text-base font-semibold tracking-tight text-slate-900">Документы в индексе</h2>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Документы в индексе</h2>
             <p class="mt-1 text-sm text-slate-500" id="docsSubtitle">по ним ассистент отвечает на вопросы</p>
           </div>
-          <a href="/upload.html" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+          <a href="/upload.html" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-all duration-150 hover:border-slate-300 hover:bg-slate-50 hover:shadow-card active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-200">
             Загрузить документ
             <i data-lucide="arrow-right" class="h-4 w-4 text-slate-400"></i>
           </a>
@@ -211,7 +226,7 @@
         <div class="hidden overflow-x-auto sm:block">
           <table class="w-full min-w-[640px] text-left text-sm">
             <thead>
-              <tr class="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-400">
+              <tr class="border-b border-slate-100 text-[11px] uppercase tracking-[0.08em] text-slate-400">
                 <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Документ</th>
                 <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Тип</th>
                 <th scope="col" class="px-3 py-3 text-right font-semibold sm:px-5">Фрагментов</th>
