@@ -48,8 +48,14 @@
         body: JSON.stringify(body || {}),
         signal: signal
       }).then(function (r) {
-        if (!r.ok) throw new Error(path + ": HTTP " + r.status);
-        return r.json();
+        if (r.ok) return r.json();
+        // Сервер объясняет отказ по-русски (429 «уже отвечает», 400 «пустой
+        // вопрос»). Отдавать человеку «HTTP 429» — значит заставить его
+        // гадать, что он сделал не так.
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          var d = j && j.detail;
+          throw new Error(typeof d === "string" ? d : path + ": HTTP " + r.status);
+        });
       }),
       ms || 120000, path);
   }
@@ -67,9 +73,13 @@
     // Переиндексация папки knowledge (долгая — свой таймаут)
     reindex: function () { return post("/api/reindex?prune=true", {}, 600000); },
 
-    // Вопрос ИИ-ассистенту (одиночный путь, без агентов)
-    ask: function (question, topK) {
-      return post("/api/ask", { question: question, top_k: topK || 0 }, 180000);
+    // Вопрос ИИ-ассистенту (одиночный путь, без агентов).
+    // Время ожидания большое намеренно: на процессорной машине даже один
+    // вызов модели идёт минутами, и 180 секунд обрывали ответ на середине.
+    // Лучше честный длинный лимит, чем «не дождались» при работающем счёте.
+    ask: function (question, topK, signal) {
+      return post("/api/ask", { question: question, top_k: topK || 0 },
+        600000, signal);
     },
 
     // Вопрос экипажу агентов. Режим не передаётся: число агентов

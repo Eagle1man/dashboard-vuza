@@ -8,8 +8,9 @@ HTTP-сервер дашборда.
 из-за политики происхождения, и ИИ молча вернёт «нет связи» —
 выглядит как поломка, хотя ломается только способ открытия.
 """
+import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from fastapi import Cookie, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -281,6 +282,27 @@ def agents():
     return out
 
 
+# Модель одна, а ответ на этой машине идёт минутами. Без заслонки второй
+# вопрос встаёт в очередь к Ollama (OLLAMA_NUM_PARALLEL=1), браузер
+# сдаётся по таймауту, а человек видит «сбой», не понимая, что его вопрос
+# вообще не начинался. Честнее сразу сказать «занято» и показать, сколько
+# ждать. Замок берётся без ожидания: очередь из вопросов — это не помощь.
+_ASK_LOCK = threading.Lock()
+
+
+@contextmanager
+def _one_question_at_a_time():
+    if not _ASK_LOCK.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail="Ассистент уже отвечает на другой вопрос. "
+                   "Дождитесь ответа или нажмите «Стоп» в панели.")
+    try:
+        yield
+    finally:
+        _ASK_LOCK.release()
+
+
 @app.post("/api/ask/crew")
 def ask_crew(req: AskRequest):
     question = (req.question or "").strip()
@@ -289,9 +311,14 @@ def ask_crew(req: AskRequest):
     question = question[:2000]
     mode = req.mode if req.mode in crew.MODES else "auto"
 
+    with _one_question_at_a_time():
+        return _answer_with_crew(question, mode, req.top_k)
+
+
+def _answer_with_crew(question: str, mode: str, top_k):
     c = conn()
     try:
-        out = crew.run(question, c, mode=mode, top_k=req.top_k)
+        out = crew.run(question, c, mode=mode, top_k=top_k)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Ошибка агента: {exc}")
 
@@ -340,12 +367,16 @@ def ask(req: AskRequest):
         raise HTTPException(status_code=400, detail="Пустой вопрос")
     if len(question) > 2000:
         question = question[:2000]
+    with _one_question_at_a_time():
+        return _answer_question(question, req.top_k)
 
+
+def _answer_question(question: str, top_k):
     c = conn()
     t0 = time.time()
     try:
         chunks, stats = retrieve.search(
-            c, question, top_k=req.top_k or config.RETRIEVE_TOP_K)
+            c, question, top_k=top_k or config.RETRIEVE_TOP_K)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Ошибка поиска: {exc}")
 

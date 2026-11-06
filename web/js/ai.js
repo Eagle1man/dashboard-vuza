@@ -312,40 +312,52 @@
   async function askServer(question, signal) {
     const api = global.DashboardAPI;
     if (!api) return null;
-    var out = await api.askCrew(question, signal);
+    // Одиночный путь: один вызов модели. «Экипаж» (роутер → специалист →
+    // критик) — это до четырёх вызовов подряд, и на процессорной машине
+    // он превращался в десятки минут, после которых браузер сдавался и
+    // человек видел ошибку вместо ответа. Глубокий разбор остаётся
+    // доступен как API.askCrew — его стоит включать, когда ждать можно.
+    var out = await api.ask(question, 0, signal);
     if (!out || typeof out.answer !== "string") return null;
 
-    // В ответе без модели сервер сам объясняет, что не смог ответить,
-    // и показывает найденные документы. Причину показываем честно —
-    // иначе "аналитик молчит" выглядит как зависание.
-    {
-      // Экипаж возвращает больше полей, чем одиночный путь, и они
-      // показываются пользователю: без этого «проверено критиком»
-      // ничем не отличается от «никто не проверял».
-      var parts = [];
-      parts.push("Агент · " + (out.agent_name || out.agent_id));
-      if (out.agents && out.agents.length) {
-        parts.push("агентов: " + out.agents.join(", "));
-      }
-      if (out.critic && out.critic.ran && !out.critic.ok) {
-        parts.push("критик нашёл замечание");
-      } else if (out.critic && out.critic.ran) {
-        parts.push("критик подтвердил");
-      } else if (out.critic) {
-        parts.push("критик не запускался");
-      }
-      parts.push(Math.round((out.latency_ms || 0) / 100) / 10 + " сек");
-      return {
-        text: out.answer,
-        source: parts.join(" · "),
-        sources: out.sources || [],
-        charts: [],
-        demo: !!out.demo_notice,
-        server: true,
-        crew: out,
-        meta: out.meta || {}
-      };
+    var meta = out.meta || {};
+    var parts = [];
+    if (meta.model) parts.push(meta.model);
+    parts.push("источников: " + ((out.sources || []).length));
+    parts.push(Math.round((meta.latency_ms || 0) / 100) / 10 + " сек");
+    return {
+      text: out.answer,
+      source: parts.join(" · "),
+      sources: out.sources || [],
+      charts: [],
+      demo: !!out.demo_notice,
+      server: true,
+      meta: meta
+    };
+  }
+
+  // Разные сбои — разные слова. «Failed to fetch» означает, что соединение
+  // с сервером оборвалось, а не что модель отказала: с прежним текстом
+  // человек искал поломку Ollama там, где пропала сеть или сервер
+  // перезапускался.
+  function describeServerError(e) {
+    var msg = String((e && e.message) || e || "");
+    if (/превышено время ожидания/.test(msg)) {
+      return "Сервер не ответил за отведённое время. На этой машине модель " +
+        "считает медленно — ответ мог не уложиться в лимит.";
     }
+    if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) {
+      return "Связь с сервером дашборда прервалась (сервер перезапускался " +
+        "или пропала сеть). Вопрос мог продолжить считаться без вас — " +
+        "проверьте «Журнал» или спросите снова.";
+    }
+    if (/HTTP 5\d\d/.test(msg)) {
+      return "Сервер ответил внутренней ошибкой (" + msg + ").";
+    }
+    if (/HTTP 4\d\d/.test(msg)) {
+      return "Сервер отклонил запрос: " + msg;
+    }
+    return "Ошибка обращения к серверу: " + msg;
   }
 
   // Публичный API. signal — сигнал отмены из интерфейса: без него
@@ -369,7 +381,7 @@
         // «остановлено» человек увидит запасной ответ с эмодзи ошибки.
         if (e && e.name === "AbortError") throw e;
         return {
-          text: "⚠️ Локальный сервер ответил с ошибкой (" + e.message + ")." +
+          text: "⚠️ " + describeServerError(e) +
             "\n\nНиже — встроенная аналитика по демо-данным.\n\n" +
             answerLocal(question, data, ctx).text,
           source: "запасной режим (встроенная аналитика)",
