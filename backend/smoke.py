@@ -153,10 +153,13 @@ def check_models():
     for role, model in (("small", llm.resolve_role("small")[0]),
                         ("large", llm.resolve_role("large")[0])):
         installed = llm.model_available(model, names)
-        if role == "small":
-            check(OK if installed else FAIL, f"Модель {role}", model +
-                  ("" if installed else " — не скачана: ollama pull " + model))
-        elif not installed:
+        if installed:
+            # Печатаем обе роли: при двухуровневой схеме важно видеть,
+            # что на аналитике стоит именно та модель, которую выбрали.
+            check(OK, f"Модель {role}", model)
+        elif role == "small":
+            check(FAIL, f"Модель {role}", model + " — не скачана: ollama pull " + model)
+        else:
             check(WARN, f"Модель {role}", model + " — не скачана. "
                   "Объяснения проверок будут недоступны, остальное работает.")
 
