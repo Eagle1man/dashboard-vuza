@@ -158,6 +158,36 @@ def trace(purpose: str, role: str, model: str, resolved: str,
         pass
 
 
+def _answer_text(out: dict, meta: dict) -> str:
+    """Текст ответа или пустая строка с человеческой причиной в meta.
+
+    «Пустой ответ» — не всегда пустой. Думающие модели (qwen3.5:35b)
+    кладут всю цепочку рассуждений в message.thinking, а message.content
+    оставляют пустым, если num_predict кончился раньше, чем модель
+    перешла к ответу. Сказать в этом случае «модель вернула пустой
+    ответ» — значит отправить человека искать сеть и Ollama, когда дело
+    в бюджете токенов или в самой модели.
+    """
+    msg = out.get("message") or {}
+    content = (msg.get("content") or "").strip()
+    if content:
+        return content
+
+    thinking = (msg.get("thinking") or "").strip()
+    if thinking:
+        meta["reason"] = (
+            "модель ушла в рассуждения и не дошла до ответа: "
+            f"{len(thinking)} символов reasoning, "
+            f"токенов {out.get('eval_count') or 0}, "
+            f"stop={out.get('done_reason')}. Поднимите num_predict "
+            "или выберите модель без reasoning")
+        meta["thinking_chars"] = len(thinking)
+        return ""
+
+    meta["reason"] = "модель вернула пустой ответ"
+    return ""
+
+
 def chat(system: str, user: str, model: str = None, temperature: float = 0.15,
          num_predict: int = 600, role: str = "small",
          purpose: str = "chat") -> tuple[str, dict]:
@@ -213,9 +243,8 @@ def chat(system: str, user: str, model: str = None, temperature: float = 0.15,
               len(system) + len(user), 0)
         return "", meta
 
-    content = (out.get("message") or {}).get("content")
-    if not content or not content.strip():
-        meta["reason"] = "модель вернула пустой ответ"
+    content = _answer_text(out, meta)
+    if not content:
         trace(purpose, role, model, resolved, started, False, "empty",
               len(system) + len(user), 0)
         return "", meta
@@ -224,7 +253,7 @@ def chat(system: str, user: str, model: str = None, temperature: float = 0.15,
     meta["duration_ms"] = int((time.time() - started) * 1000)
     trace(purpose, role, model, resolved, started, True, None,
           len(system) + len(user), len(content))
-    return content.strip(), meta
+    return content, meta
 
 
 def _post_chat(body: dict, timeout: float):
@@ -324,14 +353,13 @@ def _answer_inner(question: str, chunks, model: str = None):
         meta["reason"] = f"ошибка обращения к Ollama: {exc}"
         return fallback_answer(chunks, meta), meta
 
-    content = (out.get("message") or {}).get("content")
-    if not content or not content.strip():
-        meta["reason"] = "модель вернула пустой ответ"
+    content = _answer_text(out, meta)
+    if not content:
         return fallback_answer(chunks, meta), meta
 
     meta["llm"] = True
     meta["latency_ms"] = int((time.time() - started) * 1000)
-    return content.strip(), meta
+    return content, meta
 
 
 def fallback_answer(chunks, meta) -> str:

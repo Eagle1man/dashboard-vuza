@@ -86,6 +86,31 @@ def test_model_answers():
     check("ответ не слишком долгий", dt < 120, f"{dt:.0f} с")
 
 
+def test_thinking_only_is_named():
+    """Думающая модель: ответа нет, всё в thinking.
+
+    qwen3.5:35b на живом вопросе вернула 600 токенов рассуждений и
+    пустой content, а панель сказала «модель вернула пустой ответ» —
+    искать надо было сеть и Ollama вместо бюджета токенов и модели.
+    """
+    meta = {}
+    text = llm._answer_text(
+        {"message": {"content": "", "thinking": "Thinking Process: 2+2=4"},
+         "eval_count": 600, "done_reason": "length"}, meta)
+    reason = meta.get("reason") or ""
+    check("reasoning без ответа даёт пустую строку", text == "")
+    check("причина называет рассуждения", "рассужден" in reason, reason[:80])
+    check("причина не сваливает всё в пустой ответ",
+          "пустой ответ" not in reason, reason[:80])
+    check("длина рассуждений записана", meta.get("thinking_chars", 0) > 0)
+
+    meta2 = {}
+    text2 = llm._answer_text({"message": {"content": "  Ответ по делу  "}}, meta2)
+    check("обычный ответ возвращается без пробелов", text2 == "Ответ по делу")
+    check("обычный ответ не помечен ошибкой", not meta2.get("reason"),
+          str(meta2))
+
+
 def test_crew_degrades():
     """Экипаж при недоступной модели честно помечает сбой."""
     conn = db.connect()
@@ -102,6 +127,7 @@ def test_crew_degrades():
 def main():
     print("Проверка локальной модели")
     test_model_configured()
+    test_thinking_only_is_named()
     test_offline_is_honest()
     test_model_answers()
     test_crew_degrades()
