@@ -37,10 +37,15 @@
     // истории нет предыдущей точки. Раньше здесь печаталось «NaN»,
     // а в deltaStr — падало с TypeError, из-за чего не отрисовывался
     // весь дашборд, а не одна его часть.
+    //
+    // Делить на 1000 здесь нельзя: единица показателя уже может быть
+    // «тыс ₽», и тогда 221 475 превращалось в «221,5 тыс ₽» — число
+    // в тысячу раз меньше настоящего. Показываем как есть, с пробелами
+    // между разрядами: 2 946, 221 475.
     if (v === null || v === undefined || isNaN(v)) return "—";
-    if (v >= 1000000) return (v / 1000000).toFixed(1).replace(".", ",") + " млн";
-    if (v >= 10000) return (v / 1000).toFixed(1).replace(".", ",");
-    return String(parseFloat(v.toFixed(2))).replace(".", ",");
+    var n = Number(v);
+    var digits = Math.abs(n) >= 100 ? 0 : 2;
+    return n.toLocaleString("ru-RU", { maximumFractionDigits: digits });
   }
   // Изменение к прошлому периоду. У официальных показателей ряда нет,
   // поэтому изменения нет либо оно равно нулю — «0,0 %» в этом случае
@@ -767,7 +772,7 @@ $("btnExportPdf").addEventListener("click", function () {
     $("themeToggle").addEventListener("click", function () {
       var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);
-      try { localStorage.setItem("dash_theme", next); } catch (e) {}
+      try { localStorage.setItem("dash_theme_v2", next); } catch (e) {}
     });
 
     $("roleSelect").addEventListener("change", function () { state.role = this.value; applyRole(); });
@@ -797,7 +802,10 @@ $("btnExportPdf").addEventListener("click", function () {
   // ---------- Тема ----------
   function applyTheme() {
     var saved = null;
-    try { saved = localStorage.getItem("dash_theme"); } catch (e) {}
+    // Ключ сменился на v2: старая сохранённая «тёмная» больше не
+    // перебивает новый светлый вид. Тёмная тема остаётся доступной
+    // кнопкой «Тема».
+    try { saved = localStorage.getItem("dash_theme_v2"); } catch (e) {}
     if (saved) document.documentElement.setAttribute("data-theme", saved);
   }
 

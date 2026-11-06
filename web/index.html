@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20261106-0215" />
+  <link rel="stylesheet" href="css/style.css?v=20261107-0159" />
   <style>
     /* ---------- Первый экран: лендинг-вход ----------
        Палитра дизайн-системы eagle1man: светлая azure-подложка днём,
@@ -32,7 +32,7 @@
       --land-shadow: 0 18px 44px rgba(6, 61, 107, .16);
       --land-shadow-hover: 0 26px 56px rgba(6, 61, 107, .22);
     }
-    html[data-theme="dark"] {
+    html[data-theme="light"] {
       --land-bg: linear-gradient(180deg, #0f0f0f 0%, #171717 100%);
       --land-fg: #f5f5f5;
       --land-fg-dim: #adadad;
@@ -301,9 +301,10 @@
       "use strict";
 
       // ---------- Тема ----------
-      // Ключ тот же, что у дашборда (dash_theme): тема выбранная на
-      // входе должна пережить переход на рабочие страницы.
-      var KEY = "dash_theme";
+      // Ключ тот же, что у дашборда (dash_theme_v2): тема выбранная на
+      // входе должна пережить переход на рабочие страницы. v2 — чтобы
+      // старая сохранённая «тёмная» не перебивала новый светлый вид.
+      var KEY = "dash_theme_v2";
       var saved = localStorage.getItem(KEY);
       if (saved) document.documentElement.setAttribute("data-theme", saved);
       document.getElementById("themeToggle").addEventListener("click", function () {

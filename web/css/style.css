@@ -1,3 +1,4 @@
+@import url("vendor/golos.css");
 /* ============ Сброс и база ============ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 /* ---------- Палитра ----------
@@ -11,34 +12,36 @@
   --surface: #ffffff;
   --surface-2: #f3f5f7;
   --surface-3: #ffffff;
-  --border: #e3e6ea;            /* hairline-граница */
-  --border-strong: #cdd2d9;     /* граница при наведении */
-  --text: #0c0d0f;
-  --muted: #667085;
-  --primary: #101114;           /* акцент действия — чернила */
-  --primary-hover: #000000;
+  --border: #e5e7eb;            /* hairline-граница */
+  --border-strong: #cbd5e1;     /* граница при наведении */
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;           /* акцент действия — синий Mosaic */
+  --primary-hover: #1d4ed8;
   --on-primary: #ffffff;        /* текст на акценте */
-  --navy: #101114;
-  --navy-deep: #0c0d0f;
-  --azure-soft: #eef0f3;
-  --amber: #b8860b;
-  --amber-soft: #fbf4e0;
-  --amber-deep: #8a6508;
-  --green: #15803d;
-  --yellow: #a16207;
-  --red: #c0392b;
-  --shadow: none;               /* карточки плоские: разделяет граница */
-  --shadow-lg: 0 14px 34px rgba(6, 61, 107, .16);  /* только всплывающее */
+  --navy: #0f172a;
+  --navy-deep: #0f172a;
+  --azure-soft: #eef2ff;
+  --amber: #d97706;
+  --amber-soft: #fffbeb;
+  --amber-deep: #b45309;
+  --green: #059669;
+  --yellow: #d97706;
+  --red: #e11d48;
+  /* Тень как в Mosaic: контурная 1px плюс мягкая 2px. Одна размытая
+     тень даёт «грязное пятно», две — глубину. */
+  --shadow: 0 1px 3px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .02);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, .08), 0 4px 6px -2px rgba(0, 0, 0, .01);
   /* Три радиуса на всю систему: контролы, карточки, статусы. */
-  --r-control: 6px;
-  --r-card: 12px;
+  --r-control: 10px;
+  --r-card: 16px;
   --r-pill: 999px;
   --radius: var(--r-card);
   --radius-sm: var(--r-control);
-  --font-display: Georgia, "Times New Roman", serif;
-  --fab-bg: #0c5f97;            /* пилюля чата: navy днём, белая ночью */
+  --font-display: "Golos Text", "Segoe UI", Roboto, -apple-system, Arial, sans-serif;
+  --fab-bg: #2563eb;            /* пилюля чата: синяя днём, белая ночью */
   --fab-fg: #ffffff;
-  --fab-shadow: 0 10px 26px rgba(6, 61, 107, .38);
+  --fab-shadow: 0 8px 20px rgba(37, 99, 235, .35);
 }
 html[data-theme="dark"] {
   /* Палитра linear: полночь как подложка, а не «тёмная тема». */
@@ -74,7 +77,7 @@ html { font-size: 15px; }
    overflow: clip даёт тот же эффект, не создавая контейнера. */
 html, body { overflow-x: clip; }
 body {
-  font-family: "Segoe UI", Roboto, -apple-system, Arial, sans-serif;
+  font-family: "Golos Text", "Segoe UI", Roboto, -apple-system, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -90,7 +93,7 @@ h1, h2, h3, h4, .brand-text strong, .page-head h1, .page-head h2 {
 }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
-:focus-visible { outline: 3px solid rgba(9, 122, 174, .55); outline-offset: 2px; }
+:focus-visible { outline: 3px solid rgba(37, 99, 235, .45); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
@@ -121,7 +124,7 @@ html[data-theme="dark"] .brand-text strong { color: #fff; }
 .header-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .search-wrap { position: relative; }
 .search-wrap input { width: 220px; max-width: 70vw; padding: 9px 34px 9px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
-.search-wrap input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,122,174,.18); }
+.search-wrap input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
 .search-badge { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: var(--primary); color: #fff; font-size: 11px; border-radius: 999px; padding: 1px 7px; }
 .role-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .role-switch select { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
@@ -146,10 +149,23 @@ html[data-theme="dark"] .brand-text strong { color: #fff; }
 
 /* ============ Кнопки ============ */
 /* Капсула (radius-control) — его фирменная форма контролов. */
-.btn { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid transparent; font-size: 13px; font-weight: 600; transition: .15s; white-space: nowrap; min-height: 40px; }
-.btn-primary { background: var(--primary); color: var(--on-primary); }.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+.btn {
+  padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: 13px; font-weight: 600; white-space: nowrap; min-height: 40px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .06);
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s, transform .1s;
+}
+.btn:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(16, 24, 40, .18); }
+.btn-primary {
+  background: var(--primary); color: var(--on-primary);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, .25), 0 6px 16px -8px rgba(37, 99, 235, .45);
+}
+.btn-primary:hover {
+  background: var(--primary-hover); transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, .30), 0 10px 22px -8px rgba(37, 99, 235, .50);
+}
 .btn-outline { background: var(--surface); color: var(--text); border-color: var(--border); }
-.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+.btn-outline:hover { border-color: var(--border-strong); background: var(--surface-2); color: var(--text); }
 /* Главное действие — янтарная капсула с тёмно-navy текстом (его btn-call). */
 .btn-amber { background: var(--amber); color: var(--navy-deep); }
 .btn-amber:hover { background: var(--amber-deep); color: #fff; transform: translateY(-1px); }
@@ -414,7 +430,8 @@ table.data td.clickable { color: var(--primary); font-weight: 600; cursor: point
 .widget-block-head .sub { font-size: 12px; }
 .widget-block-head .open-block { margin-left: auto; }
 .widget-mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
-.metric-widget { position: relative; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.metric-widget { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; transition: border-color .15s, box-shadow .15s; }
+.metric-widget:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
 .spark-wrap { margin-top: 10px; }
 .spark-wrap .spark { width: 100%; height: 40px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -790,7 +807,7 @@ html[data-theme="dark"] .metrics-value { color: #fff; }
   border: 1px solid transparent;
 }
 .side-link:hover { background: var(--surface-2); color: var(--text); }
-.side-link.on { background: var(--surface-2); color: var(--text); border-color: var(--border); font-weight: 600; }
+.side-link.on { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600; }
 .side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; }
 .side-foot .sys-status { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 .app-top {
