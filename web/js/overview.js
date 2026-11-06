@@ -1,8 +1,8 @@
-/* Обзор университета: единственный источник данных — API дашборда.
+/* Обзор университета в стиле Mosaic: единственный источник данных — API.
  *
- * Никаких выдуманных чисел: всё, что на странице, приходит из
- * /api/metrics (витрина), /api/docs (индекс документов) и /api/health.
- * Если сервер недоступен или данных нет — так и пишем, а не рисуем ноль.
+ * Никаких выдуманных чисел: всё приходит из /api/metrics (витрина),
+ * /api/docs (индекс документов) и /api/health. Если сервер молчит или
+ * данных нет — так и пишем, а не рисуем ноль.
  */
 (function () {
   "use strict";
@@ -12,6 +12,7 @@
     blocks: [],
     periods: [],
     docs: [],
+    health: null,
     demo: false,
     query: "",
     block: "all",
@@ -31,13 +32,12 @@
   };
 
   var STATUS = {
-    green: { text: "в норме", cls: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", bar: "bg-emerald-500" },
-    yellow: { text: "внимание", cls: "bg-amber-50 text-amber-700", dot: "bg-amber-500", bar: "bg-amber-500" },
-    red: { text: "отклонение", cls: "bg-rose-50 text-rose-700", dot: "bg-rose-500", bar: "bg-rose-500" },
-    none: { text: "без цели", cls: "bg-slate-100 text-slate-500", dot: "bg-slate-300", bar: "bg-slate-300" }
+    green: { text: "в норме", cls: "bg-emerald-50 text-emerald-700", bar: "bg-emerald-500", dot: "bg-emerald-500" },
+    yellow: { text: "внимание", cls: "bg-amber-50 text-amber-700", bar: "bg-amber-500", dot: "bg-amber-500" },
+    red: { text: "отклонение", cls: "bg-rose-50 text-rose-700", bar: "bg-rose-500", dot: "bg-rose-500" },
+    none: { text: "без цели", cls: "bg-slate-100 text-slate-500", bar: "bg-slate-300", dot: "bg-slate-300" }
   };
 
-  // Что показываем крупно наверху: самые «ректорские» показатели.
   var KPI_IDS = ["continuer-total", "income", "trudoustroystvo", "nagruzka-pps"];
 
   function $(id) { return document.getElementById(id); }
@@ -72,44 +72,33 @@
     return Math.round(((cur - prev) / prev) * 1000) / 10;
   }
 
+  // Плашка изменения как в референсе: мягкий фон, стрелка, процент.
   function deltaPill(metric) {
     var d = delta(metric);
-    if (d === null) {
-      return '<span class="text-xs text-slate-400">один период в данных</span>';
-    }
+    if (d === null) return "";
     var up = d >= 0;
-    // Для показателей, где меньше — лучше (dir = lower), рост означает ухудшение.
     var good = metric.dir === "lower" ? !up : up;
     var cls = good ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700";
-    var icon = up ? "arrow-up-right" : "arrow-down-right";
-    return '<span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold ' + cls + '">' +
-      '<i data-lucide="' + icon + '" class="h-3.5 w-3.5 shrink-0"></i>' + num(Math.abs(d)) + "%</span>" +
-      '<span class="text-xs text-slate-500">к прошлому периоду</span>';
+    return '<span class="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-0.5 text-xs font-semibold ' + cls + '">' +
+      '<i data-lucide="' + (up ? "arrow-up-right" : "arrow-down-right") + '" class="h-3 w-3"></i>' + num(Math.abs(d)) + "%</span>";
   }
 
   function statusBadge(status) {
     var s = STATUS[status] || STATUS.none;
-    if (status === "none" || !status) return "";
-    return '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-semibold ' + s.cls + '">' +
+    if (!status || status === "none") return "";
+    return '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-0.5 text-[11px] font-semibold ' + s.cls + '">' +
       '<span class="h-1.5 w-1.5 rounded-full ' + s.dot + '"></span>' + s.text + "</span>";
   }
 
   // ---------- KPI ----------
-  function kpiMetric(id, used) {
-    for (var i = 0; i < state.metrics.length; i++) {
-      if (state.metrics[i].id === id && used.indexOf(id) === -1) return state.metrics[i];
-    }
-    return null;
-  }
-
   function renderKpi() {
     var used = [];
     var list = [];
     KPI_IDS.forEach(function (id) {
-      var m = kpiMetric(id, used);
-      if (m) { used.push(id); list.push(m); }
+      state.metrics.forEach(function (m) {
+        if (m.id === id && used.indexOf(id) === -1) { used.push(id); list.push(m); }
+      });
     });
-    // Если чего-то из списка нет — добираем показателями с целью.
     if (list.length < 4) {
       state.metrics.slice().sort(function (a, b) {
         return (b.target ? 1 : 0) - (a.target ? 1 : 0);
@@ -120,26 +109,28 @@
 
     $("kpi").innerHTML = list.map(function (m) {
       var icon = ICONS[m.block] || "activity";
-      var target = m.target ? '<span class="text-xs text-slate-500">цель ' + num(m.target) + " " + esc(m.unit) + "</span>" : "";
+      var secondary = [];
+      if (m.target) secondary.push("цель " + num(m.target) + " " + esc(m.unit));
+      secondary.push(m.status && m.status !== "none" ? STATUS[m.status].text : "один период в данных");
       return '' +
-        '<article class="group flex h-full min-h-[168px] flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:min-h-[190px]">' +
-          '<div class="mb-4 flex items-start justify-between">' +
-            '<p class="min-h-[34px] text-[13px] font-medium leading-snug tracking-[0.01em] text-slate-500">' + esc(m.title) + "</p>" +
-            '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shadow-xs ring-1 ring-inset ring-indigo-100/70">' +
-              '<i data-lucide="' + icon + '" class="h-5 w-5"></i>' +
-            "</span>" +
+        '<article class="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">' +
+          '<div class="flex items-start justify-between gap-3">' +
+            '<div class="flex items-center gap-2.5">' +
+              '<span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200/70">' +
+                '<i data-lucide="' + icon + '" class="h-4 w-4"></i>' +
+              "</span>" +
+              '<p class="text-[13px] font-medium leading-tight text-slate-500">' + esc(m.title) + "</p>" +
+            "</div>" +
+            deltaPill(m) +
           "</div>" +
-          '<p class="text-[34px] font-semibold leading-none tracking-display tabular-nums">' + num(m.current) +
-            ' <span class="text-base font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
-          '<div class="mt-auto space-y-2 pt-3">' +
-            '<div class="flex flex-wrap items-center gap-2">' + deltaPill(m) + "</div>" +
-            (target || m.status ? '<div class="flex flex-wrap items-center gap-2">' + target + statusBadge(m.status) + "</div>" : "") +
-          "</div>" +
+          '<p class="mt-3.5 text-[30px] font-semibold leading-none tracking-display tabular-nums">' + num(m.current) +
+            ' <span class="text-sm font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
+          '<p class="mt-3 text-[12.5px] text-slate-500">' + esc(secondary.join(" · ")) + "</p>" +
         "</article>";
     }).join("");
   }
 
-  // ---------- Графики ----------
+  // ---------- График ----------
   function trendMetric() {
     var best = null;
     state.metrics.forEach(function (m) {
@@ -153,8 +144,6 @@
     if (!m) return;
 
     var series = (m.series || []).slice(-state.span);
-    // В витрине встречаются и короткие «Янв», и длинные «март 2026» —
-    // на оси такие подписи наезжают друг на друга.
     var labels = state.periods.slice(-state.span).map(function (p) {
       var label = String(p.label || "");
       var long = label.match(/^([а-яё]+)\s+(\d{4})$/i);
@@ -164,13 +153,13 @@
     while (labels.length < series.length) labels.unshift("");
 
     $("chartTitle").textContent = m.title;
-    $("chartSubtitle").textContent = "по периодам · " + esc(m.unit || "значение") +
+    $("chartSubtitle").textContent = "по периодам · " + (m.unit || "значение") +
       (m.target ? " · цель " + num(m.target) : "");
 
     var ctx = $("trendChart").getContext("2d");
-    var gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, "rgba(79, 70, 229, 0.22)");
-    gradient.addColorStop(1, "rgba(79, 70, 229, 0)");
+    var gradient = ctx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, "rgba(37, 99, 235, 0.14)");
+    gradient.addColorStop(1, "rgba(37, 99, 235, 0)");
 
     if (state.trend) state.trend.destroy();
     state.trend = new Chart(ctx, {
@@ -180,15 +169,15 @@
         datasets: [{
           label: m.title,
           data: series,
-          borderColor: "#4f46e5",
+          borderColor: "#2563eb",
           backgroundColor: gradient,
-          borderWidth: 2.5,
+          borderWidth: 2,
           fill: true,
-          tension: 0.4,
+          tension: 0.35,
           pointRadius: 0,
-          pointHoverRadius: 5,
+          pointHoverRadius: 4,
           pointHoverBackgroundColor: "#ffffff",
-          pointHoverBorderColor: "#4f46e5",
+          pointHoverBorderColor: "#2563eb",
           pointHoverBorderWidth: 3
         }]
       },
@@ -199,7 +188,7 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#0f172a", padding: 12, cornerRadius: 10, displayColors: false,
+            backgroundColor: "#0f1115", padding: 10, cornerRadius: 10, displayColors: false,
             callbacks: { label: function (c) { return num(c.parsed.y) + " " + (m.unit || ""); } }
           }
         },
@@ -207,21 +196,20 @@
           x: {
             grid: { display: false },
             border: { display: false },
-            // На телефоне 13 подписей не влезают: Chart.js начинает их
-            // наклонять и обрезает последнюю. Просим прореживать.
-            ticks: { padding: 8, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }
+            ticks: { padding: 8, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, font: { size: 11 } }
           },
           y: {
             beginAtZero: false,
-            grid: { color: "#f1f5f9", drawTicks: false },
+            grid: { color: "#eef1f5", drawTicks: false },
             border: { display: false },
-            ticks: { padding: 10, callback: function (v) { return num(v); } }
+            ticks: { padding: 10, callback: function (v) { return num(v); }, font: { size: 11 } }
           }
         }
       }
     });
   }
 
+  // ---------- Источники: полукруг со счётчиком ----------
   function renderSources() {
     var official = 0, demo = 0;
     state.metrics.forEach(function (m) { if (m.source === "official") official++; else demo++; });
@@ -235,33 +223,75 @@
         labels: ["Официальные документы", "Демонстрационные"],
         datasets: [{
           data: [official, demo],
-          backgroundColor: ["#6366f1", "#cbd5e1"],
+          backgroundColor: ["#2563eb", "#cbd5e1"],
           borderColor: "#ffffff",
-          borderWidth: 4,
-          hoverOffset: 6
+          borderWidth: 3,
+          hoverOffset: 4
         }]
       },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: "72%",
+        responsive: true,
+        maintainAspectRatio: false,
+        circumference: 180,
+        rotation: 270,
+        cutout: "76%",
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: "#0f172a", padding: 10, cornerRadius: 10 }
+          tooltip: { backgroundColor: "#0f1115", padding: 10, cornerRadius: 10 }
         }
       }
     });
 
     var rows = [
-      { label: "Официальные документы", color: "bg-indigo-500", value: official },
-      { label: "Демонстрационные", color: "bg-slate-300", value: demo }
+      { label: "Официальные", color: "border-blue-600", value: official },
+      { label: "Демо", color: "border-slate-300", value: demo }
     ];
     $("sourceLegend").innerHTML = rows.map(function (r) {
       var share = total ? Math.round((r.value / total) * 100) : 0;
-      return '<li class="flex items-center gap-2.5 text-sm">' +
-        '<span class="h-2.5 w-2.5 rounded-full ' + r.color + '"></span>' +
-        '<span class="text-slate-600">' + r.label + "</span>" +
-        '<span class="ml-auto font-semibold tabular-nums text-slate-900">' + share + "%</span>" +
-        "</li>";
+      return '<li class="border-l-2 pl-2.5 ' + r.color + '">' +
+        '<p class="text-[11px] uppercase tracking-[0.06em] text-slate-400">' + r.label + "</p>" +
+        '<p class="text-sm font-semibold tabular-nums text-slate-900">' + r.value + " <span class=\"text-xs font-medium text-slate-400\">" + share + "%</span></p>" +
+      "</li>";
     }).join("");
+  }
+
+  // ---------- Исполнение целей: квадраты как в референсе ----------
+  function renderGoals() {
+    var withTarget = state.metrics.filter(function (m) { return !!m.target; });
+    var green = withTarget.filter(function (m) { return m.status === "green"; });
+    var share = withTarget.length ? Math.round((green.length / withTarget.length) * 100) : 0;
+
+    $("goalsShare").textContent = share + "%";
+    $("goalsValue").textContent = green.length + " из " + withTarget.length;
+    $("goalsNote").textContent = withTarget.length
+      ? "Показателей с целью: " + withTarget.length + ". В норме " + green.length +
+        ", требуют внимания " + (withTarget.length - green.length) + "."
+      : "Ни у одного показателя не задана цель — сравнивать не с чем.";
+
+    $("goalsSquares").innerHTML = withTarget.map(function (m) {
+      var s = STATUS[m.status] || STATUS.none;
+      return '<span class="h-2.5 w-2.5 rounded-[3px] ' + s.bar + '" title="' + esc(m.title) + ' — ' + num(m.current) + " " + esc(m.unit) + '"></span>';
+    }).join("");
+  }
+
+  // ---------- Состояние ----------
+  function renderStatus() {
+    var h = state.health;
+    var rows = [
+      ["Сервер", h && h.totals ? "онлайн" : "не отвечает", h && h.totals ? "text-emerald-600" : "text-rose-600"],
+      ["Документов", h && h.totals ? h.totals.docs : "—", ""],
+      ["Фрагментов", h && h.totals ? h.totals.chunks : "—", ""],
+      ["Показателей", state.metrics.length, ""]
+    ];
+    $("statusList").innerHTML = rows.map(function (r) {
+      return '<li class="flex items-center justify-between gap-3">' +
+        '<span class="text-slate-500">' + r[0] + "</span>" +
+        '<span class="font-semibold tabular-nums ' + (r[2] || "text-slate-900") + '">' + r[1] + "</span>" +
+      "</li>";
+    }).join("");
+
+    var dot = $("railStatus");
+    dot.className = "h-2 w-2 rounded-full " + (h && h.totals ? "bg-emerald-500" : "bg-rose-500");
   }
 
   // ---------- Блоки ----------
@@ -276,23 +306,22 @@
     var s = STATUS[m.status] || STATUS.none;
     var progress = "";
     if (m.target) {
-      var rawPct = (Number(m.current) / Number(m.target)) * 100;
-      var barPct = Math.max(0, Math.min(100, rawPct));
-      progress = '<div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">' +
-        '<div class="h-1.5 rounded-full ' + s.bar + '" style="width:' + barPct.toFixed(0) + '%"></div></div>' +
-        // В подписи — настоящий процент, а не обрезанный: 116% от цели это
-        // не «100%», и скрывать перевыполнение нельзя.
-        '<p class="mt-1.5 text-[11px] text-slate-400">' + num(rawPct) + "% от цели " + num(m.target) + " " + esc(m.unit) + "</p>";
+      var raw = (Number(m.current) / Number(m.target)) * 100;
+      var bar = Math.max(0, Math.min(100, raw));
+      progress = '<div class="mt-3 h-1 overflow-hidden rounded-full bg-slate-100">' +
+        '<div class="h-1 rounded-full ' + s.bar + '" style="width:' + bar.toFixed(0) + '%"></div></div>' +
+        '<p class="mt-1.5 text-[11px] text-slate-400">' + num(raw) + "% от цели " + num(m.target) + "</p>";
     } else {
-      progress = '<p class="mt-3 text-[11px] text-slate-400">' + (m.source === "official" ? "официальный документ" : "демонстрационное значение") + "</p>";
+      progress = '<p class="mt-3 text-[11px] text-slate-400">' +
+        (m.source === "official" ? "официальный документ" : "демонстрационное значение") + "</p>";
     }
-    return '<div class="rounded-xl border border-slate-100 bg-white p-4 shadow-xs transition-all duration-150 hover:border-slate-200 hover:shadow-card">' +
+    return '<div class="rounded-xl border border-slate-100 p-4 transition-colors hover:border-slate-200 hover:bg-slate-50/60">' +
       '<div class="flex items-start justify-between gap-2">' +
-        '<p class="min-h-[38px] text-[13.5px] leading-snug text-slate-600">' + esc(m.title) + "</p>" +
+        '<p class="min-h-[36px] text-[13px] leading-snug text-slate-600">' + esc(m.title) + "</p>" +
         statusBadge(m.status) +
       "</div>" +
-      '<p class="mt-2 text-[22px] font-semibold tracking-display tabular-nums">' + num(m.current) +
-        ' <span class="text-xs font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
+      '<p class="mt-1 text-[21px] font-semibold tracking-display tabular-nums">' + num(m.current) +
+        ' <span class="text-[11px] font-medium text-slate-400">' + esc(m.unit) + "</span></p>" +
       progress +
     "</div>";
   }
@@ -302,15 +331,15 @@
     state.blocks.forEach(function (b) {
       var items = state.metrics.filter(function (m) { return m.block === b.id && matches(m); });
       if (!items.length) return;
-      html += '<article class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">' +
+      html += '<article class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">' +
         '<div class="flex items-start gap-3 border-b border-slate-100 px-5 py-4">' +
-          '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shadow-xs ring-1 ring-inset ring-indigo-100/70">' +
-            '<i data-lucide="' + (ICONS[b.id] || "activity") + '" class="h-5 w-5"></i></span>' +
+          '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200/70">' +
+            '<i data-lucide="' + (ICONS[b.id] || "activity") + '" class="h-4 w-4"></i></span>' +
           '<div class="min-w-0">' +
-            '<h3 class="text-base font-semibold tracking-tight text-slate-900">' + esc(b.title) + "</h3>" +
-            '<p class="mt-0.5 text-sm text-slate-500">' + esc(b.desc || "") + "</p>" +
+            '<h3 class="text-[15px] font-semibold tracking-tight text-slate-900">' + esc(b.title) + "</h3>" +
+            '<p class="mt-0.5 text-[13px] text-slate-500">' + esc(b.desc || "") + "</p>" +
           "</div>" +
-          '<span class="ml-auto shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">' + items.length + "</span>" +
+          '<span class="ml-auto shrink-0 rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">' + items.length + "</span>" +
         "</div>" +
         '<div class="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">' +
           items.map(metricTile).join("") +
@@ -325,8 +354,9 @@
     var chips = [{ id: "all", title: "Все блоки" }].concat(state.blocks);
     $("blockChips").innerHTML = chips.map(function (b) {
       var active = state.block === b.id;
-      return '<button data-block="' + b.id + '" class="rounded-xl border px-3 py-1.5 text-sm font-medium transition-all duration-150 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200 ' +
-        (active ? "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs" : "border-slate-200 bg-white text-slate-600 shadow-xs hover:border-slate-300 hover:bg-slate-50") +
+      return '<button data-block="' + b.id + '" class="rounded-lg border px-3 py-1.5 text-[13px] font-medium transition ' +
+        (active ? "border-slate-900 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900") +
         '">' + esc(b.title) + "</button>";
     }).join("");
   }
@@ -334,68 +364,63 @@
   // ---------- Документы ----------
   function docBadge(isDemo) {
     return isDemo
-      ? '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>демо</span>'
-      : '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>официальный</span>';
+      ? '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>демо</span>'
+      : '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>официальный</span>';
   }
 
   function renderDocs() {
-    var docs = state.docs.slice(0, 8);
+    var docs = state.docs.slice(0, 7);
     $("docsSubtitle").textContent = state.docs.length
-      ? "всего " + state.docs.length + " документов · по ним ассистент отвечает на вопросы"
+      ? "всего " + state.docs.length + " · по ним ассистент отвечает на вопросы"
       : "пока ни одного документа";
 
     $("docsTable").innerHTML = docs.map(function (d) {
-      return "<tr class=\"transition hover:bg-slate-50/70\">" +
-        '<td class="px-3 py-4 sm:px-5"><p class="font-medium text-slate-900">' + esc(d.title) + "</p>" +
-          '<p class="text-xs text-slate-500">id ' + d.doc_id + "</p></td>" +
-        '<td class="px-3 py-4 text-slate-600 sm:px-5">' + esc(d.doc_type || "—") + "</td>" +
-        '<td class="px-3 py-4 text-right font-semibold tabular-nums sm:px-5">' + num(d.n_chunks) + "</td>" +
-        '<td class="px-3 py-4 sm:px-5">' + docBadge(d.is_demo) + "</td>" +
+      return "<tr class=\"transition-colors hover:bg-slate-50/60\">" +
+        '<td class="px-5 py-3"><p class="font-medium leading-snug text-slate-900">' + esc(d.title) + "</p>" +
+          '<p class="text-[11px] text-slate-400">id ' + d.doc_id + "</p></td>" +
+        '<td class="px-5 py-3 text-[13px] text-slate-500">' + esc(d.doc_type || "—") + "</td>" +
+        '<td class="px-5 py-3 text-right font-semibold tabular-nums">' + num(d.n_chunks) + "</td>" +
+        '<td class="px-5 py-3">' + docBadge(d.is_demo) + "</td>" +
       "</tr>";
     }).join("");
 
     $("docsCards").innerHTML = docs.map(function (d) {
       return '<li class="flex items-start justify-between gap-4 px-5 py-4">' +
         '<div class="min-w-0">' +
-          '<p class="font-medium leading-snug text-slate-900">' + esc(d.title) + "</p>" +
-          '<p class="mt-1 text-xs text-slate-500">' + esc(d.doc_type || "—") + " · фрагментов " + num(d.n_chunks) + "</p>" +
+          '<p class="text-[13px] font-medium leading-snug text-slate-900">' + esc(d.title) + "</p>" +
+          '<p class="mt-1 text-[11px] text-slate-500">' + esc(d.doc_type || "—") + " · фрагментов " + num(d.n_chunks) + "</p>" +
         "</div>" +
         '<div class="shrink-0">' + docBadge(d.is_demo) + "</div>" +
       "</li>";
     }).join("");
   }
 
-  // ---------- Статус сервера ----------
-  function renderStatus(health) {
-    var ok = health && health.totals;
-    $("statusText").textContent = ok ? "Сервер онлайн" : "Сервер не отвечает";
-    $("statusDot").className = "h-2 w-2 rounded-full " + (ok ? "bg-emerald-300" : "bg-rose-300");
-    if (ok) {
-      $("statusDetails").textContent = "документов " + health.totals.docs +
-        " · фрагментов " + health.totals.chunks;
-    }
-    $("updatedAt").textContent = "данные на " + new Date().toLocaleString("ru-RU", {
-      day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"
-    });
+  function renderHeader() {
+    var now = new Date();
+    var date = now.toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "long" });
+    $("todayLine").textContent = date.charAt(0).toUpperCase() + date.slice(1);
+    $("subtitle").textContent = state.metrics.length + " показателей в " + state.blocks.length +
+      " блоках · данные из витрины и документов";
+    $("demoBadge").hidden = !state.demo;
   }
 
   // ---------- События ----------
   function wire() {
-    var sidebar = $("sidebar"), overlay = $("overlay");
-    function openSidebar() {
-      sidebar.classList.remove("-translate-x-full");
+    var rail = $("rail"), overlay = $("overlay");
+    function openRail() {
+      rail.classList.remove("-translate-x-full");
       overlay.classList.remove("hidden");
       document.body.classList.add("overflow-hidden");
     }
-    function closeSidebar() {
-      sidebar.classList.add("-translate-x-full");
+    function closeRail() {
+      rail.classList.add("-translate-x-full");
       overlay.classList.add("hidden");
       document.body.classList.remove("overflow-hidden");
     }
-    $("openSidebar").addEventListener("click", openSidebar);
-    $("closeSidebar").addEventListener("click", closeSidebar);
-    overlay.addEventListener("click", closeSidebar);
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSidebar(); });
+    $("openRail").addEventListener("click", openRail);
+    $("closeRail").addEventListener("click", closeRail);
+    overlay.addEventListener("click", closeRail);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeRail(); });
 
     $("searchInput").addEventListener("input", function (e) {
       state.query = e.target.value.trim();
@@ -423,9 +448,9 @@
       btn.addEventListener("click", function () {
         state.span = Number(btn.getAttribute("data-span")) || 13;
         document.querySelectorAll(".chart-span").forEach(function (b) {
-          b.className = "chart-span rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700";
+          b.className = "chart-span rounded-lg px-3 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700";
         });
-        btn.className = "chart-span rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm";
+        btn.className = "chart-span rounded-lg bg-white px-3 py-1 text-xs font-semibold text-slate-800 shadow-card";
         renderTrend();
       });
     });
@@ -443,26 +468,24 @@
       state.blocks = metrics.blocks || [];
       state.periods = metrics.periods || [];
       state.demo = !!metrics.demo;
+      state.health = res[2];
 
       var docs = res[1] || {};
       state.docs = docs.documents || docs.docs || docs.items || [];
 
-      $("demoBadge").hidden = !state.demo;
-      $("subtitle").textContent = state.metrics.length
-        ? state.metrics.length + " показателей в " + state.blocks.length + " блоках · данные из витрины и документов"
-        : "Витрина пуста — загрузите документы";
-
-      renderStatus(res[2]);
+      renderHeader();
+      renderStatus();
       renderChips();
       renderKpi();
       renderTrend();
       renderSources();
+      renderGoals();
       renderBlocks();
       renderDocs();
       lucide.createIcons();
     }).catch(function (err) {
       $("subtitle").textContent = "Не удалось загрузить данные: " + err.message;
-      $("statusText").textContent = "Сервер не отвечает";
+      $("railStatus").className = "h-2 w-2 rounded-full bg-rose-500";
       lucide.createIcons();
     });
 

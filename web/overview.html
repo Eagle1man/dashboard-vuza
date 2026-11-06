@@ -13,20 +13,19 @@
           fontFamily: {
             sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
           },
-          // Слоистые тени: у shadcn и Tremor это отдельные токены
-          // (shadow-xs, shadow-tremor-card), а не встроенные «размытые».
-          // Две тени вместо одной дают мягкий контур и глубину.
+          colors: {
+            ink: "#0f1115",
+            canvas: "#f7f8fa",
+          },
+          // Тени из Mosaic: контурная 1px + мягкая 2px, прозрачность 0.08.
+          // Одна размытая тень выглядит как грязь, две дают глубину.
           boxShadow: {
-            xs: "0 1px 2px 0 rgb(16 24 40 / 0.05)",
-            card: "0 1px 2px rgb(16 24 40 / 0.04), 0 4px 12px -2px rgb(16 24 40 / 0.06)",
-            "card-hover": "0 2px 4px rgb(16 24 40 / 0.05), 0 12px 24px -6px rgb(16 24 40 / 0.10)",
-            btn: "0 1px 2px rgb(16 24 40 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.16)",
-            "btn-primary": "0 1px 2px rgb(79 70 229 / 0.26), 0 6px 16px -8px rgb(79 70 229 / 0.42)",
-            "btn-primary-hover": "0 2px 4px rgb(79 70 229 / 0.30), 0 10px 22px -8px rgb(79 70 229 / 0.50)",
-            "btn-active": "inset 0 1px 3px rgb(16 24 40 / 0.18)",
+            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+            pop: "0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.01)",
           },
           letterSpacing: {
-            display: "-0.024em",
+            display: "-0.02em",
           },
         },
       },
@@ -37,207 +36,187 @@
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 
-<body class="overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased">
+<body class="overflow-x-hidden bg-canvas font-sans text-slate-900 antialiased">
   <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
 
-  <!-- Боковое меню -->
-  <aside id="sidebar"
-         class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-out lg:translate-x-0">
-    <div class="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
-      <img src="/img/iubip-logo.svg" alt="ИУБиП" class="h-9 w-auto" />
-      <div class="leading-tight">
-        <p class="text-sm font-semibold tracking-tight">Дашборд ректора</p>
-        <p class="text-xs text-slate-500">Южный университет</p>
-      </div>
-      <button id="closeSidebar" class="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden" aria-label="Закрыть меню">
-        <i data-lucide="x" class="h-5 w-5"></i>
-      </button>
-    </div>
+  <!-- Боковой рейл: только иконки. Названия — в подсказке при наведении. -->
+  <aside id="rail"
+         class="fixed inset-y-0 left-0 z-40 flex w-[76px] -translate-x-full flex-col items-center bg-ink py-4 transition-transform duration-300 ease-out lg:translate-x-0">
 
-    <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
-      <p class="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Рабочее пространство</p>
+    <a href="/overview.html" class="mb-6 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10" title="Дашборд ректора">
+      <img src="/img/iubip-logo.svg" alt="ИУБиП" class="h-7 w-auto brightness-0 invert" />
+    </a>
 
-      <a href="/overview.html" class="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm font-medium text-indigo-700">
+    <nav class="flex flex-1 flex-col items-center gap-1.5">
+      <a href="/overview.html" class="group flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white" title="Обзор">
         <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
-        Обзор
       </a>
-
-      <a href="/dashboard.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+      <a href="/dashboard.html" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Лента показателей">
         <i data-lucide="chart-line" class="h-5 w-5"></i>
-        Лента показателей
       </a>
-
-      <a href="/upload.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+      <a href="/upload.html" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Загрузка данных">
         <i data-lucide="upload" class="h-5 w-5"></i>
-        Загрузка данных
       </a>
-
-      <a href="/uploads.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+      <a href="/uploads.html" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Мои загрузки">
         <i data-lucide="inbox" class="h-5 w-5"></i>
-        Мои загрузки
       </a>
-
-      <a href="/journal.html" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+      <a href="/journal.html" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Журнал событий">
         <i data-lucide="history" class="h-5 w-5"></i>
-        Журнал событий
       </a>
 
-      <p class="px-3 pb-2 pt-6 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Помощник</p>
-      <a href="/dashboard.html#assistant" class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+      <span class="my-2 h-px w-8 bg-white/10"></span>
+
+      <a href="/dashboard.html#assistant" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Спросить ассистента">
         <i data-lucide="sparkles" class="h-5 w-5"></i>
-        Спросить ассистента
       </a>
     </nav>
 
-    <div class="border-t border-slate-100 p-3">
-      <div class="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-4 text-white">
-        <div class="mb-1 flex items-center gap-2 text-sm font-semibold">
-          <span id="statusDot" class="h-2 w-2 rounded-full bg-white/70"></span>
-          <span id="statusText">Проверка сервера…</span>
-        </div>
-        <p class="mb-3 text-xs text-indigo-100" id="statusDetails">документов и показателей</p>
-        <a href="/dashboard.html" class="block w-full rounded-xl bg-white/15 px-3 py-2 text-center text-xs font-semibold shadow-btn backdrop-blur transition-all duration-150 hover:bg-white/25 active:translate-y-px">
-          Открыть ленту
-        </a>
-      </div>
+    <div class="flex flex-col items-center gap-3">
+      <span id="railStatus" class="h-2 w-2 rounded-full bg-slate-600" title="Состояние сервера"></span>
+      <a href="/index.html" class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-xs font-semibold text-white" title="Аккаунт">
+        Р
+      </a>
+      <button id="closeRail" class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-4 w-4"></i>
+      </button>
     </div>
   </aside>
 
-  <div class="lg:pl-72">
-    <!-- Верхняя панель -->
-    <header class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
-      <div class="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
-        <button id="openSidebar" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
-          <i data-lucide="menu" class="h-5 w-5"></i>
-        </button>
+  <div class="lg:pl-[76px]">
+    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
 
-        <div class="relative hidden max-w-md flex-1 sm:block">
-          <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
-          <input id="searchInput" type="search" placeholder="Поиск показателя: контингент, доходы, нагрузка…"
-                 class="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-16 text-sm text-slate-700 placeholder:text-slate-400 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100" />
-          <kbd class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">⌘K</kbd>
-        </div>
-
-        <div class="ml-auto flex items-center gap-1.5 sm:gap-3">
-          <a href="/journal.html" class="relative rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Журнал событий">
-            <i data-lucide="bell" class="h-5 w-5"></i>
-            <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
-          </a>
-
-          <div class="mx-1 hidden h-6 w-px bg-slate-200 sm:block"></div>
-
-          <a href="/index.html" class="flex items-center gap-3 rounded-xl p-1 pr-2 transition hover:bg-slate-100">
-            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold text-white">Р</span>
-            <span class="hidden text-left leading-tight sm:block">
-              <span class="block text-sm font-semibold text-slate-800" id="userName">Ректор</span>
-              <span class="block text-xs text-slate-500" id="userRole">ЮУ ИУБиП</span>
-            </span>
-            <i data-lucide="chevron-down" class="hidden h-4 w-4 text-slate-400 sm:block"></i>
-          </a>
-        </div>
-      </div>
-    </header>
-
-    <main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <!-- Заголовок -->
-      <div class="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div class="mb-2 inline-flex flex-wrap items-center gap-2">
-            <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-              <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              <span id="updatedAt">данные загружаются…</span>
-            </span>
-            <span id="demoBadge" hidden class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-              <i data-lucide="info" class="h-3.5 w-3.5"></i>
-              демонстрационные данные
-            </span>
+      <!-- Приветствие и управление -->
+      <header class="mb-6 flex flex-col gap-4 sm:mb-7 lg:flex-row lg:items-end lg:justify-between">
+        <div class="flex items-start gap-3">
+          <button id="openRail" class="mt-1 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+          <div>
+            <p class="text-[13px] text-slate-500" id="todayLine">—</p>
+            <h1 class="mt-0.5 text-[26px] font-semibold leading-tight tracking-display text-slate-900 sm:text-[30px]">
+              Добрый день, <span id="userName">ректор</span>
+            </h1>
+            <p class="mt-1 text-sm text-slate-500" id="subtitle">47 показателей в 7 блоках</p>
           </div>
-          <h1 class="text-3xl font-semibold tracking-display text-slate-900 sm:text-[34px] sm:leading-[1.1]">Обзор университета</h1>
-          <p class="mt-1 text-sm text-slate-500" id="subtitle">Ключевые показатели и состояние данных</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <a href="/dashboard.html" class="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-btn-primary ring-1 ring-inset ring-white/15 transition-all duration-150 hover:from-indigo-500 hover:to-indigo-700 hover:shadow-btn-primary-hover active:translate-y-px active:shadow-btn-active focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-200">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span id="demoBadge" hidden class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200/70">
+            <i data-lucide="info" class="h-3.5 w-3.5"></i>
+            демонстрационные данные
+          </span>
+
+          <div class="relative">
+            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+            <input id="searchInput" type="search" placeholder="Найти показатель…"
+                   class="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 shadow-card outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:w-[260px]" />
+          </div>
+
+          <a href="/dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
             <i data-lucide="sparkles" class="h-4 w-4"></i>
-            Спросить ассистента
+            Ассистент
           </a>
         </div>
-      </div>
+      </header>
 
       <!-- KPI -->
-      <section id="kpi" class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели"></section>
+      <section id="kpi" class="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели"></section>
 
-      <!-- Графики -->
-      <section class="mb-6 grid grid-cols-1 gap-5 sm:mb-8 lg:grid-cols-3" aria-label="Графики">
-        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:col-span-2">
-          <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <!-- График + источники -->
+      <section class="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-3" aria-label="Динамика и источники">
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card xl:col-span-2">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 class="text-[15px] font-semibold tracking-tight text-slate-900" id="chartTitle">Динамика показателя</h2>
-              <p class="mt-1 text-sm text-slate-500" id="chartSubtitle">по периодам</p>
+              <p class="mt-0.5 text-[13px] text-slate-500" id="chartSubtitle">по периодам</p>
             </div>
-            <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
-              <button data-span="7" class="chart-span rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700">7</button>
-              <button data-span="13" class="chart-span rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">13</button>
+            <div class="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button data-span="7" class="chart-span rounded-lg px-3 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-700">7</button>
+              <button data-span="13" class="chart-span rounded-lg bg-white px-3 py-1 text-xs font-semibold text-slate-800 shadow-card">13</button>
             </div>
           </div>
-          <div class="h-64 sm:h-72">
+          <div class="h-64 sm:h-[280px]">
             <canvas id="trendChart" aria-label="График динамики показателя" role="img"></canvas>
           </div>
         </article>
 
-        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <div class="mb-2">
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+          <div class="mb-1">
             <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Источники данных</h2>
-            <p class="mt-1 text-sm text-slate-500">Откуда взяты числа в витрине</p>
+            <p class="mt-0.5 text-[13px] text-slate-500">Откуда взяты числа</p>
           </div>
-          <div class="relative mx-auto h-52 w-52">
+
+          <div class="relative mx-auto mt-3 h-[150px] w-full max-w-[260px]">
             <canvas id="sourceChart" aria-label="Кольцевая диаграмма источников данных" role="img"></canvas>
-            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-2xl font-semibold tracking-tight" id="sourceTotal">—</span>
-              <span class="text-xs text-slate-500">показателей</span>
+            <div class="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center">
+              <span class="text-[26px] font-semibold leading-none tracking-display" id="sourceTotal">—</span>
+              <span class="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">показателей</span>
             </div>
           </div>
-          <ul class="mt-4 space-y-2.5" id="sourceLegend"></ul>
+
+          <ul class="mt-4 grid grid-cols-2 gap-3" id="sourceLegend"></ul>
         </article>
       </section>
 
+      <!-- Документы + цели -->
+      <section class="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-3" aria-label="Документы и цели">
+        <article class="rounded-2xl border border-slate-200/80 bg-white shadow-card xl:col-span-2">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Документы в индексе</h2>
+              <p class="mt-0.5 text-[13px] text-slate-500" id="docsSubtitle">по ним ассистент отвечает на вопросы</p>
+            </div>
+            <a href="/upload.html" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 shadow-card transition hover:border-slate-300 hover:bg-slate-50">
+              Загрузить
+              <i data-lucide="arrow-right" class="h-3.5 w-3.5 text-slate-400"></i>
+            </a>
+          </div>
+
+          <div class="hidden overflow-x-auto sm:block">
+            <table class="w-full min-w-[620px] text-left text-sm">
+              <thead>
+                <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Документ</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Тип</th>
+                  <th scope="col" class="px-5 py-2.5 text-right font-semibold">Фрагментов</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Источник</th>
+                </tr>
+              </thead>
+              <tbody id="docsTable" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+
+          <ul id="docsCards" class="divide-y divide-slate-100 sm:hidden"></ul>
+        </article>
+
+        <div class="space-y-4">
+          <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+            <div class="flex items-start justify-between">
+              <div>
+                <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Исполнение целей</h2>
+                <p class="mt-0.5 text-[13px] text-slate-500">показатели с целью</p>
+              </div>
+              <span class="rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700" id="goalsShare">—</span>
+            </div>
+            <p class="mt-4 text-[30px] font-semibold leading-none tracking-display" id="goalsValue">—</p>
+            <div class="mt-3 flex flex-wrap gap-1" id="goalsSquares"></div>
+            <p class="mt-3 text-[13px] text-slate-500" id="goalsNote">—</p>
+          </article>
+
+          <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Состояние</h2>
+            <ul class="mt-3 space-y-2.5 text-[13px]" id="statusList"></ul>
+          </article>
+        </div>
+      </section>
+
       <!-- Блоки показателей -->
-      <section class="mb-6 space-y-5 sm:mb-8" aria-label="Показатели по блокам">
+      <section class="space-y-4" aria-label="Показатели по блокам">
         <div class="flex flex-wrap items-center gap-2" id="blockChips"></div>
-        <div id="blocks" class="space-y-5"></div>
+        <div id="blocks" class="space-y-4"></div>
         <p id="emptyState" hidden class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
           По запросу ничего не найдено. Измените слово поиска или выберите другой блок.
         </p>
-      </section>
-
-      <!-- Документы -->
-      <section class="rounded-2xl border border-slate-200/80 bg-white shadow-sm" aria-label="Документы в индексе">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div>
-            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Документы в индексе</h2>
-            <p class="mt-1 text-sm text-slate-500" id="docsSubtitle">по ним ассистент отвечает на вопросы</p>
-          </div>
-          <a href="/upload.html" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs transition-all duration-150 hover:border-slate-300 hover:bg-slate-50 hover:shadow-card active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-200">
-            Загрузить документ
-            <i data-lucide="arrow-right" class="h-4 w-4 text-slate-400"></i>
-          </a>
-        </div>
-
-        <div class="hidden overflow-x-auto sm:block">
-          <table class="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr class="border-b border-slate-100 text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Документ</th>
-                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Тип</th>
-                <th scope="col" class="px-3 py-3 text-right font-semibold sm:px-5">Фрагментов</th>
-                <th scope="col" class="px-3 py-3 font-semibold sm:px-5">Источник</th>
-              </tr>
-            </thead>
-            <tbody id="docsTable" class="divide-y divide-slate-100"></tbody>
-          </table>
-        </div>
-
-        <ul id="docsCards" class="divide-y divide-slate-100 sm:hidden"></ul>
       </section>
 
       <p class="py-8 text-center text-xs text-slate-400">
