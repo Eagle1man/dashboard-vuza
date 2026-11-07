@@ -1256,6 +1256,48 @@ $("btnExportPdf").addEventListener("click", function () {
     return p >= 66 ? "#16a34a" : p >= 33 ? "#f59e0b" : "#ef4444";
   }
 
+  var CHART_PALETTE = ["#2563eb", "#14b8a6", "#f59e0b", "#8b5cf6", "#ec4899"];
+
+  function radarSVG(labels, values) {
+    var cx = 110, cy = 112, R = 88, n = values.length;
+    function pt(i, frac) {
+      var ang = -Math.PI / 2 + (2 * Math.PI * i) / n;
+      return [cx + R * frac * Math.cos(ang), cy + R * frac * Math.sin(ang)];
+    }
+    var rings = "";
+    [0.25, 0.5, 0.75, 1].forEach(function (f) {
+      var pts = values.map(function (_, i) {
+        var p = pt(i, f);
+        return p[0].toFixed(1) + "," + p[1].toFixed(1);
+      }).join(" ");
+      rings += '<polygon points="' + pts + '" fill="none" stroke="' +
+        (Math.abs(f - 0.5) < 1e-9 ? "var(--border-strong)" : "var(--border)") + '" stroke-width="1"/>';
+    });
+    var axes = values.map(function (_, i) {
+      var p = pt(i, 1);
+      return '<line x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) +
+        '" stroke="var(--border)" stroke-width="1"/>';
+    }).join("");
+    var poly = values.map(function (v, i) {
+      var p = pt(i, (v || 0) / 100);
+      return p[0].toFixed(1) + "," + p[1].toFixed(1);
+    }).join(" ");
+    var dots = values.map(function (v, i) {
+      var p = pt(i, (v || 0) / 100);
+      return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3.2" fill="#2563eb" stroke="#fff" stroke-width="1.4"><title>' +
+        esc(labels[i]) + ": " + v + "</title></circle>";
+    }).join("");
+    var lab = values.map(function (v, i) {
+      var p = pt(i, 1.22);
+      var anchor = Math.abs(p[0] - cx) < 8 ? "middle" : (p[0] < cx ? "end" : "start");
+      return '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 3).toFixed(1) + '" text-anchor="' + anchor +
+        '" font-size="10.5" fill="var(--muted)">' + esc(labels[i]) + " · " + v + "</text>";
+    }).join("");
+    return '<svg class="radar-svg" viewBox="0 0 220 224" role="img">' + rings + axes +
+      '<polygon points="' + poly + '" fill="rgba(37,99,235,.14)" stroke="#2563eb" stroke-width="2"/>' +
+      dots + lab + "</svg>";
+  }
+
   function renderCharts() {
     var grid = $("chartsGrid");
     if (!grid) return;
@@ -1269,6 +1311,16 @@ $("btnExportPdf").addEventListener("click", function () {
         { label: "Бакалавриат", value: val("continuer-ba"), color: "#14b8a6" },
         { label: "Магистратура", value: val("continuer-ma"), color: "#f59e0b" },
         { label: "Аспиранты", value: val("continuer-aspir"), color: "#8b5cf6" }
+      ]));
+
+    var std = (state.data.standards || []);
+    var byLevel = {};
+    std.forEach(function (s) { byLevel[s.level] = (byLevel[s.level] || 0) + 1; });
+    html += chartPanel("Образовательные программы по уровням", "из справочника ФГОС: " + (std.length || "—") + " программ",
+      donutSVG([
+        { label: "Бакалавриат", value: byLevel["Бакалавриат"] || 0, color: "#2563eb" },
+        { label: "Магистратура", value: byLevel["Магистратура"] || 0, color: "#14b8a6" },
+        { label: "СПО", value: byLevel["СПО"] || 0, color: "#f59e0b" }
       ]));
 
     var income = val("income");
@@ -1313,6 +1365,29 @@ $("btnExportPdf").addEventListener("click", function () {
       }).filter(Boolean);
       html += chartPanel("Перцентили E-показателей (2025)", "100 — лучший результат в области",
         hbars(pRows, 100));
+
+      html += chartPanel("Радар: перцентили E-показателей", "полигон вуза против середины области (кольцо 50)",
+        radarSVG(codes, pRows.map(function (r) { return r.value; })));
+
+      var firstInd = last.indicators.E1 || {};
+      var yearsHist = Object.keys(firstInd.values || {}).sort();
+      var series = codes.map(function (code, i) {
+        var ind = last.indicators[code];
+        var vals = ind && ind.values ? ind.values : {};
+        var base = vals[yearsHist[0]];
+        return {
+          name: code,
+          color: CHART_PALETTE[i % CHART_PALETTE.length],
+          data: yearsHist.map(function (y) {
+            var v = vals[y];
+            if (v === null || v === undefined || !base) return 0;
+            return Math.round(v / base * 100);
+          })
+        };
+      });
+      html += chartPanel("Динамика E-показателей, 2021–2025",
+        "индекс: 2021 = 100 · E.1 образование, E.2 наука, E.3 международная, E.4 финансы, E.8 НПР со степенями",
+        '<div class="chart-wrap">' + C.lineChart(yearsHist, series) + "</div>");
 
       var hmHead = '<div class="heat-corner"></div>' +
         years.map(function (y) { return '<div class="heat-head">' + esc(y) + "</div>"; }).join("");
