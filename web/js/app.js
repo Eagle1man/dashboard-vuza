@@ -1190,8 +1190,8 @@ $("btnExportPdf").addEventListener("click", function () {
   // перцентили и места E-показателей, трудоустройство. Рядов нет —
   // документы дают одну точку, поэтому вместо трендов — доли, бары,
   // тепловая карта и шкала.
-  function chartPanel(title, hint, body) {
-    return '<div class="chart-panel"><h4>' + esc(title) + "</h4>" +
+  function chartPanel(title, hint, body, cls) {
+    return '<div class="chart-panel' + (cls ? " " + cls : "") + '"><h4>' + esc(title) + "</h4>" +
       '<p class="chart-hint">' + esc(hint) + "</p>" + body + "</div>";
   }
 
@@ -1305,6 +1305,43 @@ $("btnExportPdf").addEventListener("click", function () {
     var val = function (id) { var x = m(id); return x ? Number(x.current) || 0 : 0; };
     var html = "";
 
+    var mon = state.monitoring;
+    var years = mon && mon.available ? Object.keys(mon.years).sort() : [];
+    var last = mon && mon.available ? mon.years[years[years.length - 1]] : null;
+    var E_SHORT = {
+      E1: "E.1 Образование", E2: "E.2 Наука", E3: "E.3 Международная",
+      E4: "E.4 Финансы", E8: "E.8 НПР со степенями"
+    };
+    var codes = ["E1", "E2", "E3", "E4", "E8"];
+
+    // Динамика — главный график раздела: полный ряд 2021–2025, во всю
+    // ширину, первым на странице.
+    if (last) {
+      var firstInd = last.indicators.E1 || {};
+      var yearsHist = Object.keys(firstInd.values || {}).sort();
+      var series = codes.map(function (code, i) {
+        var ind = last.indicators[code];
+        var vals = ind && ind.values ? ind.values : {};
+        var base = vals[yearsHist[0]];
+        return {
+          name: code,
+          color: CHART_PALETTE[i % CHART_PALETTE.length],
+          data: yearsHist.map(function (y) {
+            var v = vals[y];
+            if (v === null || v === undefined || !base) return 0;
+            return Math.round(v / base * 100);
+          })
+        };
+      });
+      html += chartPanel("Динамика E-показателей, 2021–2025",
+        "индекс: 2021 = 100 · E.1 образование, E.2 наука, E.3 международная, E.4 финансы, E.8 НПР со степенями",
+        '<div class="chart-wrap">' + C.lineChart(yearsHist, series) + "</div>", "chart-panel-wide");
+    } else {
+      html += chartPanel("Динамика E-показателей, 2021–2025",
+        "сервер недоступен — данные мониторинга не загружены",
+        '<p class="muted">Запустите сервер, чтобы увидеть динамику E-показателей.</p>');
+    }
+
     html += chartPanel("Структура контингента", "всего обучающихся на 01.04.2026 · отчёт о самообследовании",
       donutSVG([
         { label: "СПО", value: val("continuer-spo"), color: "#2563eb" },
@@ -1346,15 +1383,7 @@ $("btnExportPdf").addEventListener("click", function () {
           text: fmtFull(otherExp) + " · " + Math.round(otherExp / income * 100) + " %" }
       ], income));
 
-    var mon = state.monitoring;
-    if (mon && mon.available) {
-      var years = Object.keys(mon.years).sort();
-      var last = mon.years[years[years.length - 1]];
-      var E_SHORT = {
-        E1: "E.1 Образование", E2: "E.2 Наука", E3: "E.3 Международная",
-        E4: "E.4 Финансы", E8: "E.8 НПР со степенями"
-      };
-      var codes = ["E1", "E2", "E3", "E4", "E8"];
+    if (last) {
       var pRows = codes.map(function (code) {
         var ind = last.indicators[code];
         if (!ind) return null;
@@ -1368,26 +1397,6 @@ $("btnExportPdf").addEventListener("click", function () {
 
       html += chartPanel("Радар: перцентили E-показателей", "полигон вуза против середины области (кольцо 50)",
         radarSVG(codes, pRows.map(function (r) { return r.value; })));
-
-      var firstInd = last.indicators.E1 || {};
-      var yearsHist = Object.keys(firstInd.values || {}).sort();
-      var series = codes.map(function (code, i) {
-        var ind = last.indicators[code];
-        var vals = ind && ind.values ? ind.values : {};
-        var base = vals[yearsHist[0]];
-        return {
-          name: code,
-          color: CHART_PALETTE[i % CHART_PALETTE.length],
-          data: yearsHist.map(function (y) {
-            var v = vals[y];
-            if (v === null || v === undefined || !base) return 0;
-            return Math.round(v / base * 100);
-          })
-        };
-      });
-      html += chartPanel("Динамика E-показателей, 2021–2025",
-        "индекс: 2021 = 100 · E.1 образование, E.2 наука, E.3 международная, E.4 финансы, E.8 НПР со степенями",
-        '<div class="chart-wrap">' + C.lineChart(yearsHist, series) + "</div>");
 
       var hmHead = '<div class="heat-corner"></div>' +
         years.map(function (y) { return '<div class="heat-head">' + esc(y) + "</div>"; }).join("");
