@@ -224,7 +224,9 @@ def detail():
     if len(years) < 2:
         return {"available": False, "rows": [], "years": years}
 
-    first, last = years[0], years[-1]
+    # Сравниваем два последних выпуска, а не первый и последний: когда
+    # появится третий, «2024 против 2026» пропустило бы 2025-й.
+    first, last = years[-2], years[-1]
     by_first = {_norm_title(r["title"]): r for r in raw[first]}
 
     rows, used = [], set()
@@ -267,7 +269,7 @@ def detail():
     flat = sum(1 for r in rows if r["delta"] == 0)
     return {
         "available": True,
-        "years": years,
+        "years": [first, last],
         "rows": rows,
         "totals": {"all": len(rows), "grew": grew, "fell": fell, "flat": flat,
                    "comparable": grew + fell + flat},

@@ -401,9 +401,19 @@ def parse_card(tables):
     }
 
 
+def _write_text_atomic(path, text):
+    """Пишет файл через временный: обрыв не оставит половину JSON."""
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 def write_directions_md(payload, path):
+    release = str(payload.get("release", "2025"))
     lines = [
-        "# ИУБиП в мониторинге эффективности, выпуск 2025: направления деятельности",
+        f"# ИУБиП в мониторинге эффективности, выпуск {release}: направления деятельности",
         "",
         f"Источник: {payload['source']}",
         "Значения — как в первоисточнике. Сравнение с медианами: отношение",
@@ -431,12 +441,13 @@ def write_directions_md(payload, path):
                 f"{cmp_text(ind['median_private_ratio'], ind['median_private_capped'], ind['median_private_comparable'], ind['median_private'])} | "
                 f"{cmp_text(ind['median_region_ratio'], ind['median_region_capped'], ind['median_region_comparable'], ind['median_region'])} |")
         lines.append("")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_text_atomic(path, "\n".join(lines) + "\n")
 
 
 def write_card_md(card, info, path):
+    release = str(card.get("release", "2025"))
     lines = [
-        "# ИУБиП в мониторинге эффективности, выпуск 2025: карточка организации",
+        f"# ИУБиП в мониторинге эффективности, выпуск {release}: карточка организации",
         "",
         "Источник: monitoring.miccedu.ru, карточка вуза id=1971.",
         "",
@@ -465,11 +476,20 @@ def write_card_md(card, info, path):
             f"- {u['code']} — {u['name']}: контингент {u['contingent']} чел., "
             f"доля в организации {u['share_org']}%, доля в регионе {u['share_region']}%, "
             f"вузов в регионе {u['vuz_count']}, филиалов {u['branch_count']}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_text_atomic(path, "\n".join(lines) + "\n")
 
 
-def collect(html_text=None):
-    text = html_text if html_text is not None else fetch_html()
+def card_url(year=2025, vuz_id="1971"):
+    return f"https://monitoring.miccedu.ru/iam/{year}/_vpo/inst.php?id={vuz_id}"
+
+
+def region_url(year=2025, region_id="10703"):
+    return (f"https://monitoring.miccedu.ru/iam/{year}/_vpo/"
+            f"material.php?type=2&id={region_id}")
+
+
+def collect(html_text=None, year=2025, url=None):
+    text = html_text if html_text is not None else fetch_html(card_url(year))
     tables = parse_tables(text)
     info = parse_info(tables)
     e_table = parse_e_table(tables)
@@ -478,15 +498,16 @@ def collect(html_text=None):
     card = parse_card(tables)
 
     vuz_name = info.get("Наименование образовательной организации", "ИУБиП")
+    source = url or card_url(year)
     directions = {
-        "source": URL,
-        "release": "2025",
+        "source": source,
+        "release": str(year),
         "vuz": {"id": "1971", "name": vuz_name},
         "sections": sections,
     }
     card_payload = {
-        "source": URL,
-        "release": "2025",
+        "source": source,
+        "release": str(year),
         "vuz": {"id": "1971", "name": vuz_name},
         "info": info,
         "contingent": card["contingent"],
@@ -499,54 +520,77 @@ def collect(html_text=None):
     return directions, card_payload
 
 
+def detail_items(card):
+    """Показатели раздела V без подстрок «в том числе»."""
+    return [
+        {"title": a["title"], "unit": a["unit"], "value": a["raw"]}
+        for a in card["additional"] if not a["sub"]
+    ]
+
+
+def save(directions, card, source_dir=SOURCE, kb=KB):
+    """Пишет JSON и markdown карточки. Возвращает сводку."""
+    release = str(directions.get("release") or card.get("release") or "2025")
+    source_dir = pathlib.Path(source_dir)
+    kb = pathlib.Path(kb)
+    source_dir.mkdir(parents=True, exist_ok=True)
+    _write_text_atomic(
+        source_dir / "iubip-directions.json",
+        json.dumps(directions, ensure_ascii=False, indent=1) + "\n")
+    _write_text_atomic(
+        source_dir / "iubip-card.json",
+        json.dumps(card, ensure_ascii=False, indent=1) + "\n")
+    write_directions_md(directions, kb / f"{release}-directions.md")
+    write_card_md(card, card["info"], kb / f"{release}-card.md")
+
+    # Раздел V: обновляем часть текущего выпуска, прошлые не трогаем.
+    detail_path = source_dir / "iubip-detail.json"
+    if detail_path.exists():
+        detail = json.loads(detail_path.read_text(encoding="utf-8"))
+    else:
+        detail = {}
+    numbered = detail_items(card)
+    detail[release] = numbered
+    _write_text_atomic(
+        detail_path,
+        json.dumps(detail, ensure_ascii=False, indent=1) + "\n")
+
+    return {
+        "release": release,
+        "sections": len(directions.get("sections") or []),
+        "directions": sum(len(s.get("indicators") or [])
+                          for s in directions.get("sections") or []),
+        "detail": len(numbered),
+        "ugns": len(card.get("ugns") or []),
+        "e_indicators": len((card.get("e_table") or {}).get("indicators") or []),
+    }
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Сбор карточки мониторинга с сайта")
     ap.add_argument("--html", help="сохранённая страница вместо запроса в сеть")
+    ap.add_argument("--year", type=int, default=2025, help="год выпуска")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args(argv)
 
     if args.html:
         html_text = pathlib.Path(args.html).read_text(encoding="utf-8")
     else:
-        html_text = fetch_html()
+        html_text = fetch_html(card_url(args.year))
 
-    directions, card = collect(html_text)
-
-    SOURCE.mkdir(parents=True, exist_ok=True)
-    (SOURCE / "iubip-directions.json").write_text(
-        json.dumps(directions, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    (SOURCE / "iubip-card.json").write_text(
-        json.dumps(card, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-
-    write_directions_md(directions, KB / "2025-directions.md")
-    write_card_md(card, card["info"], KB / "2025-card.md")
-
-    # Обновляем 2025-ю часть детальной карточки: раздел V уже лежал в
-    # iubip-detail.json, но без подстрок «в том числе» и с ручной сверкой.
-    detail_path = SOURCE / "iubip-detail.json"
-    if detail_path.exists():
-        detail = json.loads(detail_path.read_text(encoding="utf-8"))
-    else:
-        detail = {}
-    numbered = [
-        {"title": a["title"], "unit": a["unit"], "value": a["raw"]}
-        for a in card["additional"] if not a["sub"]
-    ]
-    detail["2025"] = numbered
-    detail_path.write_text(json.dumps(detail, ensure_ascii=False, indent=1) + "\n",
-                           encoding="utf-8")
+    directions, card = collect(html_text, year=args.year)
+    info = save(directions, card)
 
     if not args.quiet:
-        total = sum(len(s["indicators"]) for s in directions["sections"])
-        print(f"направления: {len(directions['sections'])} разделов, {total} показателей")
-        print(f"дополнительные характеристики: {len(numbered)} показателей, "
-              f"{len(card['additional']) - len(numbered)} подстрок")
-        print(f"УГН: {len(card['ugns'])}, отраслей: {len(card['branches'])}")
-        print(f"E-таблица: {len(card['e_table']['indicators'])} показателей")
+        print(f"направления: {info['sections']} разделов, "
+              f"{info['directions']} показателей")
+        print(f"дополнительные характеристики: {info['detail']} показателей")
+        print(f"УГН: {info['ugns']}")
+        print(f"E-таблица: {info['e_indicators']} показателей")
         print(f"записано: {SOURCE / 'iubip-directions.json'}")
         print(f"записано: {SOURCE / 'iubip-card.json'}")
-        print(f"записано: {KB / '2025-directions.md'}")
-        print(f"записано: {KB / '2025-card.md'}")
+        print(f"записано: {KB / (info['release'] + '-directions.md')}")
+        print(f"записано: {KB / (info['release'] + '-card.md')}")
     return 0
 
 

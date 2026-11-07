@@ -53,6 +53,43 @@
 корень или в подпапку с названием подразделения. Ассистент ищет только
 по ним, и каждое число в ответе подписано документом.
 
+### Синхронизация мониторинга
+
+Карточка ИУБиП на `monitoring.miccedu.ru` обновляется сторожем:
+
+```
+sync_monitoring.bat                         проверить и обновить
+sync_monitoring.bat --check                 только проверить (код 1 — есть изменения)
+sync_monitoring.bat --full                  пересобрать все 38 карточек региона
+sync_monitoring.bat --watch --interval 86400   следить постоянно
+```
+
+Что делает сторож:
+
+1. Сравнивает дату обновления на сайте и отпечаток данных карточки с
+   прошлым запуском. Если ничего не изменилось — не пишет файлы.
+2. При изменении обновляет JSON и markdown карточки, строку ИУБиП в
+   `region_indicators.json`, пересобирает `data/monitoring.json` и
+   `data/analytics.db`.
+3. При новом выпуске или смене даты обновления на сайте делает полный
+   обход всех 38 карточек региона — иначе места и перцентили остались бы
+   от старого выпуска.
+4. Обновляет индекс `knowledge`, если Ollama и модель эмбеддингов
+   доступны. Если нет — JSON обновляются, а индекс догоняет при
+   следующем запуске; подменять настоящие векторы заглушкой сторож не
+   пытается.
+5. Перед перезаписью складывает копию в `data/backup/monitoring-*`.
+   Состояние проверки — `data/monitoring_sync.json` (локальное, в git не
+   попадает).
+
+Автозапуск раз в сутки в Планировщике заданий Windows:
+
+```
+schtasks /Create /SC DAILY /TN "Rector monitoring sync" ^
+  /TR "\"C:\Users\diorl\.cline\data\workspaces\chat\rector-dashboard\sync_monitoring.bat\"" ^
+  /ST 06:00
+```
+
 ### Резервная копия
 
 `backup.bat` — копирует `data/dashboard.db` в `data/backup/`, хранит 30 копий.
@@ -592,6 +629,7 @@ python -m backend.models          какая модель на роли и ск�
 python -m backend.ingest --force  переиндексировать всё
 python -m backend.ingest --prune  убрать из индекса удалённые файлы
 python -m backend.collect_monitoring  собрать карточку с monitoring.miccedu.ru
+python -m backend.sync_monitoring     проверить сайт и обновить при изменениях
 python -m backend.build_monitoring    пересобрать data/monitoring.json
 python -m backend.analytics --build   пересобрать витрину чисел мониторинга
 python -m backend.modelcheck      проверить готовность модели
