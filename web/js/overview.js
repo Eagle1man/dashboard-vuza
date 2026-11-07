@@ -447,19 +447,57 @@
     return codes.map(function (code) { return map[code]; }).filter(Boolean);
   }
 
+  // Оценка по медиане. В разделе III «больше — лучше», поэтому
+  // отношение > 1 — хорошо (зелёный), < 1 — плохо (оранжевый),
+  // ровно 1 — нейтрально. Если медиана не публикуется, сравнения нет:
+  // остаётся серый прочерк, а не выдуманный цвет.
+  var TONE_GOOD = "text-emerald-600";
+  var TONE_BAD = "text-orange-600";
+  var TONE_SAME = "text-slate-500";
+
+  function ratioValue(ind, kind) {
+    var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
+    var median = kind === "private" ? ind.median_private : ind.median_region;
+    var ratio = kind === "private" ? ind.median_private_ratio : ind.median_region_ratio;
+    if (ratio === null || ratio === undefined) return null;
+    var value = Number(ratio);
+    if (!isFinite(value) || value <= 0) return null;
+    if (!capped && (median === null || median === undefined)) return null;
+    return value;
+  }
+
+  function ratioTone(value) {
+    var shown = Number(Number(value).toFixed(2));
+    if (shown > 1) return TONE_GOOD;
+    if (shown < 1) return TONE_BAD;
+    return TONE_SAME;
+  }
+
+  function valueTone(ind) {
+    var ratios = [ratioValue(ind, "private"), ratioValue(ind, "region")]
+      .filter(function (value) { return value !== null; });
+    if (!ratios.length) return "text-slate-900";
+    var shown = ratios.map(function (value) { return Number(value.toFixed(2)); });
+    if (shown.some(function (value) { return value < 1; })) return TONE_BAD;
+    if (shown.every(function (value) { return value > 1; })) return TONE_GOOD;
+    return "text-slate-900";
+  }
+
   function ratioCell(ind, kind) {
     var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
-    var ratio = kind === "private" ? ind.median_private_ratio : ind.median_region_ratio;
     var median = kind === "private" ? ind.median_private : ind.median_region;
     if (capped) {
-      return '<span class="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700" ' +
+      return '<span class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700" ' +
         'title="Значение не менее чем в 2 раза выше медианы: шкала на сайте обрезана">≥ 2×</span>';
     }
-    if (median === null || median === undefined || ratio === null || ratio === undefined) {
+    var value = ratioValue(ind, kind);
+    if (value === null || median === null || median === undefined) {
       return '<span class="text-slate-300">—</span>';
     }
+    var tone = ratioTone(value);
+    var label = tone === TONE_GOOD ? "выше медианы" : tone === TONE_BAD ? "ниже медианы" : "ровно медиана";
     return '<span class="inline-flex flex-col items-end">' +
-      '<span class="font-semibold tabular-nums text-slate-700">×' + Number(ratio).toFixed(2) + "</span>" +
+      '<span class="font-semibold tabular-nums ' + tone + '" title="' + label + '">×' + value.toFixed(2) + "</span>" +
       '<span class="text-[10px] text-slate-400">' + num(median) + "</span></span>";
   }
 
@@ -618,14 +656,15 @@
       return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
         '<span class="min-w-0 pr-2 leading-snug text-slate-600"><span class="font-mono text-[11px] text-slate-400">' + esc(ind.code) + "</span> " +
         esc(ind.title) + ' <span class="text-[10.5px] text-slate-400">' + esc(ind.unit || "") + "</span></span>" +
-        '<span class="text-right font-semibold tabular-nums text-slate-900">' + num(ind.value) + "</span>" +
+        '<span class="text-right font-semibold tabular-nums ' + valueTone(ind) + '">' + num(ind.value) + "</span>" +
         '<span class="text-right">' + ratioCell(ind, "private") + "</span>" +
         '<span class="text-right">' + ratioCell(ind, "region") + "</span>" +
         "</div>";
     }).join("");
     $("monitoringTable").innerHTML = head + rows +
       '<p class="mt-3 text-[11px] leading-snug text-slate-400">Источник: monitoring.miccedu.ru, раздел III. ' +
-      "×1 — уровень медианы, «≥ 2×» — не менее двух медиан (шкала на сайте обрезана), «—» — сравнения нет.</p>";
+      "×1 — уровень медианы, «≥ 2×» — не менее двух медиан (шкала на сайте обрезана), «—» — сравнения нет. " +
+      "Зелёный — выше медианы, оранжевый — ниже.</p>";
   }
 
   function renderMonitoring() {

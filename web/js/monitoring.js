@@ -175,16 +175,54 @@
   }
 
   // ---------- III. Направления деятельности ----------
+  // В разделе III «больше — лучше»: выше медианы — зелёный, ниже —
+  // оранжевый, ровно медиана — нейтральный. Нет медианы — нет оценки.
+  var TONE_GOOD = "text-emerald-600";
+  var TONE_BAD = "text-orange-600";
+  var TONE_SAME = "text-slate-500";
+
+  function ratioValue(ind, kind) {
+    var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
+    var median = kind === "private" ? ind.median_private : ind.median_region;
+    var ratio = kind === "private" ? ind.median_private_ratio : ind.median_region_ratio;
+    if (ratio === null || ratio === undefined) return null;
+    var value = Number(ratio);
+    if (!isFinite(value) || value <= 0) return null;
+    if (!capped && (median === null || median === undefined)) return null;
+    return value;
+  }
+
+  function ratioTone(value) {
+    var shown = Number(Number(value).toFixed(2));
+    if (shown > 1) return TONE_GOOD;
+    if (shown < 1) return TONE_BAD;
+    return TONE_SAME;
+  }
+
+  function valueTone(ind) {
+    var ratios = [ratioValue(ind, "private"), ratioValue(ind, "region")]
+      .filter(function (value) { return value !== null; });
+    if (!ratios.length) return "text-slate-900";
+    var shown = ratios.map(function (value) { return Number(value.toFixed(2)); });
+    if (shown.some(function (value) { return value < 1; })) return TONE_BAD;
+    if (shown.every(function (value) { return value > 1; })) return TONE_GOOD;
+    return "text-slate-900";
+  }
+
   function ratioText(ratio, median, capped, unit) {
     if (capped) {
-      return '<span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700" ' +
+      return '<span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" ' +
         'title="На сайте шкала сравнения обрезана: значение не менее чем в 2 раза выше медианы">≥ 2×</span>';
     }
     if (median === null || median === undefined || ratio === null || ratio === undefined) {
       return '<span class="text-slate-300">—</span>';
     }
+    var value = Number(ratio);
+    if (!isFinite(value) || value <= 0) return '<span class="text-slate-300">—</span>';
+    var tone = ratioTone(value);
+    var label = tone === TONE_GOOD ? "выше медианы" : tone === TONE_BAD ? "ниже медианы" : "ровно медиана";
     return '<span class="inline-flex flex-col items-end gap-0.5">' +
-      '<span class="font-semibold tabular-nums text-slate-700">×' + Number(ratio).toFixed(2) + "</span>" +
+      '<span class="font-semibold tabular-nums ' + tone + '" title="' + label + '">×' + value.toFixed(2) + "</span>" +
       '<span class="text-[10.5px] text-slate-400">медиана ' + num(median) + (unit ? " " + esc(unit) : "") + "</span></span>";
   }
 
@@ -299,7 +337,7 @@
           '<td class="whitespace-nowrap px-3 py-2 text-right font-mono text-[11.5px] text-slate-400">' + esc(ind.code) + "</td>" +
           '<td class="px-3 py-2"><p class="leading-snug text-slate-700">' + esc(ind.title) + "</p></td>" +
           '<td class="whitespace-nowrap px-3 py-2 text-[12px] text-slate-400">' + esc(ind.unit || "") + "</td>" +
-          '<td class="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">' + num(ind.value) + "</td>" +
+          '<td class="px-3 py-2 text-right font-semibold tabular-nums ' + valueTone(ind) + '">' + num(ind.value) + "</td>" +
           '<td class="px-3 py-2 text-right">' + ratioText(ind.median_private_ratio, ind.median_private, ind.median_private_capped, ind.unit) + "</td>" +
           '<td class="px-3 py-2 text-right">' + ratioText(ind.median_region_ratio, ind.median_region, ind.median_region_capped, ind.unit) + "</td>" +
           "</tr>";
