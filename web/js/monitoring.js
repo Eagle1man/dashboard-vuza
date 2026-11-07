@@ -219,7 +219,7 @@
             fill: true
           },
           {
-            label: "Показатели вуза",
+            label: "Показатели вуза (ИУБиП)",
             data: ratios,
             borderColor: "#0f766e",
             backgroundColor: "rgba(15,118,110,.10)",
@@ -252,7 +252,7 @@
                 if (ctx.dataset.label.indexOf("Медиана") === 0) {
                   return "медиана: ×1.00";
                 }
-                var text = "вуз: ×" + value.toFixed(2);
+                var text = "ИУБиП: ×" + value.toFixed(2);
                 var median = kind === "private" ? ind.median_private : ind.median_region;
                 var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
                 if (capped) text += " (≥ 2× медианы)";

@@ -284,21 +284,75 @@
 
   // ---------- Исполнение целей: квадраты как в референсе ----------
   function renderGoals() {
-    var withTarget = state.metrics.filter(function (m) { return !!m.target; });
-    var green = withTarget.filter(function (m) { return m.status === "green"; });
-    var share = withTarget.length ? Math.round((green.length / withTarget.length) * 100) : 0;
+    var data = state.monitoring;
+    var share = $("goalsShare");
+    var value = $("goalsValue");
+    var list = $("goalsSquares");
+    var note = $("goalsNote");
 
-    $("goalsShare").textContent = share + "%";
-    $("goalsValue").textContent = green.length + " из " + withTarget.length;
-    $("goalsNote").textContent = withTarget.length
-      ? "Показателей с целью: " + withTarget.length + ". В норме " + green.length +
-        ", требуют внимания " + (withTarget.length - green.length) + "."
-      : "Ни у одного показателя не задана цель — сравнивать не с чем.";
+    if (!data || !data.available || !data.years) {
+      share.textContent = "нет данных";
+      value.textContent = "—";
+      list.innerHTML = "";
+      note.textContent = "Данных мониторинга нет: цели не из чего построить.";
+      return;
+    }
 
-    $("goalsSquares").innerHTML = withTarget.map(function (m) {
-      var s = STATUS[m.status] || STATUS.none;
-      return '<span class="h-2.5 w-2.5 rounded-[3px] ' + s.bar + '" title="' + esc(m.title) + ' — ' + num(m.current) + " " + esc(m.unit) + '"></span>';
+    var years = Object.keys(data.years).sort();
+    var last = years[years.length - 1];
+    var prev = years[years.length - 2] || null;
+    $("goalsTitle").textContent = "Цели на " + (Number(last) + 1);
+    var subtitle = $("goalsSubtitle");
+    if (subtitle) {
+      subtitle.textContent = (prev ? prev + " → " : "") + last + " → цель";
+    }
+    var axes = (data.e_axes || data.axes || []).filter(function (axis) {
+      return axis.code !== "E5"; // E.5 не публикуется в выпуске 2025
+    });
+    var rows = [];
+    axes.forEach(function (axis) {
+      var curInd = ((data.years[last] || {}).indicators || {})[axis.code];
+      var oldInd = prev ? (((data.years[prev] || {}).indicators || {})[axis.code]) : null;
+      var cur = curInd ? curInd.value : null;
+      if (cur === null || cur === undefined) return;
+      var old = oldInd ? oldInd.value : null;
+      var dir = "higher"; // E-показатели: больше — лучше
+      var goal = dir === "higher"
+        ? Math.ceil(cur * 1.05 * 10) / 10
+        : Math.floor(cur * 0.95 * 10) / 10;
+      rows.push({ code: axis.code, label: axis.label, unit: axis.unit,
+                  old: old, cur: cur, goal: goal, dir: dir });
+    });
+
+    if (!rows.length) {
+      share.textContent = "0 целей";
+      value.textContent = "—";
+      list.innerHTML = "";
+      note.textContent = "В мониторинге нет показателей с двумя выпусками — цель не построить.";
+      return;
+    }
+
+    share.textContent = rows.length + " целей";
+    value.textContent = rows.length;
+    list.innerHTML = rows.map(function (row) {
+      var label = String(row.label || "").replace(/^E\.\d+\.\s*/, "");
+      var mark = row.dir === "higher" ? "≥" : "≤";
+      var tone = row.dir === "higher" ? "text-emerald-700" : "text-rose-700";
+      return '<div class="flex w-full items-baseline justify-between gap-2 border-b border-slate-50 py-1.5 text-[12px] last:border-0" title="' +
+        esc(row.label + (row.unit ? " · " + row.unit : "")) + '">' +
+        '<span class="min-w-0 truncate text-slate-600"><span class="font-mono text-[10.5px] text-slate-400">' +
+        esc(row.code) + "</span> " + esc(label) + "</span>" +
+        '<span class="whitespace-nowrap tabular-nums">' +
+          '<span class="text-slate-400">' + (row.old === null ? "—" : num(row.old)) + "</span>" +
+          ' <span class="text-slate-300">→</span> ' +
+          '<span class="font-semibold text-slate-900">' + num(row.cur) + "</span>" +
+          ' <span class="text-slate-300">→</span> ' +
+          '<span class="font-semibold ' + tone + '">' + mark + " " + num(row.goal) + "</span>" +
+        "</span></div>";
     }).join("");
+    note.textContent = "База — " + last + ". Цель: превысить " + last +
+      " на 5% по позитивным показателям; негативные снизить на 5%. " +
+      "Позитивных: " + rows.length + ", негативных: 0.";
   }
 
   // ---------- Состояние ----------
@@ -415,7 +469,7 @@
     var release = (state.directions && state.directions.release) || "2025";
 
     $("monitoringTitle").textContent = "Блок: " + (block ? block.title : blockId) + " · мониторинг";
-    $("monitoringSubtitle").textContent = "Показатели раздела III · сравнение с медианами частных вузов и региона";
+    $("monitoringSubtitle").textContent = "Показатели вуза (ИУБиП) и медианы частных вузов / региона";
     $("monitoringAvg").textContent = items.length ? "показателей: " + items.length : "нет данных";
     $("monitoringYears").textContent = "выпуск " + release;
 
@@ -431,14 +485,37 @@
     $("radarWrap").hidden = false;
 
     var labels = items.map(function (item) { return item.ind.code; });
-    function ratios(kind) {
-      return items.map(function (item) {
-        var r = kind === "private" ? item.ind.median_private_ratio : item.ind.median_region_ratio;
-        if (r === null || r === undefined) return 0;
-        return Math.min(2, Number(r) || 0);
-      });
+
+    function positive(value) {
+      var number = Number(value);
+      return isFinite(number) && number !== 0 ? number : null;
     }
-    var baseline = items.map(function () { return 1; });
+
+    var vuzData = [], regionData = [], privateData = [], allValues = [];
+    items.forEach(function (item) {
+      var ind = item.ind;
+      var vuz = positive(ind.value);
+      var region = positive(ind.median_region);
+      var priv = positive(ind.median_private);
+      var base = region || priv;
+      if (vuz === null || base === null) {
+        // Сравнения нет: на сайте такая точка стоит в центре.
+        vuzData.push(0);
+        regionData.push(region ? 1 : null);
+        privateData.push(priv ? (region ? priv / region : 1) : null);
+        return;
+      }
+      vuzData.push(vuz / base);
+      regionData.push(region ? 1 : null);
+      privateData.push(priv ? priv / base : null);
+      allValues.push(vuz / base);
+      if (region) allValues.push(1);
+      if (priv) allValues.push(priv / base);
+    });
+    var max = Math.max(1.2, Math.min(5, Math.max.apply(
+      null, allValues.filter(function (value) { return isFinite(value); })
+        .concat([1])) * 1.08));
+    var step = max <= 2 ? 0.5 : 1;
 
     if (state.radar) state.radar.destroy();
     state.radar = new Chart($("radarChart"), {
@@ -447,39 +524,38 @@
         labels: labels,
         datasets: [
           {
-            label: "Медиана (1×)",
-            data: baseline,
-            borderColor: "#94a3b8",
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderDash: [4, 3],
-            pointRadius: 0,
-            fill: false,
+            label: "Показатели вуза (ИУБиП)",
+            data: vuzData,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15,118,110,.12)",
+            borderWidth: 2.5,
+            pointRadius: 3.5,
+            pointHoverRadius: 5,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#0f766e",
+            pointBorderWidth: 2,
+            fill: true,
             order: 10
           },
           {
-            label: "К медиане частных вузов",
-            data: ratios("private"),
-            borderColor: "#0ea5e9",
-            backgroundColor: "rgba(14,165,233,.10)",
-            borderWidth: 2,
-            pointRadius: 3,
+            label: "Медиана региона",
+            data: regionData,
+            borderColor: "#b45309",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
             pointBackgroundColor: "#ffffff",
-            pointBorderColor: "#0ea5e9",
-            pointBorderWidth: 2,
-            fill: true
+            pointBorderColor: "#b45309"
           },
           {
-            label: "К медиане региона",
-            data: ratios("region"),
-            borderColor: "#b45309",
-            backgroundColor: "rgba(180,83,9,.08)",
-            borderWidth: 2,
-            pointRadius: 3,
+            label: "Медиана частных вузов",
+            data: privateData,
+            borderColor: "#0ea5e9",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
             pointBackgroundColor: "#ffffff",
-            pointBorderColor: "#b45309",
-            pointBorderWidth: 2,
-            fill: true
+            pointBorderColor: "#0ea5e9"
           }
         ]
       },
@@ -496,23 +572,27 @@
                 var item = items[ctx.dataIndex] || {};
                 var ind = item.ind || {};
                 var value = Number(ctx.parsed.r);
-                if (ctx.dataset.label === "Медиана (1×)") return "медиана: ×1.00";
-                var kind = ctx.dataset.label.indexOf("частных") !== -1 ? "private" : "region";
-                var median = kind === "private" ? ind.median_private : ind.median_region;
-                var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
-                var text = ctx.dataset.label + ": ×" + value.toFixed(2);
-                if (capped) text += " (≥ 2×)";
-                else if (value === 0) text += " (сравнения нет)";
-                else if (median !== null && median !== undefined) text += " · медиана " + num(median);
-                return text;
+                if (!isFinite(value)) return "";
+                var unit = ind.unit ? " " + ind.unit : "";
+                if (ctx.dataset.label.indexOf("Показатели вуза") === 0) {
+                  if (value === 0) return "ИУБиП: " + num(ind.value) + unit + " (сравнения нет)";
+                  return "ИУБиП: " + num(ind.value) + unit +
+                    " (×" + value.toFixed(2) + " к медиане)";
+                }
+                var isRegion = ctx.dataset.label.indexOf("региона") !== -1;
+                var median = isRegion ? ind.median_region : ind.median_private;
+                var capped = isRegion ? ind.median_region_capped : ind.median_private_capped;
+                if (value === 0) return ctx.dataset.label + ": сравнения нет";
+                return ctx.dataset.label + ": " + num(median) + unit +
+                  (capped ? " (≥ 2×)" : "") + " (×" + value.toFixed(2) + ")";
               }
             }
           }
         },
         scales: {
           r: {
-            min: 0, max: 2,
-            ticks: { stepSize: 0.5, showLabelBackdrop: false, color: "#94a3b8", font: { size: 9 } },
+            min: 0, max: max,
+            ticks: { stepSize: step, showLabelBackdrop: false, color: "#94a3b8", font: { size: 9 } },
             grid: { color: "#e8edf3" },
             angleLines: { color: "#e8edf3" },
             pointLabels: { color: "#475569", font: { size: 9 } }
@@ -522,9 +602,9 @@
     });
 
     $("radarLegend").innerHTML = [
-      { color: "#94a3b8", text: "медиана (1×)" },
-      { color: "#0ea5e9", text: "к медиане частных вузов" },
-      { color: "#b45309", text: "к медиане региона" }
+      { color: "#0f766e", text: "показатели вуза (ИУБиП)" },
+      { color: "#b45309", text: "медиана региона" },
+      { color: "#0ea5e9", text: "медиана частных вузов" }
     ].map(function (row) {
       return '<span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full" style="background:' +
         row.color + '"></span>' + esc(row.text) + "</span>";
@@ -586,28 +666,97 @@
     var avgLast = data.years[last] ? data.years[last].average_percentile : 0;
     $("monitoringAvg").textContent = "средний процентиль " + avgFirst + " → " + avgLast;
 
-    var colors = ["#94a3b8", "#2563eb", "#0d9488"];
-    var datasets = years.map(function (year, i) {
-      var color = colors[i] || colors[colors.length - 1];
-      return {
-        label: year,
-        data: data.series[year] || [],
-        borderColor: color,
-        backgroundColor: color + "1f",
-        pointBackgroundColor: "#ffffff",
-        pointBorderColor: color,
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        borderWidth: 2,
-        fill: true
-      };
+    $("monitoringSubtitle").textContent =
+      "показатели вуза и медианы по РФ, субъекту и ведомственной принадлежности";
+
+    var release = data.years[last] || {};
+    var indicators = release.indicators || {};
+
+    function positive(value) {
+      var number = Number(value);
+      return isFinite(number) && number !== 0 ? number : null;
+    }
+
+    var vuzData = [], rfData = [], regionData = [], deptData = [];
+    var allValues = [];
+    axes.forEach(function (axis) {
+      var ind = indicators[axis.code] || {};
+      var vuz = positive(ind.value);
+      var med = ind.medians || {};
+      var rf = positive(med.rf);
+      var region = positive(med.region);
+      var dept = positive(med.department);
+      var base = rf || region || vuz;
+      if (vuz === null || base === null || base === 0) {
+        vuzData.push(null); rfData.push(null);
+        regionData.push(null); deptData.push(null);
+        return;
+      }
+      vuzData.push(vuz / base);
+      rfData.push(rf ? 1 : null);
+      regionData.push(region ? region / base : null);
+      deptData.push(dept ? dept / base : null);
+      allValues.push(vuz / base);
+      if (region) allValues.push(region / base);
+      if (dept) allValues.push(dept / base);
     });
+    var max = Math.max(1.2, Math.min(5, Math.max.apply(
+      null, allValues.filter(function (value) { return isFinite(value); })
+        .concat([1])) * 1.08));
+    var step = max <= 2 ? 0.5 : 1;
 
     if (state.radar) state.radar.destroy();
     state.radar = new Chart($("radarChart"), {
       type: "radar",
-      data: { labels: axes.map(function (a) { return wrapLabel(a); }), datasets: datasets },
+      data: {
+        labels: axes.map(function (a) { return wrapLabel(a); }),
+        datasets: [
+          {
+            label: "Показатели вуза (ИУБиП)",
+            data: vuzData,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15,118,110,.12)",
+            borderWidth: 2.5,
+            pointRadius: 3.5,
+            pointHoverRadius: 5,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#0f766e",
+            pointBorderWidth: 2,
+            fill: true,
+            order: 10
+          },
+          {
+            label: "Медианы вузов/филиалов по РФ",
+            data: rfData,
+            borderColor: "#86efac",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#86efac"
+          },
+          {
+            label: "Медианы по субъекту РФ",
+            data: regionData,
+            borderColor: "#a78bfa",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#a78bfa"
+          },
+          {
+            label: "Медианы по ведомственной принадлежности",
+            data: deptData,
+            borderColor: "#22c55e",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#22c55e"
+          }
+        ]
+      },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -618,10 +767,23 @@
             backgroundColor: "#0f1115", padding: 10, cornerRadius: 10,
             callbacks: {
               label: function (ctx) {
-                var row = table[ctx.dataIndex];
-                var info = row && row.years[ctx.dataset.label];
-                var extra = info ? " · место " + info.rank + " из " + info.total : "";
-                return ctx.dataset.label + ": " + ctx.parsed.r + " процентиль" + extra;
+                var axis = axes[ctx.dataIndex] || {};
+                var ind = indicators[axis.code] || {};
+                var value = Number(ctx.parsed.r);
+                if (!isFinite(value)) return "";
+                var unit = axis.unit ? " " + axis.unit : "";
+                if (ctx.dataset.label.indexOf("Показатели вуза") === 0) {
+                  return "ИУБиП: " + num(ind.value) + unit +
+                    " (×" + value.toFixed(2) + " к медиане РФ)";
+                }
+                var med = ind.medians || {};
+                var absolute = ctx.dataset.label.indexOf("субъекту") !== -1
+                  ? med.region
+                  : ctx.dataset.label.indexOf("ведомственной") !== -1
+                    ? med.department
+                    : med.rf;
+                return ctx.dataset.label + ": " + num(absolute) + unit +
+                  " (×" + value.toFixed(2) + ")";
               }
             }
           }
@@ -629,22 +791,26 @@
         scales: {
           r: {
             min: 0,
-            max: 100,
-            ticks: { stepSize: 25, showLabelBackdrop: false, color: "#94a3b8", font: { size: 10 } },
+            max: max,
+            ticks: { stepSize: step, showLabelBackdrop: false, color: "#94a3b8", font: { size: 10 } },
             grid: { color: "#e8edf3" },
             angleLines: { color: "#e8edf3" },
-            pointLabels: { color: "#475569", font: { size: 11 } }
+            pointLabels: { color: "#475569", font: { size: 10 } }
           }
         }
       }
     });
 
     // Легенда своим HTML: в канвасе она не влезала под радар и обрезалась.
-    $("radarLegend").innerHTML = years.map(function (year, i) {
-      var color = colors[i] || colors[colors.length - 1];
+    $("radarLegend").innerHTML = [
+      { color: "#0f766e", text: "показатели вуза (ИУБиП)" },
+      { color: "#86efac", text: "медианы вузов/филиалов по РФ" },
+      { color: "#a78bfa", text: "медианы по субъекту РФ" },
+      { color: "#22c55e", text: "медианы по ведомственной принадлежности" }
+    ].map(function (row) {
       return '<span class="inline-flex items-center gap-2">' +
-        '<span class="h-2.5 w-2.5 rounded-full" style="background:' + color + '"></span>' +
-        year + "</span>";
+        '<span class="h-2.5 w-2.5 rounded-full" style="background:' + row.color + '"></span>' +
+        esc(row.text) + "</span>";
     }).join("");
 
     // Таблица: значение и место по каждому показателю за оба года.
