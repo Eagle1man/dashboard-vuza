@@ -17,6 +17,33 @@ from . import config
 
 CACHE = {"mtime": None, "data": None}
 
+# Разделы карточки СПО. Код показателя начинается с номера раздела:
+# 1.1, 1.2 — образовательная деятельность, 2.1 — международная и т. д.
+SPO_SECTIONS = [
+    {"code": "1", "title": "Образовательная деятельность"},
+    {"code": "2", "title": "Международная деятельность"},
+    {"code": "3", "title": "Уровень подготовки выпускников"},
+    {"code": "4", "title": "Инфраструктура"},
+    {"code": "5", "title": "Кадровый состав"},
+    {"code": "6", "title": "Социальная ответственность"},
+    {"code": "7", "title": "Инклюзивное образование"},
+]
+
+# В выпуске 2024 года часть показателей имела другую нумерацию.
+# Здесь только смысловые эквиваленты: остальные показатели 2024 года
+# не подставляем, чтобы не выдать чужое число за сопоставимое.
+SPO_PREV_CODE = {
+    "1.4": "old-1.9",
+    "4.3": "old-4.7",
+    "5.1": "old-6.4",
+    "5.2": "old-6.6",
+    "6.1": "old-8.2",
+    "6.2": "old-8.3",
+    "7.1": "old-9.1",
+    "7.2": "old-9.2",
+    "7.3": "old-9.4",
+}
+
 
 def _empty():
     return {"available": False, "axes": [], "years": {}, "table": []}
@@ -153,8 +180,18 @@ def spo():
     if not years:
         return {"available": False, "years": [], "rows": []}
 
-    units = {"1.1": "чел.", "1.2": "%", "1.3": "балл", "1.4": "%", "2.1": "%", "2.2": "%"}
-    last = raw["years"][years[-1]].get("indicators") or {}
+    units = {
+        "1.1": "чел.", "1.2": "%", "1.3": "балл", "1.4": "%",
+        "2.1": "%", "2.2": "%",
+        "3.1": "%", "3.2": "%", "3.3": "%",
+        "4.1": "%", "4.2": "%", "4.3": "%",
+        "5.1": "%", "5.2": "%",
+        "6.1": "%", "6.2": "%",
+        "7.1": "%", "7.2": "%", "7.3": "чел.", "7.4": "%",
+    }
+    first_year, last_year = years[0], years[-1]
+    last = raw["years"][last_year].get("indicators") or {}
+    first = raw["years"][first_year].get("indicators") or {}
 
     rows = []
     for code in last.keys():
@@ -169,6 +206,30 @@ def spo():
                 "percentile": ind.get("percentile"), "median": ind.get("median"),
                 "delta": ind.get("delta"),
             }
+
+        # 2024 год: если код сменился, но показатель тот же, показываем
+        # сопоставимое значение и считаем динамику. mapped=True — чтобы
+        # интерфейс мог пометить такое число, а не выдать его за прямое.
+        prev_entry = row["years"].get(first_year)
+        if (first_year != last_year
+                and (not prev_entry or prev_entry.get("org") is None)):
+            alias = SPO_PREV_CODE.get(code)
+            prev = first.get(alias) if alias else None
+            if prev and prev.get("org") is not None:
+                row["years"][first_year] = {
+                    "org": prev["org"], "region": prev.get("region"),
+                    "rf": prev.get("rf"), "rank": None, "total": None,
+                    "percentile": None, "median": None, "delta": None,
+                    "mapped": True,
+                }
+                current = row["years"].get(last_year) or {}
+                prev_org = prev["org"]
+                if current.get("org") is not None and prev_org not in (None, 0):
+                    current["delta"] = round(
+                        (current["org"] - prev_org) / abs(prev_org) * 100, 1)
+                elif current.get("org") == 0 and prev_org == 0:
+                    current["delta"] = 0.0
+
         rows.append(row)
 
     return {
@@ -176,6 +237,7 @@ def spo():
         "source": raw.get("source"),
         "years": years,
         "total": raw["years"][years[-1]].get("total"),
+        "sections": SPO_SECTIONS,
         "rows": rows,
     }
 

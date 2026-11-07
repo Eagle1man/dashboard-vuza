@@ -674,6 +674,21 @@
   }
 
   // ---------- СПО ----------
+  var SPO_FALLBACK_SECTIONS = [
+    { code: "1", title: "Образовательная деятельность" },
+    { code: "2", title: "Международная деятельность" },
+    { code: "3", title: "Уровень подготовки выпускников" },
+    { code: "4", title: "Инфраструктура" },
+    { code: "5", title: "Кадровый состав" },
+    { code: "6", title: "Социальная ответственность" },
+    { code: "7", title: "Инклюзивное образование" }
+  ];
+
+  function spoSections(data) {
+    var sections = (data && data.sections) || [];
+    return sections.length ? sections : SPO_FALLBACK_SECTIONS;
+  }
+
   function renderSpo(data) {
     if (!data || !data.available) {
       $("spoTable").innerHTML = '<tr><td colspan="7" class="px-5 py-6 text-slate-500">Данных СПО нет: файл не собран.</td></tr>';
@@ -683,14 +698,18 @@
     var first = years[0], last = years[years.length - 1];
     $("spoTotal").textContent = "организаций СПО в области: " + (data.total || "—");
 
-    $("spoTable").innerHTML = (data.rows || []).map(function (row) {
+    function rowHtml(row) {
       var a = row.years[first] || {};
       var b = row.years[last] || {};
+      var unitLine = row.unit && String(row.title || "").toLowerCase()
+        .indexOf(row.unit.toLowerCase()) === -1
+        ? '<p class="text-[11px] text-slate-400">' + esc(row.unit) + "</p>"
+        : "";
       var delta = b.delta;
       var deltaHtml = '<span class="text-slate-400">—</span>';
       if (delta !== null && delta !== undefined) {
         var up = delta > 0;
-        var tone = delta === 0 ? "text-slate-500" : up ? "text-emerald-600" : "text-rose-600";
+        var tone = delta === 0 ? "text-slate-500" : up ? "text-emerald-600" : "text-orange-600";
         var icon = delta === 0 ? "minus" : up ? "arrow-up-right" : "arrow-down-right";
         deltaHtml = '<span class="inline-flex items-center gap-1 whitespace-nowrap font-semibold ' + tone + '">' +
           '<i data-lucide="' + icon + '" class="h-3.5 w-3.5"></i>' + num(Math.abs(delta)) + "%</span>";
@@ -704,19 +723,31 @@
 
       return '<tr class="transition-colors hover:bg-slate-50/60">' +
         '<td class="px-5 py-3"><p class="leading-snug text-slate-700">' + esc(row.title) + "</p>" +
-          '<p class="text-[11px] text-slate-400">' + esc(row.unit || "") + "</p></td>" +
-        '<td class="px-5 py-3 text-right tabular-nums text-slate-500">' + num(a.org) + "</td>" +
+          unitLine + "</td>" +
+        '<td class="px-5 py-3 text-right tabular-nums text-slate-500">' + num(a.org) +
+          (a.mapped ? '<span class="ml-0.5 text-[10px] text-slate-400" title="В 2024 году показатель учитывался под другим кодом">*</span>' : "") + "</td>" +
         '<td class="px-5 py-3 text-right font-semibold tabular-nums">' + num(b.org) + "</td>" +
         '<td class="px-5 py-3 text-right">' + deltaHtml + "</td>" +
         '<td class="px-5 py-3 text-right">' + place + "</td>" +
         '<td class="px-5 py-3 text-right tabular-nums text-slate-600">' + num(b.region) + "</td>" +
         '<td class="px-5 py-3 text-right tabular-nums text-slate-500">' + num(b.rf) + "</td>" +
       "</tr>";
+    }
+
+    var body = spoSections(data).map(function (section) {
+      var items = (data.rows || []).filter(function (row) {
+        return String(row.code).split(".")[0] === section.code;
+      });
+      if (!items.length) return "";
+      return '<tr class="bg-slate-50/80"><td colspan="7" class="px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">' +
+        esc(section.code) + ". " + esc(section.title) + "</td></tr>" +
+        items.map(rowHtml).join("");
     }).join("");
+    $("spoTable").innerHTML = body;
 
     $("spoNote").textContent = "Источник: monitoring.miccedu.ru, СПО, карточка организации id=1971. " +
-      "Место — среди " + (data.total || "—") + " организаций СПО Ростовской области; " +
-      "по численности студентов место отражает размер, а не качество.";
+      "Место — среди " + (data.total || "—") + " организаций СПО Ростовской области; область и РФ — медианные значения. " +
+      "По численности студентов место отражает размер, а не качество. За 2024 год показатели, которых не было в прежней методике, отмечены прочерком; «*» — показатель учитывался под другим кодом.";
   }
 
   // ---------- Общее ----------

@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend import spo  # noqa: E402
+from backend import monitoring, spo  # noqa: E402
 
 
 CARD_HTML = """
@@ -74,6 +74,27 @@ def test_build_release_ties_share_place():
     row = spo.build_release(card, organizations)["1.1"]
     assert row["rank"] == 1
     assert row["percentile"] == 100
+
+
+def test_spo_api_has_all_sections_and_units():
+    """Подраздел СПО получает все 7 разделов и единицы измерения."""
+    data = monitoring.spo()
+    assert data["available"] is True
+    assert [s["code"] for s in data["sections"]] == [str(i) for i in range(1, 8)]
+    assert len(data["rows"]) == 20
+    assert all(row["unit"] for row in data["rows"])
+
+
+def test_spo_api_maps_changed_codes_for_2024():
+    """Смена нумерации не должна оставлять 2024 год пустым."""
+    data = monitoring.spo()
+    by_code = {row["code"]: row for row in data["rows"]}
+    assert by_code["5.2"]["years"]["2024"]["org"] == 41.46
+    assert by_code["5.2"]["years"]["2024"].get("mapped") is True
+    assert by_code["5.2"]["years"]["2025"]["delta"] == 24.3
+    assert by_code["1.4"]["years"]["2024"]["org"] == 0.0
+    # Для 1.3 сопоставимого значения в прежней методике нет.
+    assert "2024" not in by_code["1.3"]["years"]
 
 
 def test_write_spo_md(tmp_path):

@@ -14,6 +14,7 @@
     health: null,
     monitoring: null,
     directions: null,
+    spo: null,
     query: "",
     block: "all",
     span: 13,
@@ -501,7 +502,17 @@
       '<span class="text-[10px] text-slate-400">' + num(median) + "</span></span>";
   }
 
+  // Радар и таблица стоят в двух колонках. Для СПО радар не нужен:
+  // прячем левую колонку и отдаём всю ширину таблице.
+  function showMonitoringRadar() {
+    var radarCol = $("monitoringRadarCol");
+    if (radarCol) radarCol.hidden = false;
+    var grid = $("monitoringGrid");
+    if (grid) grid.style.gridTemplateColumns = "";
+  }
+
   function renderBlockMonitoring(blockId) {
+    showMonitoringRadar();
     var block = (state.blocks || []).filter(function (b) { return b.id === blockId; })[0];
     var items = blockIndicators(blockId);
     var release = (state.directions && state.directions.release) || "2025";
@@ -667,7 +678,119 @@
       "Зелёный — выше медианы, оранжевый — ниже.</p>";
   }
 
+  // ---------- СПО ----------
+  var SPO_FALLBACK_SECTIONS = [
+    { code: "1", title: "Образовательная деятельность" },
+    { code: "2", title: "Международная деятельность" },
+    { code: "3", title: "Уровень подготовки выпускников" },
+    { code: "4", title: "Инфраструктура" },
+    { code: "5", title: "Кадровый состав" },
+    { code: "6", title: "Социальная ответственность" },
+    { code: "7", title: "Инклюзивное образование" }
+  ];
+
+  function spoSections(data) {
+    var sections = (data && data.sections) || [];
+    return sections.length ? sections : SPO_FALLBACK_SECTIONS;
+  }
+
+  function spoDelta(delta) {
+    if (delta === null || delta === undefined) {
+      return '<span class="text-slate-300">—</span>';
+    }
+    var tone = delta > 0 ? "text-emerald-600" : delta < 0 ? "text-orange-600" : "text-slate-500";
+    var sign = delta > 0 ? "+" : "";
+    return '<span class="font-semibold tabular-nums ' + tone + '">' + sign + num(delta) + "%</span>";
+  }
+
+  function renderSpoBlock() {
+    var data = state.spo;
+    $("monitoringSection").hidden = false;
+    $("monitoringTitle").textContent = "СПО: показатели ИУБиП";
+    $("monitoringSubtitle").textContent =
+      "Среднее профессиональное образование · ИУБиП, область и РФ";
+    $("monitoringYears").textContent = data && data.total
+      ? "организаций: " + data.total
+      : "";
+    $("monitoringAvg").textContent = data && data.rows
+      ? "показателей: " + data.rows.length
+      : "нет данных";
+
+    $("radarWrap").hidden = true;
+    $("radarLegend").innerHTML = "";
+    var radarCol = $("monitoringRadarCol");
+    if (radarCol) radarCol.hidden = true;
+    var grid = $("monitoringGrid");
+    if (grid) grid.style.gridTemplateColumns = "minmax(0, 1fr)";
+    if (state.radar) { state.radar.destroy(); state.radar = null; }
+
+    if (!data || !data.available || !(data.rows || []).length) {
+      $("monitoringTable").innerHTML =
+        '<p class="text-sm leading-relaxed text-slate-500">Данных СПО нет: файл не собран.</p>';
+      return;
+    }
+
+    var years = data.years || [];
+    var first = years[0], last = years[years.length - 1];
+    var rows = data.rows || [];
+
+    function rowHtml(row) {
+      var a = row.years[first] || {};
+      var b = row.years[last] || {};
+      var unitLine = row.unit && String(row.title || "").toLowerCase()
+        .indexOf(row.unit.toLowerCase()) === -1
+        ? '<p class="text-[10.5px] text-slate-400">' + esc(row.unit) + "</p>"
+        : "";
+      var place = (b.rank && b.total)
+        ? '<span class="inline-flex flex-col items-end gap-1"><span class="whitespace-nowrap">' +
+          '<span class="font-semibold tabular-nums">' + b.rank + "</span>" +
+          '<span class="text-[11px] text-slate-400"> / ' + b.total + "</span></span>" +
+          scoreBar(b.percentile) + "</span>"
+        : '<span class="text-slate-300">—</span>';
+      return '<tr class="transition-colors hover:bg-slate-50/60">' +
+        '<td class="px-3 py-2"><p class="leading-snug text-slate-700">' + esc(row.title) + "</p>" +
+          unitLine + "</td>" +
+        '<td class="px-3 py-2 text-right tabular-nums text-slate-500">' + num(a.org) +
+          (a.mapped ? '<span class="ml-0.5 text-[10px] text-slate-400" title="В 2024 году показатель учитывался под другим кодом">*</span>' : "") + "</td>" +
+        '<td class="px-3 py-2 text-right font-semibold tabular-nums">' + num(b.org) + "</td>" +
+        '<td class="px-3 py-2 text-right">' + spoDelta(b.delta) + "</td>" +
+        '<td class="px-3 py-2 text-right">' + place + "</td>" +
+        '<td class="px-3 py-2 text-right tabular-nums text-slate-600">' + num(b.region) + "</td>" +
+        '<td class="px-3 py-2 text-right tabular-nums text-slate-500">' + num(b.rf) + "</td>" +
+        "</tr>";
+    }
+
+    var body = spoSections(data).map(function (section) {
+      var items = rows.filter(function (row) {
+        return String(row.code).split(".")[0] === section.code;
+      });
+      if (!items.length) return "";
+      return '<tr class="bg-slate-50/80"><td colspan="7" class="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">' +
+        esc(section.code) + ". " + esc(section.title) + "</td></tr>" +
+        items.map(rowHtml).join("");
+    }).join("");
+
+    $("monitoringTable").innerHTML =
+      '<div class="overflow-x-auto"><table class="w-full min-w-[980px] text-left text-sm">' +
+      '<thead><tr class="border-b border-slate-100 text-[10.5px] uppercase tracking-[0.07em] text-slate-400">' +
+        '<th class="px-3 py-2 font-semibold">Показатель</th>' +
+        '<th class="px-3 py-2 text-right font-semibold">' + esc(first) + "</th>" +
+        '<th class="px-3 py-2 text-right font-semibold">' + esc(last) + "</th>" +
+        '<th class="px-3 py-2 text-right font-semibold">Δ</th>' +
+        '<th class="px-3 py-2 text-right font-semibold">Место в области</th>' +
+        '<th class="px-3 py-2 text-right font-semibold">Область</th>' +
+        '<th class="px-3 py-2 text-right font-semibold">РФ</th>' +
+      "</tr></thead><tbody class=\"divide-y divide-slate-50\">" + body + "</tbody></table></div>" +
+      '<p class="mt-3 text-[11px] leading-snug text-slate-400">Источник: monitoring.miccedu.ru, СПО, карточка организации id=1971. ' +
+      "Место — среди " + (data.total || "—") + " организаций СПО Ростовской области; область и РФ — медианные значения. " +
+      "По численности студентов место отражает размер, а не качество. За 2024 год показатели, которых не было в прежней методике, отмечены прочерком; «*» — показатель учитывался под другим кодом.</p>";
+  }
+
   function renderMonitoring() {
+    if (state.block === "spo") {
+      renderSpoBlock();
+      return;
+    }
     if (!state.monitoring || !state.monitoring.available) {
       $("monitoringSection").hidden = true;
       return;
@@ -681,6 +804,7 @@
   }
 
   function renderMonitoringAll() {
+    showMonitoringRadar();
     var data = state.monitoring;
     if (!data || !data.available) {
       $("monitoringSection").hidden = true;
@@ -916,6 +1040,13 @@
   }
 
   function renderBlocks() {
+    var blocksSection = $("blocksSection");
+    if (blocksSection) blocksSection.hidden = state.block === "spo";
+    if (state.block === "spo") {
+      $("blocks").innerHTML = "";
+      $("emptyState").hidden = true;
+      return;
+    }
     var html = "";
     state.blocks.forEach(function (b) {
       var items = state.metrics.filter(function (m) { return m.block === b.id && matches(m); });
@@ -950,7 +1081,16 @@
   }
 
   function renderChips() {
-    var chips = [{ id: "all", title: "Все блоки" }].concat(state.blocks);
+    var chips = [{ id: "all", title: "Все блоки" }];
+    var spoAdded = false;
+    state.blocks.forEach(function (b) {
+      if (!spoAdded && b.id === "digital") {
+        chips.push({ id: "spo", title: "СПО" });
+        spoAdded = true;
+      }
+      chips.push(b);
+    });
+    if (!spoAdded) chips.push({ id: "spo", title: "СПО" });
     $("blockChips").innerHTML = chips.map(function (b) {
       var active = state.block === b.id;
       return '<button data-block="' + b.id + '" class="rounded-lg border px-3 py-1.5 text-[13px] font-medium transition ' +
@@ -958,9 +1098,9 @@
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900") +
         '">' + esc(b.title) + "</button>";
     }).join("");
-    var selected = state.block === "all" ? null : state.blocks.filter(function (b) {
-      return b.id === state.block;
-    })[0];
+    var selected = state.block === "all" ? null
+      : state.block === "spo" ? { title: "СПО" }
+      : state.blocks.filter(function (b) { return b.id === state.block; })[0];
     var hint = $("blocksHint");
     if (hint) hint.textContent = selected ? selected.title : "все блоки";
   }
@@ -1033,15 +1173,21 @@
       get("/api/metrics"),
       get("/api/health").catch(function () { return null; }),
       get("/api/monitoring").catch(function () { return null; }),
-      get("/api/monitoring/directions").catch(function () { return null; })
+      get("/api/monitoring/directions").catch(function () { return null; }),
+      get("/api/monitoring/spo").catch(function () { return null; })
     ]).then(function (res) {
       var metrics = res[0] || {};
       state.metrics = metrics.metrics || [];
-      state.blocks = metrics.blocks || [];
+      // «Воспитательная работа» — пустой блок: в мониторинге для него
+      // нет показателей, поэтому в переключателе он не нужен.
+      state.blocks = (metrics.blocks || []).filter(function (b) {
+        return b.id !== "upr";
+      });
       state.periods = metrics.periods || [];
       state.health = res[1];
       state.monitoring = res[2];
       state.directions = res[3];
+      state.spo = res[4];
       DIRECTION_INDEX = null;
 
       renderHeader();

@@ -198,8 +198,8 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-            <div>
+          <div id="monitoringGrid" class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+            <div id="monitoringRadarCol">
               <div class="relative h-[330px]" id="radarWrap">
                 <canvas id="radarChart" aria-label="Профиль вуза по показателям мониторинга" role="img"></canvas>
               </div>
@@ -211,7 +211,7 @@
       </section>
 
       <!-- Блоки показателей -->
-      <section class="space-y-4" aria-label="Показатели по блокам">
+      <section id="blocksSection" class="space-y-4" aria-label="Показатели по блокам">
         <div class="flex items-baseline justify-between gap-3">
           <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Показатели по блокам</h2>
           <span class="text-[12px] text-slate-400" id="blocksHint">все блоки</span>
