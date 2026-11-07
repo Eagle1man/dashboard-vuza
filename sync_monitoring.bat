@@ -7,6 +7,8 @@ rem
 rem  Run once:        sync_monitoring.bat
 rem  Check only:      sync_monitoring.bat --check
 rem  Full region:     sync_monitoring.bat --full
+rem  SPO card:        sync_monitoring.bat --spo
+rem  SPO full:        sync_monitoring.bat --spo --full
 rem  Watch daily:     sync_monitoring.bat --watch --interval 86400
 rem ================================================================
 cd /d "%~dp0"

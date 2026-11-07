@@ -82,6 +82,31 @@ sync_monitoring.bat --watch --interval 86400   следить постоянно
    Состояние проверки — `data/monitoring_sync.json` (локальное, в git не
    попадает).
 
+#### СПО
+
+Карточка СПО (id=1971, 20 показателей) синхронизируется отдельно:
+
+```
+sync_monitoring.bat --spo                 проверить и обновить строку ИУБиП
+sync_monitoring.bat --spo --check         только проверить
+sync_monitoring.bat --spo --full          пересобрать все 142 карточки СПО региона
+```
+
+Быстрый режим берёт места и медианы из `source/spo_region.json` — это
+сохранённые карточки всех организаций СПО области. Если файла нет,
+сторож сам делает полный обход. Полный обход стоит 142 запроса,
+поэтому его стоит вынести в отдельную задачу, например раз в неделю:
+
+```
+schtasks /Create /SC WEEKLY /TN "Rector SPO sync" ^
+  /TR "\"C:\Users\diorl\.cline\data\workspaces\chat\rector-dashboard\sync_monitoring.bat\" --spo --full" ^
+  /ST 06:30
+```
+
+СПО и ВО — разные наборы данных, поэтому `--spo` запускается отдельно
+от обычной синхронизации; состояние хранится в том же
+`data/monitoring_sync.json`, но в отдельном разделе `spo`.
+
 Автозапуск раз в сутки в Планировщике заданий Windows:
 
 ```
@@ -630,6 +655,7 @@ python -m backend.ingest --force  переиндексировать всё
 python -m backend.ingest --prune  убрать из индекса удалённые файлы
 python -m backend.collect_monitoring  собрать карточку с monitoring.miccedu.ru
 python -m backend.sync_monitoring     проверить сайт и обновить при изменениях
+python -m backend.sync_spo            то же для карточки СПО
 python -m backend.build_monitoring    пересобрать data/monitoring.json
 python -m backend.analytics --build   пересобрать витрину чисел мониторинга
 python -m backend.modelcheck      проверить готовность модели

@@ -618,7 +618,16 @@ def main(argv=None):
                     help="работать постоянно")
     ap.add_argument("--interval", type=int, default=86400,
                     help="интервал проверки в --watch, сек (по умолчанию сутки)")
+    ap.add_argument("--spo", action="store_true",
+                    help="синхронизировать карточку СПО вместо ВО")
     args = ap.parse_args(argv)
+
+    if args.spo:
+        # Отдельный парсер СПО: та же идея, другая страница и 142 карточки.
+        from backend import sync_spo
+        source = list(sys.argv[1:] if argv is None else argv)
+        forwarded = [arg for arg in source if arg != "--spo"]
+        return sync_spo.main(forwarded)
 
     if args.watch:
         log(f"сторож запущен: интервал {args.interval} с")
