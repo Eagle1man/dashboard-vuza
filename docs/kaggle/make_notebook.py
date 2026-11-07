@@ -344,7 +344,7 @@ try:
     else:
         model.save_pretrained_gguf("/tmp/gguf", tokenizer,
                                    quantization_method="q4_k_m")
-        ggufs = sorted(pathlib.Path("/tmp/gguf").glob("*.gguf"))
+        ggufs = sorted(pathlib.Path("/tmp/gguf").rglob("*.gguf"))
         assert ggufs, "GGUF не создан"
         for source in ggufs:
             size_gb = source.stat().st_size / 1e9
