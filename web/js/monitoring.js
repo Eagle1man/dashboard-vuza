@@ -188,6 +188,101 @@
       '<span class="text-[10.5px] text-slate-400">медиана ' + num(median) + (unit ? " " + esc(unit) : "") + "</span></span>";
   }
 
+  var DIR_CHARTS = {};
+
+  function dirChartConfig(section, kind) {
+    var items = section.indicators || [];
+    var labels = items.map(function (ind) { return ind.code; });
+    var ratios = items.map(function (ind) {
+      var r = kind === "private" ? ind.median_private_ratio : ind.median_region_ratio;
+      if (r === null || r === undefined) return 0;
+      return Math.min(2, Number(r) || 0);
+    });
+    var baseline = items.map(function () { return 1; });
+    var medianColor = kind === "private" ? "#38bdf8" : "#b45309";
+    var medianFill = kind === "private" ? "rgba(56,189,248,.08)" : "rgba(180,83,9,.08)";
+    return {
+      type: "radar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: kind === "private" ? "Медиана частных вузов" : "Медиана региона",
+            data: baseline,
+            borderColor: medianColor,
+            backgroundColor: medianFill,
+            borderWidth: 1.5,
+            pointRadius: 2.5,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: medianColor,
+            pointBorderWidth: 1.5,
+            fill: true
+          },
+          {
+            label: "Показатели вуза",
+            data: ratios,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15,118,110,.10)",
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#0f766e",
+            pointBorderWidth: 2,
+            fill: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        layout: { padding: 4 },
+        plugins: {
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: { boxWidth: 8, boxHeight: 8, font: { size: 9 }, padding: 8 }
+          },
+          tooltip: {
+            backgroundColor: "#0f1115", padding: 8, cornerRadius: 8,
+            callbacks: {
+              label: function (ctx) {
+                var ind = items[ctx.dataIndex] || {};
+                var value = Number(ctx.parsed.r);
+                if (ctx.dataset.label.indexOf("Медиана") === 0) {
+                  return "медиана: ×1.00";
+                }
+                var text = "вуз: ×" + value.toFixed(2);
+                var median = kind === "private" ? ind.median_private : ind.median_region;
+                var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
+                if (capped) text += " (≥ 2× медианы)";
+                else if (value === 0) text += " (сравнения нет)";
+                else if (median !== null && median !== undefined) text += " · медиана " + num(median);
+                return text;
+              }
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0, max: 2,
+            ticks: { stepSize: 0.5, showLabelBackdrop: false, color: "#94a3b8", font: { size: 8 } },
+            grid: { color: "#e8edf3" },
+            angleLines: { color: "#e8edf3" },
+            pointLabels: { color: "#475569", font: { size: 8.5 } }
+          }
+        }
+      }
+    };
+  }
+
+  function resizeDirectionCharts() {
+    Object.keys(DIR_CHARTS).forEach(function (key) {
+      var chart = DIR_CHARTS[key];
+      if (chart) chart.resize();
+    });
+  }
+
   function renderDirections(data) {
     if (!data || !data.available) {
       $("directions").innerHTML = '<p class="px-5 py-6 text-sm text-slate-500">Данных раздела III нет: файл не собран.</p>';
@@ -198,7 +293,7 @@
     sections.forEach(function (s) { total += (s.indicators || []).length; });
     $("dirTotal").textContent = sections.length + " разделов · " + total + " показателей";
 
-    $("directions").innerHTML = sections.map(function (section, idx) {
+    $("directions").innerHTML = sections.map(function (section) {
       var rows = (section.indicators || []).map(function (ind) {
         return '<tr class="transition-colors hover:bg-slate-50/60">' +
           '<td class="whitespace-nowrap px-3 py-2 text-right font-mono text-[11.5px] text-slate-400">' + esc(ind.code) + "</td>" +
@@ -209,11 +304,24 @@
           '<td class="px-3 py-2 text-right">' + ratioText(ind.median_region_ratio, ind.median_region, ind.median_region_capped, ind.unit) + "</td>" +
           "</tr>";
       }).join("");
-      return '<details class="group" ' + (idx === 0 ? "open" : "") + '>' +
+      var chartId = "dir-" + section.code;
+      var charts =
+        '<div class="grid grid-cols-1 gap-4 border-t border-slate-50 p-4 lg:grid-cols-2">' +
+          '<div class="rounded-xl border border-slate-100 p-3">' +
+            '<p class="mb-2 text-[11.5px] font-semibold text-slate-600">К медиане частных вузов</p>' +
+            '<div class="relative h-[300px]"><canvas id="' + chartId + '-private" aria-label="Показатели вуза к медиане частных вузов" role="img"></canvas></div>' +
+          '</div>' +
+          '<div class="rounded-xl border border-slate-100 p-3">' +
+            '<p class="mb-2 text-[11.5px] font-semibold text-slate-600">К медиане вузов региона</p>' +
+            '<div class="relative h-[300px]"><canvas id="' + chartId + '-region" aria-label="Показатели вуза к медиане вузов региона" role="img"></canvas></div>' +
+          '</div>' +
+        '</div>';
+      return '<details class="group" open>' +
         '<summary class="flex cursor-pointer items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50/60">' +
         '<span class="text-[13.5px] font-semibold text-slate-800">' + esc(section.code) + ". " + esc(section.title) + "</span>" +
         '<span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">' +
         (section.indicators || []).length + " показателей</span></summary>" +
+        charts +
         '<div class="overflow-x-auto border-t border-slate-50">' +
         '<table class="w-full min-w-[820px] text-left text-sm">' +
         '<thead><tr class="text-[10.5px] uppercase tracking-[0.07em] text-slate-400">' +
@@ -225,6 +333,24 @@
         '<th class="px-3 py-2 text-right font-semibold">К медиане региона</th>' +
         "</tr></thead><tbody class=\"divide-y divide-slate-50\">" + rows + "</tbody></table></div></details>";
     }).join("");
+
+    Object.keys(DIR_CHARTS).forEach(function (key) {
+      if (DIR_CHARTS[key]) DIR_CHARTS[key].destroy();
+    });
+    DIR_CHARTS = {};
+    sections.forEach(function (section) {
+      ["private", "region"].forEach(function (kind) {
+        var canvas = document.getElementById("dir-" + section.code + "-" + kind);
+        if (!canvas) return;
+        DIR_CHARTS[section.code + "-" + kind] =
+          new Chart(canvas, dirChartConfig(section, kind));
+      });
+    });
+    $("directions").querySelectorAll("details").forEach(function (details) {
+      details.addEventListener("toggle", function () {
+        if (details.open) resizeDirectionCharts();
+      });
+    });
   }
 
   // ---------- IV. Контингент и УГН ----------
@@ -499,6 +625,7 @@
         printState.push([d, d.open]);
         d.open = true;
       });
+      resizeDirectionCharts();
     });
     window.addEventListener("afterprint", function () {
       if (!printState) return;
@@ -535,6 +662,7 @@
     }).finally(function () {
       lucide.createIcons();
       Object.values(Chart.instances).forEach(function (c) { c.resize(); });
+      resizeDirectionCharts();
     });
     get("/api/health").then(function (h) {
       $("railStatus").className = "h-2 w-2 rounded-full " + (h && h.totals ? "bg-emerald-500" : "bg-rose-500");
@@ -548,6 +676,7 @@
 
   window.addEventListener("load", function () {
     Object.values(Chart.instances).forEach(function (c) { c.resize(); });
+    resizeDirectionCharts();
     lucide.createIcons();
   });
 })();

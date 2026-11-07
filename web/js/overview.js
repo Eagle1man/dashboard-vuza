@@ -1,8 +1,8 @@
 /* Обзор университета в стиле Mosaic: единственный источник данных — API.
  *
  * Никаких выдуманных чисел: всё приходит из /api/metrics (витрина),
- * /api/docs (индекс документов) и /api/health. Если сервер молчит или
- * данных нет — так и пишем, а не рисуем ноль.
+ * /api/monitoring и /api/monitoring/directions (мониторинг) и /api/health.
+ * Если сервер молчит или данных нет — так и пишем, а не рисуем ноль.
  */
 (function () {
   "use strict";
@@ -11,13 +11,15 @@
     metrics: [],
     blocks: [],
     periods: [],
-    docs: [],
     health: null,
+    monitoring: null,
+    directions: null,
     query: "",
     block: "all",
     span: 13,
     trend: null,
-    sources: null
+    sources: null,
+    radar: null
   };
 
   var ICONS = {
@@ -354,12 +356,222 @@
     return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
   }
 
-  function renderMonitoring(data) {
+  // Какие показатели раздела III показывать для каждого блока ленты.
+  // Полного соответствия у сайта нет: «ВНОКО» и «воспитательной работы»
+  // в мониторинге эффективности не существует, поэтому там честный
+  // отказ, а не выдуманный радар.
+  var BLOCK_MONITORING_CODES = {
+    academic: ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8",
+               "1.9", "1.10", "1.11", "1.12", "1.13", "1.14", "1.15"],
+    results: ["1.3", "1.4", "1.11", "1.12"],
+    vnoko: ["1.3", "1.4", "1.15"],
+    finance: ["4.1", "4.2", "4.3"],
+    science: ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8",
+              "2.9", "2.10", "2.11", "2.12", "2.13"],
+    digital: ["5.6", "5.7", "5.8"],
+    upr: []
+  };
+
+  var DIRECTION_INDEX = null;
+
+  function directionIndex() {
+    if (DIRECTION_INDEX) return DIRECTION_INDEX;
+    var map = {};
+    var sections = (state.directions && state.directions.sections) || [];
+    sections.forEach(function (section) {
+      (section.indicators || []).forEach(function (ind) {
+        map[ind.code] = { ind: ind, section: section };
+      });
+    });
+    DIRECTION_INDEX = map;
+    return map;
+  }
+
+  function blockIndicators(blockId) {
+    var codes = BLOCK_MONITORING_CODES[blockId] || [];
+    var map = directionIndex();
+    return codes.map(function (code) { return map[code]; }).filter(Boolean);
+  }
+
+  function ratioCell(ind, kind) {
+    var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
+    var ratio = kind === "private" ? ind.median_private_ratio : ind.median_region_ratio;
+    var median = kind === "private" ? ind.median_private : ind.median_region;
+    if (capped) {
+      return '<span class="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700" ' +
+        'title="Значение не менее чем в 2 раза выше медианы: шкала на сайте обрезана">≥ 2×</span>';
+    }
+    if (median === null || median === undefined || ratio === null || ratio === undefined) {
+      return '<span class="text-slate-300">—</span>';
+    }
+    return '<span class="inline-flex flex-col items-end">' +
+      '<span class="font-semibold tabular-nums text-slate-700">×' + Number(ratio).toFixed(2) + "</span>" +
+      '<span class="text-[10px] text-slate-400">' + num(median) + "</span></span>";
+  }
+
+  function renderBlockMonitoring(blockId) {
+    var block = (state.blocks || []).filter(function (b) { return b.id === blockId; })[0];
+    var items = blockIndicators(blockId);
+    var release = (state.directions && state.directions.release) || "2025";
+
+    $("monitoringTitle").textContent = "Блок: " + (block ? block.title : blockId) + " · мониторинг";
+    $("monitoringSubtitle").textContent = "Показатели раздела III · сравнение с медианами частных вузов и региона";
+    $("monitoringAvg").textContent = items.length ? "показателей: " + items.length : "нет данных";
+    $("monitoringYears").textContent = "выпуск " + release;
+
+    if (!items.length) {
+      if (state.radar) { state.radar.destroy(); state.radar = null; }
+      $("radarWrap").hidden = true;
+      $("radarLegend").innerHTML = "";
+      $("monitoringTable").innerHTML =
+        '<p class="text-sm leading-relaxed text-slate-500">В мониторинге эффективности нет показателей по блоку «' +
+        esc(block ? block.title : blockId) + '». Ближайшие данные — раздел IV (контингент и УГН) на странице «Мониторинг».</p>';
+      return;
+    }
+    $("radarWrap").hidden = false;
+
+    var labels = items.map(function (item) { return item.ind.code; });
+    function ratios(kind) {
+      return items.map(function (item) {
+        var r = kind === "private" ? item.ind.median_private_ratio : item.ind.median_region_ratio;
+        if (r === null || r === undefined) return 0;
+        return Math.min(2, Number(r) || 0);
+      });
+    }
+    var baseline = items.map(function () { return 1; });
+
+    if (state.radar) state.radar.destroy();
+    state.radar = new Chart($("radarChart"), {
+      type: "radar",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Медиана (1×)",
+            data: baseline,
+            borderColor: "#94a3b8",
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+            order: 10
+          },
+          {
+            label: "К медиане частных вузов",
+            data: ratios("private"),
+            borderColor: "#0ea5e9",
+            backgroundColor: "rgba(14,165,233,.10)",
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#0ea5e9",
+            pointBorderWidth: 2,
+            fill: true
+          },
+          {
+            label: "К медиане региона",
+            data: ratios("region"),
+            borderColor: "#b45309",
+            backgroundColor: "rgba(180,83,9,.08)",
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#b45309",
+            pointBorderWidth: 2,
+            fill: true
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: 6 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0f1115", padding: 10, cornerRadius: 10,
+            callbacks: {
+              label: function (ctx) {
+                var item = items[ctx.dataIndex] || {};
+                var ind = item.ind || {};
+                var value = Number(ctx.parsed.r);
+                if (ctx.dataset.label === "Медиана (1×)") return "медиана: ×1.00";
+                var kind = ctx.dataset.label.indexOf("частных") !== -1 ? "private" : "region";
+                var median = kind === "private" ? ind.median_private : ind.median_region;
+                var capped = kind === "private" ? ind.median_private_capped : ind.median_region_capped;
+                var text = ctx.dataset.label + ": ×" + value.toFixed(2);
+                if (capped) text += " (≥ 2×)";
+                else if (value === 0) text += " (сравнения нет)";
+                else if (median !== null && median !== undefined) text += " · медиана " + num(median);
+                return text;
+              }
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0, max: 2,
+            ticks: { stepSize: 0.5, showLabelBackdrop: false, color: "#94a3b8", font: { size: 9 } },
+            grid: { color: "#e8edf3" },
+            angleLines: { color: "#e8edf3" },
+            pointLabels: { color: "#475569", font: { size: 9 } }
+          }
+        }
+      }
+    });
+
+    $("radarLegend").innerHTML = [
+      { color: "#94a3b8", text: "медиана (1×)" },
+      { color: "#0ea5e9", text: "к медиане частных вузов" },
+      { color: "#b45309", text: "к медиане региона" }
+    ].map(function (row) {
+      return '<span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full" style="background:' +
+        row.color + '"></span>' + esc(row.text) + "</span>";
+    }).join("");
+
+    var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-slate-100 pb-2 text-[10.5px] uppercase tracking-[0.06em] text-slate-400">' +
+      "<span>Показатель</span><span class=\"text-right\">Значение</span>" +
+      '<span class="text-right">К медиане частных</span><span class="text-right">К медиане региона</span></div>';
+    var rows = items.map(function (item) {
+      var ind = item.ind;
+      return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
+        '<span class="min-w-0 pr-2 leading-snug text-slate-600"><span class="font-mono text-[11px] text-slate-400">' + esc(ind.code) + "</span> " +
+        esc(ind.title) + ' <span class="text-[10.5px] text-slate-400">' + esc(ind.unit || "") + "</span></span>" +
+        '<span class="text-right font-semibold tabular-nums text-slate-900">' + num(ind.value) + "</span>" +
+        '<span class="text-right">' + ratioCell(ind, "private") + "</span>" +
+        '<span class="text-right">' + ratioCell(ind, "region") + "</span>" +
+        "</div>";
+    }).join("");
+    $("monitoringTable").innerHTML = head + rows +
+      '<p class="mt-3 text-[11px] leading-snug text-slate-400">Источник: monitoring.miccedu.ru, раздел III. ' +
+      "×1 — уровень медианы, «≥ 2×» — не менее двух медиан (шкала на сайте обрезана), «—» — сравнения нет.</p>";
+  }
+
+  function renderMonitoring() {
+    if (!state.monitoring || !state.monitoring.available) {
+      $("monitoringSection").hidden = true;
+      return;
+    }
+    $("monitoringSection").hidden = false;
+    if (state.block && state.block !== "all") {
+      renderBlockMonitoring(state.block);
+    } else {
+      renderMonitoringAll();
+    }
+  }
+
+  function renderMonitoringAll() {
+    var data = state.monitoring;
     if (!data || !data.available) {
       $("monitoringSection").hidden = true;
       return;
     }
     $("monitoringSection").hidden = false;
+    $("monitoringTitle").textContent = "Место среди вузов Ростовской области";
+    $("monitoringSubtitle").textContent =
+      "мониторинг эффективности · процентиль: 100 — лучший результат в области";
+    $("radarWrap").hidden = false;
 
     var years = Object.keys(data.years || {}).sort();
     var axes = data.axes || [];
@@ -519,7 +731,17 @@
       "</article>";
     });
     $("blocks").innerHTML = html;
-    $("emptyState").hidden = html !== "";
+    var empty = $("emptyState");
+    empty.hidden = html !== "";
+    if (html === "") {
+      if (state.query) {
+        empty.textContent = "По запросу ничего не найдено. Измените слово поиска или выберите другой блок.";
+      } else if (state.block !== "all") {
+        empty.textContent = "В этом блоке пока нет подтверждённых документами показателей.";
+      } else {
+        empty.textContent = "Показателей пока нет.";
+      }
+    }
   }
 
   function renderChips() {
@@ -531,42 +753,14 @@
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900") +
         '">' + esc(b.title) + "</button>";
     }).join("");
+    var selected = state.block === "all" ? null : state.blocks.filter(function (b) {
+      return b.id === state.block;
+    })[0];
+    var hint = $("blocksHint");
+    if (hint) hint.textContent = selected ? selected.title : "все блоки";
   }
 
-  // ---------- Документы ----------
-  function docBadge(isDemo) {
-    // Демонстрационных документов больше нет; параметр оставлен, чтобы
-    // не менять вызовы, но метка всегда одна — «в индексе».
-    return '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>в индексе</span>';
-  }
-
-  function renderDocs() {
-    var docs = state.docs.slice(0, 7);
-    $("docsSubtitle").textContent = state.docs.length
-      ? "всего " + state.docs.length + " · по ним ассистент отвечает на вопросы"
-      : "пока ни одного документа";
-
-    $("docsTable").innerHTML = docs.map(function (d) {
-      return "<tr class=\"transition-colors hover:bg-slate-50/60\">" +
-        '<td class="px-5 py-3"><p class="font-medium leading-snug text-slate-900">' + esc(d.title) + "</p>" +
-          '<p class="text-[11px] text-slate-400">id ' + d.doc_id + "</p></td>" +
-        '<td class="px-5 py-3 text-[13px] text-slate-500">' + esc(d.doc_type || "—") + "</td>" +
-        '<td class="px-5 py-3 text-right font-semibold tabular-nums">' + num(d.n_chunks) + "</td>" +
-        '<td class="px-5 py-3">' + docBadge(d.is_demo) + "</td>" +
-      "</tr>";
-    }).join("");
-
-    $("docsCards").innerHTML = docs.map(function (d) {
-      return '<li class="flex items-start justify-between gap-4 px-5 py-4">' +
-        '<div class="min-w-0">' +
-          '<p class="text-[13px] font-medium leading-snug text-slate-900">' + esc(d.title) + "</p>" +
-          '<p class="mt-1 text-[11px] text-slate-500">' + esc(d.doc_type || "—") + " · фрагментов " + num(d.n_chunks) + "</p>" +
-        "</div>" +
-        '<div class="shrink-0">' + docBadge(d.is_demo) + "</div>" +
-      "</li>";
-    }).join("");
-  }
-
+  // ---------- Заголовок ----------
   function renderHeader() {
     var now = new Date();
     var date = now.toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "long" });
@@ -612,6 +806,7 @@
       state.block = btn.getAttribute("data-block");
       renderChips();
       renderBlocks();
+      renderMonitoring();
       lucide.createIcons();
     });
 
@@ -631,18 +826,18 @@
   function boot() {
     Promise.all([
       get("/api/metrics"),
-      get("/api/docs").catch(function () { return { documents: [] }; }),
       get("/api/health").catch(function () { return null; }),
-      get("/api/monitoring").catch(function () { return null; })
+      get("/api/monitoring").catch(function () { return null; }),
+      get("/api/monitoring/directions").catch(function () { return null; })
     ]).then(function (res) {
       var metrics = res[0] || {};
       state.metrics = metrics.metrics || [];
       state.blocks = metrics.blocks || [];
       state.periods = metrics.periods || [];
-      state.health = res[2];
-
-      var docs = res[1] || {};
-      state.docs = docs.documents || docs.docs || docs.items || [];
+      state.health = res[1];
+      state.monitoring = res[2];
+      state.directions = res[3];
+      DIRECTION_INDEX = null;
 
       renderHeader();
       renderStatus();
@@ -650,10 +845,9 @@
       renderKpi();
       renderTrend();
       renderSources();
-      renderMonitoring(res[3]);
+      renderMonitoring();
       renderGoals();
       renderBlocks();
-      renderDocs();
       lucide.createIcons();
     }).catch(function (err) {
       $("subtitle").textContent = "Не удалось загрузить данные: " + err.message;
