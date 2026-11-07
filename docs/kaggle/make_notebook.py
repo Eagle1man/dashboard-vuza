@@ -116,7 +116,8 @@ rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines
 bad = [r for r in rows
        if len(r["messages"]) != 3
        or "ВОПРОС:" not in r["messages"][1]["content"]
-       or "[" not in r["messages"][2]["content"]]
+       or ("[" not in r["messages"][2]["content"]
+           and "не найден" not in r["messages"][2]["content"].lower())]
 assert not bad, f"примеров не в боевом формате: {len(bad)}"
 print("примеров:", len(rows))
 print(rows[0]["messages"][1]["content"][:280])
