@@ -1014,6 +1014,91 @@
       "</p>";
   }
 
+  // ---------- Влияние показателей ленты на место в мониторинге ----------
+  function metricById(id) {
+    return (state.metrics || []).filter(function (m) { return m.id === id; })[0];
+  }
+
+  function percentileTone(value) {
+    var v = Number(value) || 0;
+    if (v >= 66) return "text-emerald-600";
+    if (v >= 33) return "text-amber-600";
+    return "text-orange-600";
+  }
+
+  function renderMonitoringLinks() {
+    var links = (window.MONITORING_LINKS && window.MONITORING_LINKS.links) || [];
+    var indicators = {};
+    var years = (state.monitoring && state.monitoring.years)
+      ? Object.keys(state.monitoring.years).sort() : [];
+    if (years.length) {
+      indicators = state.monitoring.years[years[years.length - 1]].indicators || {};
+    }
+    var spoLast = null;
+    if (state.spo && state.spo.available) {
+      var spoRow = (state.spo.rows || []).filter(function (r) {
+        return r.code === "1.1";
+      })[0];
+      if (spoRow) {
+        var spoYears = Object.keys(spoRow.years || {});
+        spoLast = spoYears.length ? spoRow.years[spoYears[spoYears.length - 1]] : null;
+      }
+    }
+
+    var rows = links.map(function (link) {
+      var sub = "";
+      if (link.code === "SPO") {
+        if (spoLast) {
+          sub = num(spoLast.org) + " чел. · место " + spoLast.rank + " из " + spoLast.total;
+        }
+      } else {
+        var ind = indicators[link.code];
+        if (ind) {
+          sub = num(ind.value) + " " + esc(ind.unit) + " · место " + ind.rank + " из " + ind.total +
+            ' · перцентиль <span class="font-semibold ' + percentileTone(ind.percentile) + '">' +
+            ind.percentile + "</span>";
+        }
+      }
+      var feed = (link.feed || []).map(function (f) {
+        var m = metricById(f.id);
+        var value = m ? '<span class="font-semibold tabular-nums">' + num(m.current) + "</span> " + esc(m.unit) : "";
+        return '<div class="leading-snug">' + esc(m ? m.title : f.id) +
+          (value ? " — " + value : "") +
+          '<span class="text-[11px] text-slate-400"> · ' + esc(f.role) + "</span></div>";
+      }).join("");
+      return '<tr class="align-top">' +
+        '<td class="px-5 py-2.5"><p class="font-semibold leading-snug text-slate-800">' +
+        (link.code === "SPO" ? esc(link.title) : esc(link.code) + ". " + esc(link.title)) + "</p>" +
+        '<p class="mt-0.5 text-[11.5px] text-slate-500">' + sub + "</p></td>" +
+        '<td class="px-4 py-2.5 text-[12.5px] text-slate-600">' + feed + "</td>" +
+        '<td class="px-5 py-2.5 text-[12px] leading-snug text-slate-500">' + esc(link.role) + "</td>" +
+        "</tr>";
+    }).join("");
+    $("monitoringLinksTable").innerHTML = rows;
+
+    var weakest = [];
+    ["E1", "E2", "E3", "E4", "E8"].forEach(function (code) {
+      var ind = indicators[code];
+      if (ind) weakest.push({ code: code, percentile: ind.percentile });
+    });
+    weakest.sort(function (a, b) { return a.percentile - b.percentile; });
+    var weakestText = weakest.slice(0, 3).map(function (item) {
+      return esc(item.code) + " (" + item.percentile + ")";
+    }).join(", ");
+
+    var eCount = links.filter(function (l) { return l.code !== "SPO"; }).length;
+    $("monitoringLinksTotal").textContent = eCount + " E + СПО";
+    $("monitoringLinksNote").innerHTML =
+      '<p class="font-semibold text-slate-600">Не влияют на место:</p>' +
+      '<p>«Трудоустройство выпускников» и «Выпуск 2025» — входят в дополнительные характеристики, но не в E-место. ' +
+      "«Расходы», «Фонд оплаты труда», доли ФОТ, аренды и субсидии — в E.4 считаются только доходы. " +
+      "«Библиотечный фонд» — инфраструктура раздела III (п. 5.8), не место. " +
+      "«Доходы (план 2026)» — план следующего года: факт в мониторинге — услуги, субсидия и НИР.</p>" +
+      '<p class="mt-1.5 font-semibold text-slate-600">Рекомендация.</p>' +
+      "<p>Место тянут вниз " + (weakestText || "—") + ". Чтобы управлять местом, в ленте не хватает трёх метрик: " +
+      "средний балл ЕГЭ принятых, НПР с учёными степенями и численность НПР (знаменатель E.2 и E.4).</p>";
+  }
+
   // ---------- Блоки ----------
   function matches(metric) {
     if (state.block !== "all" && metric.block !== state.block) return false;
@@ -1204,6 +1289,7 @@
       renderTrend();
       renderSources();
       renderMonitoring();
+      renderMonitoringLinks();
       renderGoals();
       renderBlocks();
       lucide.createIcons();

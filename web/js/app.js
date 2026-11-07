@@ -442,10 +442,15 @@ function updateStamp() {
       srcLine = '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
         esc(shortSource(m.srcNote)) + "</div>";
     }
+    // Связь с местом в мониторинге: бейдж, если показатель ленты влияет
+    // на какой-то из E-показателей. Нет бейджа — не влияет на место.
+    var monBadges = (window.MONITORING_LINKS && window.MONITORING_LINKS.byMetric[m.id] || []).map(function (code) {
+      return '<span class="mon-badge" title="Влияет на место в мониторинге: ' + esc(code) + '">' + esc(code) + "</span>";
+    }).join("");
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
       '<span class="widget-badges">' +
-      '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></span></div>" +
+      '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span>" + monBadges + "</span></div>" +
       '<div class="widget-value">' + fmtFull(value) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
       srcLine +
       '<div class="widget-footer">' + foot +
