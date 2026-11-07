@@ -1047,17 +1047,19 @@
 
     var rows = links.map(function (link) {
       var sub = "";
-      if (link.code === "SPO") {
+      if (link.eCode === "SPO") {
         if (spoLast) {
           sub = num(spoLast.org) + " чел. · место " + spoLast.rank + " из " + spoLast.total;
         }
-      } else {
-        var ind = indicators[link.code];
+      } else if (link.eCode) {
+        var ind = indicators[link.eCode];
         if (ind) {
           sub = num(ind.value) + " " + esc(ind.unit) + " · место " + ind.rank + " из " + ind.total +
             ' · перцентиль <span class="font-semibold ' + percentileTone(ind.percentile) + '">' +
             ind.percentile + "</span>";
         }
+      } else {
+        sub = "в E-место не входит";
       }
       var feed = (link.feed || []).map(function (f) {
         var m = metricById(f.id);
@@ -1067,11 +1069,11 @@
           '<span class="text-[11px] text-slate-400"> · ' + esc(f.role) + "</span></div>";
       }).join("");
       return '<tr class="align-top">' +
-        '<td class="px-5 py-2.5"><p class="font-semibold leading-snug text-slate-800">' +
-        (link.code === "SPO" ? esc(link.title) : esc(link.code) + ". " + esc(link.title)) + "</p>" +
+        '<td class="px-5 py-2.5"><p class="font-semibold leading-snug text-slate-800">' + esc(link.section) + "</p>" +
         '<p class="mt-0.5 text-[11.5px] text-slate-500">' + sub + "</p></td>" +
         '<td class="px-4 py-2.5 text-[12.5px] text-slate-600">' + feed + "</td>" +
-        '<td class="px-5 py-2.5 text-[12px] leading-snug text-slate-500">' + esc(link.role) + "</td>" +
+        '<td class="px-4 py-2.5 text-[12px] leading-snug text-slate-600">' + esc(link.monitors) + "</td>" +
+        '<td class="px-5 py-2.5 text-[12px] leading-snug text-slate-500">' + esc(link.missing) + "</td>" +
         "</tr>";
     }).join("");
     $("monitoringLinksTable").innerHTML = rows;
@@ -1086,14 +1088,13 @@
       return esc(item.code) + " (" + item.percentile + ")";
     }).join(", ");
 
-    var eCount = links.filter(function (l) { return l.code !== "SPO"; }).length;
-    $("monitoringLinksTotal").textContent = eCount + " E + СПО";
+    $("monitoringLinksTotal").textContent = links.length + " разделов";
     $("monitoringLinksNote").innerHTML =
-      '<p class="font-semibold text-slate-600">Не влияют на место:</p>' +
-      '<p>«Трудоустройство выпускников» и «Выпуск 2025» — входят в дополнительные характеристики, но не в E-место. ' +
-      "«Расходы», «Фонд оплаты труда», доли ФОТ, аренды и субсидии — в E.4 считаются только доходы. " +
-      "«Библиотечный фонд» — инфраструктура раздела III (п. 5.8), не место. " +
-      "«Доходы (план 2026)» — план следующего года: факт в мониторинге — услуги, субсидия и НИР.</p>" +
+      '<p class="font-semibold text-slate-600">Не привязаны ни к одному разделу:</p>' +
+      '<p>«Трудоустройство выпускников» и «Выпуск 2025» — входят в дополнительные характеристики мониторинга, а не в разделы III. ' +
+      "«Расходы», «Фонд оплаты труда», «Доля ФОТ» и «Доля аренды» — расходы в разделах III не оцениваются (там доходы). " +
+      "«Доходы (план 2026)» — план: в мониторинге факт («услуги» и «субсидия»). " +
+      "«Контингент обучающихся» (всего) — включает СПО: по разделам ВО берутся бакалавриат и магистратура.</p>" +
       '<p class="mt-1.5 font-semibold text-slate-600">Рекомендация.</p>' +
       "<p>Место тянут вниз " + (weakestText || "—") + ". Чтобы управлять местом, в ленте не хватает трёх метрик: " +
       "средний балл ЕГЭ принятых, НПР с учёными степенями и численность НПР (знаменатель E.2 и E.4).</p>";

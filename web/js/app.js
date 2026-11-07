@@ -445,7 +445,7 @@ function updateStamp() {
     // Связь с местом в мониторинге: бейдж, если показатель ленты влияет
     // на какой-то из E-показателей. Нет бейджа — не влияет на место.
     var monBadges = (window.MONITORING_LINKS && window.MONITORING_LINKS.byMetric[m.id] || []).map(function (code) {
-      return '<span class="mon-badge" title="Влияет на место в мониторинге: ' + esc(code) + '">' + esc(code) + "</span>";
+      return '<span class="mon-badge" title="Влияет на показатели мониторинга: ' + esc(code) + '">' + esc(code) + "</span>";
     }).join("");
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
