@@ -1,8 +1,8 @@
 СБОРКА ВОПРОСОВ И ДАТАСЕТА
 
-train: 640 — comparison 30, extraction 562, refusal 46, structure 2
-dev: 180 — comparison 15, extraction 160, refusal 5
-test: 185 — comparison 15, extraction 165, refusal 5
+train: 636 — comparison 30, extraction 562, refusal 42, structure 2
+dev: 182 — comparison 15, extraction 160, refusal 7
+test: 187 — comparison 15, extraction 165, refusal 7
 
 всего вопросов: 1005
 отброшено проверкой «есть во фрагменте»: 0

@@ -99,8 +99,19 @@ def context_text(chunks):
 
 
 def add(task, question, answer, chunks, expected_paths,
-        expected_value=None, operands=None, source=""):
-    """Добавляет вопрос после проверки, что опора есть во фрагменте."""
+        expected_value=None, operands=None, source="", refusal_kind=None,
+        split=None):
+    """Добавляет вопрос после проверки, что опора есть во фрагменте.
+
+    `refusal_kind` отделяет два разных отказа, и это важно для замера:
+    «данных нет вообще» (Scopus, эндаумент) и «в этом фрагменте нет
+    нужного года». Второй случай витрина закрывает честно — число за
+    другой выпуск в источнике есть, поэтому считать его перехватом нельзя.
+
+    `split` перекрывает разбиение по документу. Нужен для отказов:
+    вопрос «данных нет» не опирается на содержание документа, поэтому
+    его можно держать в test, не открывая ответ.
+    """
     joined = norm_text(" ".join(c["text"] for c in chunks))
     if expected_value is not None and norm_num(expected_value) not in norm_num(joined):
         dropped.append({"task": task, "question": question,
@@ -112,7 +123,7 @@ def add(task, question, answer, chunks, expected_paths,
             return
 
     rel = expected_paths[0]
-    split = split_for(rel)
+    split = split or split_for(rel)
     qid = f"q{len(rows) + 1:04d}"
     rows.append({
         "id": qid,
@@ -124,6 +135,7 @@ def add(task, question, answer, chunks, expected_paths,
         "expected_value": expected_value,
         "operands": operands or [],
         "source": source,
+        "refusal_kind": refusal_kind,
         "context": chunks,
     })
     counts[(split, task)] = counts.get((split, task), 0) + 1
@@ -316,9 +328,12 @@ absent_questions = [
     "Сколько иностранных студентов из Китая обучается в ИУБиП?",
     "Каков средний балл ЕГЭ у ИУБиП в 2026 году?",
 ]
-for question in absent_questions:
+# Разносим по всем частям: вопрос «данных нет» не зависит от содержания
+# документа, поэтому его можно проверять в test, не открывая ответ.
+for i, question in enumerate(absent_questions):
     add("refusal", question, NO_ANSWER, refusal_context,
-        ["official/monitoring/2025-iubip.md"])
+        ["official/monitoring/2025-iubip.md"], refusal_kind="absent_data",
+        split=("train", "dev", "test")[i % 3])
 
 # Отказ по году: фрагмент реальный, но год в нём другой.
 title_2024, facts_2024 = detail_facts("2024")
@@ -329,6 +344,7 @@ for f in facts_2024[:20]:
         NO_ANSWER,
         [chunk("ИУБиП, выпуск 2024", "", f["line"])],
         ["official/monitoring/2024-iubip.md"],
+        refusal_kind="year_mismatch",
     )
 # И зеркально: в контексте 2025, спрашиваем про 2024. Без симметрии
 # модель выучивает «вопрос про 2025 = отказ», а не «нет факта — отказ».
@@ -339,6 +355,7 @@ for f in facts_2025[:20]:
         NO_ANSWER,
         [chunk("ИУБиП, выпуск 2025", "", f["line"])],
         ["official/monitoring/2025-iubip.md"],
+        refusal_kind="year_mismatch",
     )
 
 
@@ -366,7 +383,8 @@ for r in rows_25:
         f"в выпуске 2024?",
         NO_ANSWER,
         [chunk(title_25, r["section"], r["line"])],
-        ["official/monitoring/region-2025.md"])
+        ["official/monitoring/region-2025.md"],
+        refusal_kind="year_mismatch")
 
 # dev: контекст 2024, вопрос про 2025.
 title_24, rows_24 = region_rows("2024", 5)
@@ -376,14 +394,16 @@ for r in rows_24:
         f"в выпуске 2025?",
         NO_ANSWER,
         [chunk(title_24, r["section"], r["line"])],
-        ["official/monitoring/region-2024.md"])
+        ["official/monitoring/region-2024.md"],
+        refusal_kind="year_mismatch")
 
 # ---------- 5. Структура базы -------------------------------------------
 summary = (KB / "summary.md").read_text(encoding="utf-8")
 head = [l for l in summary.splitlines()[:8] if l.strip()]
 add("structure", "Какие выпуски мониторинга есть в базе?",
-    "В базе два выпуска мониторинга — 2024 и 2025. Выпуск 2025 года "
-    "описывает данные за 2024 год [1].",
+    "В базе два выпуска мониторинга — 2024 и 2025. В таблицах источника "
+    "значения подписаны годом выпуска: в выпуске 2025 значения за "
+    "2025 год [1].",
     [chunk("Сводка по мониторингу", "", "\n".join(head))],
     ["official/monitoring/summary.md"])
 add("structure", "Как читать место вуза в Ростовской области?",
