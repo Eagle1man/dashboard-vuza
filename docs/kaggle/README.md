@@ -80,14 +80,23 @@ markdown. Это не «идеальный» датасет, но он учит 
 
 ## 5. Порядок работ
 
-1. `python docs/kaggle/dataset_build.py` — собрать `train.jsonl`.
-2. Загрузить `train.jsonl` в Kaggle как Dataset.
-3. Открыть `docs/kaggle/finetune_qwen14b.ipynb`, включить GPU T4×2, Run all.
+1. `python docs/kaggle/dataset_build.py` — собрать `train.jsonl`
+   (сейчас 753 примера из всех материалов; каждый ответ проверен на
+   присутствие во фрагменте, см. `dataset-report.txt`).
+2. Загрузить `train.jsonl` в Kaggle как **Dataset** с именем
+   `monitoring-qa` (Notebook → Add Data → Upload).
+3. Открыть `docs/kaggle/finetune_qwen14b.ipynb`, включить GPU T4 и Run all.
 4. Скачать получившийся GGUF (~9 ГБ) из `/kaggle/working`.
 5. На сервере: `ollama create rector-qwen -f Modelfile`, затем
    `python -m backend.models small rector-qwen`.
 6. Прогнать `python -m backend.smoke --ask "..."` и сравнить с базовой
    моделью по тем же вопросам.
+
+Проверка, что база знаний вообще находится поиском (до обучения):
+
+```
+python -m pytest backend/tests/test_monitoring_retrieval.py -q
+```
 
 ## 6. Чего ждать по скорости
 
