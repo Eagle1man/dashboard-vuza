@@ -444,6 +444,20 @@ def write_directions_md(payload, path):
     _write_text_atomic(path, "\n".join(lines) + "\n")
 
 
+def write_detail_md(items, release, path):
+    """Раздел V отдельным документом: по нему отвечает ассистент."""
+    lines = [
+        f"# ИУБиП в мониторинге эффективности, выпуск {release}",
+        "",
+        "Источник: monitoring.miccedu.ru, карточка вуза id=1971.",
+        "Значения приведены как в первоисточнике.",
+        "",
+    ]
+    for item in items:
+        lines.append(f"- {item['title']} ({item['unit']}): **{item['value']}**")
+    _write_text_atomic(path, "\n".join(lines) + "\n")
+
+
 def write_card_md(card, info, path):
     release = str(card.get("release", "2025"))
     lines = [
@@ -554,6 +568,7 @@ def save(directions, card, source_dir=SOURCE, kb=KB):
     _write_text_atomic(
         detail_path,
         json.dumps(detail, ensure_ascii=False, indent=1) + "\n")
+    write_detail_md(numbered, release, kb / f"{release}-iubip.md")
 
     return {
         "release": release,

@@ -266,6 +266,131 @@ def backup_files(paths):
     return folder, copied
 
 
+def _fmt_ru(value):
+    if value is None:
+        return "—"
+    return f"{value:g}".replace(".", ",")
+
+
+SUMMARY_PHRASES = {
+    "E1": "среднему баллу ЕГЭ",
+    "E2": "объёму НИОКР (наука)",
+    "E3": "доле иностранных студентов",
+    "E4": "доходам на одного НПР",
+    "E5": "зарплате ППС",
+    "E8": "ППС с учёными степенями",
+}
+
+# Заголовки разделов в файле региона. Должны сохранять привычные слова
+# («Средний балл ЕГЭ»), иначе поиск по вопросу перестаёт цепляться за
+# раздел: одного «E.1» мало.
+REGION_HEADINGS = {
+    "E1": "E.1 Средний балл ЕГЭ",
+    "E2": "E.2 Объём НИОКР на одного НПР",
+    "E3": "E.3 Доля иностранных студентов",
+    "E4": "E.4 Доходы на одного НПР",
+    "E5": "E.5 Заработная плата ППС",
+    "E8": "E.8 ППС с учёными степенями",
+}
+
+
+def write_region_md(release, data, entries):
+    """Все вузы области по каждому E-показателю, с местом ИУБиП."""
+    block = (data.get("years") or {}).get(str(release)) or {}
+    indicators = block.get("indicators") or {}
+    axes = data.get("e_axes") or []
+    lines = [
+        f"# Вузы Ростовской области в мониторинге, выпуск {release}",
+        "",
+        f"Участников: {block.get('total', len(entries))}. Значения — как в "
+        "первоисточнике; «—» означает, что показатель не заполнен.",
+        "",
+    ]
+    for axis in axes:
+        code = axis["code"]
+        ind = indicators.get(code)
+        if not ind:
+            continue
+        data_year = str(ind.get("year") or "")
+        rows = []
+        for entry in entries:
+            value = (((entry.get("indicators") or {}).get(code) or {})
+                     .get("values", {}).get(data_year))
+            if value is not None:
+                rows.append((value, entry.get("name") or str(entry.get("id")),
+                             str(entry.get("id"))))
+        if not rows:
+            continue
+        rows.sort(key=lambda item: (-item[0], item[1]))
+        heading = REGION_HEADINGS.get(code, axis["label"])
+        lines += [f"## {heading}", ""]
+        for place, (value, name, vuz_id) in enumerate(rows, start=1):
+            mark = " ← ИУБиП" if vuz_id == VUZ_ID else ""
+            lines.append(f"{place}. {name} — {_fmt_ru(value)}{mark}")
+        lines.append("")
+    collect_monitoring._write_text_atomic(
+        KB / f"region-{release}.md", "\n".join(lines) + "\n")
+
+
+def write_summary_md(data):
+    """Краткая сводка по всем выпускам — для быстрых ответов ассистента."""
+    releases = sorted((data.get("years") or {}).keys())
+    axes = data.get("e_axes") or []
+    lines = [
+        "# ИУБиП в мониторинге эффективности: краткая сводка",
+        "",
+        "Источник: monitoring.miccedu.ru, карточка вуза id=1971.",
+        "Место — среди вузов Ростовской области, участвовавших в мониторинге.",
+        "Год выпуска указан в заголовке документа и в подписи значений источника.",
+        "",
+        "## Быстрые ответы",
+        "",
+    ]
+    for axis in axes:
+        code = axis["code"]
+        parts = []
+        for release in releases:
+            ind = ((data["years"][release].get("indicators")) or {}).get(code)
+            if not ind:
+                continue
+            unit = ind.get("unit") or ""
+            parts.append(f"{ind['rank']}-е из {ind['total']} "
+                         f"(выпуск {release}, {_fmt_ru(ind['value'])} {unit})".strip())
+        if parts:
+            phrase = SUMMARY_PHRASES.get(code, axis["label"])
+            lines.append(f"- Место ИУБиП по {phrase}: " + "; ".join(parts) + ".")
+    lines.append("")
+    for release in releases:
+        block = data["years"][release]
+        lines += [f"## Выпуск {release} (участников {block.get('total')})", ""]
+        for axis in axes:
+            code = axis["code"]
+            ind = (block.get("indicators") or {}).get(code)
+            if not ind:
+                continue
+            unit = ind.get("unit") or ""
+            lines.append(
+                f"- {axis['label']}: **{_fmt_ru(ind['value'])} {unit}**, "
+                f"{ind['rank']}-е место из {ind['total']}, медиана по области "
+                f"{_fmt_ru(ind.get('median'))} {unit}".rstrip())
+        lines.append("")
+    collect_monitoring._write_text_atomic(
+        KB / "summary.md", "\n".join(lines) + "\n")
+
+
+def write_derived_markdown():
+    """Пересобрать region-<выпуск>.md и summary.md из уже собранной витрины."""
+    data = load_json(ROOT / "data" / "monitoring.json", {})
+    if not data.get("years"):
+        return
+    region = load_json(REGION_JSON, {})
+    latest = max(data["years"])
+    entries = region.get(str(latest)) or []
+    if entries:
+        write_region_md(latest, data, entries)
+    write_summary_md(data)
+
+
 def rebuild(no_rebuild=False):
     """Пересобрать monitoring.json, analytics.db и индекс knowledge."""
     stats = {"ingest_ok": False}
@@ -273,6 +398,7 @@ def rebuild(no_rebuild=False):
         stats["rebuild"] = "пропущено (--no-rebuild)"
         return stats
     build_monitoring.build()
+    write_derived_markdown()
     stats["monitoring"] = "data/monitoring.json"
     analytics.build(verbose=False)
     stats["analytics"] = "data/analytics.db"
