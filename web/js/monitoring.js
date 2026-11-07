@@ -465,30 +465,96 @@
     var years = Object.keys(data.years || {}).sort();
     var axes = data.axes || [];
     var first = years[0], last = years[years.length - 1];
-    var colors = ["#94a3b8", "#2563eb"];
-
     $("regionAvg").textContent = "средний процентиль " +
       data.years[first].average_percentile + " → " + data.years[last].average_percentile;
+
+    var release = data.years[last] || {};
+    var indicators = release.indicators || {};
+
+    function positive(value) {
+      var number = Number(value);
+      return isFinite(number) && number !== 0 ? number : null;
+    }
+
+    var vuzData = [], rfData = [], regionData = [], deptData = [];
+    var allValues = [];
+    axes.forEach(function (axis) {
+      var ind = indicators[axis.code] || {};
+      var vuz = positive(ind.value);
+      var med = ind.medians || {};
+      var rf = positive(med.rf);
+      var region = positive(med.region);
+      var dept = positive(med.department);
+      var base = rf || region || vuz;
+      if (vuz === null || base === null || base === 0) {
+        vuzData.push(null); rfData.push(null);
+        regionData.push(null); deptData.push(null);
+        return;
+      }
+      vuzData.push(vuz / base);
+      rfData.push(rf ? 1 : null);
+      regionData.push(region ? region / base : null);
+      deptData.push(dept ? dept / base : null);
+      allValues.push(vuz / base);
+      if (region) allValues.push(region / base);
+      if (dept) allValues.push(dept / base);
+    });
+    var max = Math.max(1.2, Math.min(5, Math.max.apply(
+      null, allValues.filter(function (value) { return isFinite(value); })
+        .concat([1])) * 1.08));
+    var step = max <= 2 ? 0.5 : 1;
 
     if (window.__radar) window.__radar.destroy();
     window.__radar = new Chart($("radarChart"), {
       type: "radar",
       data: {
         labels: axes.map(function (a) { return MON_SHORT[a.code] || a.label; }),
-        datasets: years.map(function (year, i) {
-          return {
-            label: year,
-            data: data.series[year],
-            borderColor: colors[i] || colors[colors.length - 1],
-            backgroundColor: (colors[i] || colors[colors.length - 1]) + "1f",
+        datasets: [
+          {
+            label: "Показатели вуза (ИУБиП)",
+            data: vuzData,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15,118,110,.12)",
+            borderWidth: 2.5,
+            pointRadius: 3.5,
+            pointHoverRadius: 5,
             pointBackgroundColor: "#ffffff",
-            pointBorderColor: colors[i] || colors[colors.length - 1],
+            pointBorderColor: "#0f766e",
             pointBorderWidth: 2,
-            pointRadius: 4,
-            borderWidth: 2,
-            fill: true
-          };
-        })
+            fill: true,
+            order: 10
+          },
+          {
+            label: "Медианы вузов/филиалов по РФ",
+            data: rfData,
+            borderColor: "#86efac",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#86efac"
+          },
+          {
+            label: "Медианы по субъекту РФ",
+            data: regionData,
+            borderColor: "#a78bfa",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#a78bfa"
+          },
+          {
+            label: "Медианы по ведомственной принадлежности",
+            data: deptData,
+            borderColor: "#22c55e",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#22c55e"
+          }
+        ]
       },
       options: {
         responsive: true, maintainAspectRatio: false, layout: { padding: 6 },
@@ -498,29 +564,47 @@
             backgroundColor: "#0f1115", padding: 10, cornerRadius: 10,
             callbacks: {
               label: function (ctx) {
-                var row = (data.table || [])[ctx.dataIndex];
-                var info = row && row.years[ctx.dataset.label];
-                return ctx.dataset.label + ": " + ctx.parsed.r + " процентиль" +
-                  (info ? " · место " + info.rank + " из " + info.total : "");
+                var axis = axes[ctx.dataIndex] || {};
+                var ind = indicators[axis.code] || {};
+                var value = Number(ctx.parsed.r);
+                if (!isFinite(value)) return "";
+                var unit = axis.unit ? " " + axis.unit : "";
+                if (ctx.dataset.label.indexOf("Показатели вуза") === 0) {
+                  return "ИУБиП: " + num(ind.value) + unit +
+                    " (×" + value.toFixed(2) + " к медиане РФ)";
+                }
+                var med = ind.medians || {};
+                var absolute = ctx.dataset.label.indexOf("субъекту") !== -1
+                  ? med.region
+                  : ctx.dataset.label.indexOf("ведомственной") !== -1
+                    ? med.department
+                    : med.rf;
+                return ctx.dataset.label + ": " + num(absolute) + unit +
+                  " (×" + value.toFixed(2) + ")";
               }
             }
           }
         },
         scales: {
           r: {
-            min: 0, max: 100,
-            ticks: { stepSize: 25, showLabelBackdrop: false, color: "#94a3b8", font: { size: 10 } },
+            min: 0, max: max,
+            ticks: { stepSize: step, showLabelBackdrop: false, color: "#94a3b8", font: { size: 10 } },
             grid: { color: "#e8edf3" }, angleLines: { color: "#e8edf3" },
-            pointLabels: { color: "#475569", font: { size: 11 } }
+            pointLabels: { color: "#475569", font: { size: 10 } }
           }
         }
       }
     });
 
-    $("radarLegend").innerHTML = years.map(function (year, i) {
+    $("radarLegend").innerHTML = [
+      { color: "#0f766e", text: "показатели вуза (ИУБиП)" },
+      { color: "#86efac", text: "медианы вузов/филиалов по РФ" },
+      { color: "#a78bfa", text: "медианы по субъекту РФ" },
+      { color: "#22c55e", text: "медианы по ведомственной принадлежности" }
+    ].map(function (row) {
       return '<span class="inline-flex items-center gap-2">' +
-        '<span class="h-2.5 w-2.5 rounded-full" style="background:' + (colors[i] || "#2563eb") + '"></span>' +
-        year + "</span>";
+        '<span class="h-2.5 w-2.5 rounded-full" style="background:' + row.color + '"></span>' +
+        row.text + "</span>";
     }).join("");
 
     var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-100 pb-2 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
