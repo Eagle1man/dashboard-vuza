@@ -659,20 +659,24 @@
         row.color + '"></span>' + esc(row.text) + "</span>";
     }).join("");
 
-    var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-slate-100 pb-2 text-[10.5px] uppercase tracking-[0.06em] text-slate-400">' +
-      "<span>Показатель</span><span class=\"text-right\">Значение</span>" +
-      '<span class="text-right">К медиане частных</span><span class="text-right">К медиане региона</span></div>';
+    var head = '<div class="overflow-x-auto"><table class="w-full min-w-[720px] text-left text-sm">' +
+      '<thead><tr class="border-b border-slate-100 text-[10.5px] uppercase tracking-[0.06em] text-slate-400">' +
+      '<th scope="col" class="py-2 pr-3 font-semibold">Показатель</th>' +
+      '<th scope="col" class="whitespace-nowrap px-2 py-2 text-right font-semibold">Значение</th>' +
+      '<th scope="col" class="whitespace-nowrap px-2 py-2 text-right font-semibold">К медиане частных</th>' +
+      '<th scope="col" class="whitespace-nowrap py-2 pl-3 text-right font-semibold">К медиане региона</th>' +
+      "</tr></thead><tbody>";
     var rows = items.map(function (item) {
       var ind = item.ind;
-      return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
-        '<span class="min-w-0 pr-2 leading-snug text-slate-600"><span class="font-mono text-[11px] text-slate-400">' + esc(ind.code) + "</span> " +
-        esc(ind.title) + ' <span class="text-[10.5px] text-slate-400">' + esc(ind.unit || "") + "</span></span>" +
-        '<span class="text-right font-semibold tabular-nums ' + valueTone(ind) + '">' + num(ind.value) + "</span>" +
-        '<span class="text-right">' + ratioCell(ind, "private") + "</span>" +
-        '<span class="text-right">' + ratioCell(ind, "region") + "</span>" +
-        "</div>";
+      return '<tr class="border-b border-slate-50 text-[13px] transition-colors last:border-0 hover:bg-slate-50/60">' +
+        '<td class="min-w-0 py-2 pr-3 align-top leading-snug text-slate-600"><span class="font-mono text-[11px] text-slate-400">' + esc(ind.code) + "</span> " +
+        esc(ind.title) + ' <span class="text-[10.5px] text-slate-400">' + esc(ind.unit || "") + "</span></td>" +
+        '<td class="px-2 py-2 text-right align-top font-semibold tabular-nums ' + valueTone(ind) + '">' + num(ind.value) + "</td>" +
+        '<td class="px-2 py-2 text-right align-top">' + ratioCell(ind, "private") + "</td>" +
+        '<td class="py-2 pl-3 text-right align-top">' + ratioCell(ind, "region") + "</td>" +
+        "</tr>";
     }).join("");
-    $("monitoringTable").innerHTML = head + rows +
+    $("monitoringTable").innerHTML = head + rows + "</tbody></table></div>" +
       '<p class="mt-3 text-[11px] leading-snug text-slate-400">Источник: monitoring.miccedu.ru, раздел III. ' +
       "×1 — уровень медианы, «≥ 2×» — не менее двух медиан (шкала на сайте обрезана), «—» — сравнения нет. " +
       "Зелёный — выше медианы, оранжевый — ниже.</p>";
@@ -977,30 +981,33 @@
     }).join("");
 
     // Таблица: значение и место по каждому показателю за оба года.
-    var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-100 pb-2 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
-      "<span>Показатель</span>" +
-      years.map(function (y) { return '<span class="text-right">' + y + "</span>"; }).join("") +
-      "</div>";
+    var head = '<div class="overflow-x-auto"><table class="w-full min-w-[620px] text-left text-sm">' +
+      '<thead><tr class="border-b border-slate-100 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
+      '<th scope="col" class="py-2 pr-3 font-semibold">Показатель</th>' +
+      years.map(function (y) {
+        return '<th scope="col" class="whitespace-nowrap px-2 py-2 text-right font-semibold">' + y + "</th>";
+      }).join("") +
+      "</tr></thead><tbody>";
 
     var rows = table.map(function (row) {
       var cells = years.map(function (year) {
         var info = row.years[year];
-        if (!info) return '<span class="text-right text-slate-300">—</span>';
+        if (!info) return '<td class="px-2 py-2 text-right align-top text-slate-300">—</td>';
         var tone = info.rank <= 5 ? "text-emerald-600" : info.rank <= 15 ? "text-slate-900" : "text-slate-500";
-        return '<span class="flex flex-col items-end gap-1">' +
+        return '<td class="px-2 py-2 text-right align-top"><span class="inline-flex flex-col items-end gap-1">' +
           '<span class="whitespace-nowrap">' +
           '<span class="font-semibold tabular-nums ' + tone + '">' + num(info.value) + "</span>" +
           '<span class="ml-2 text-[11px] text-slate-400">' + info.rank + "/" + info.total + "</span></span>" +
           scoreBar(info.percentile) +
-          "</span>";
+          "</span></td>";
       }).join("");
-      return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
-        '<span class="min-w-0 pr-2 leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
-        ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></span>" + cells +
-        "</div>";
+      return '<tr class="border-b border-slate-50 text-[13px] transition-colors last:border-0 hover:bg-slate-50/60">' +
+        '<td class="min-w-0 py-2 pr-3 align-top leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
+        ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></td>" + cells +
+        "</tr>";
     }).join("");
 
-    $("monitoringTable").innerHTML = head + rows +
+    $("monitoringTable").innerHTML = head + rows + "</tbody></table></div>" +
       '<p class="mt-3 text-[11px] leading-snug text-slate-400">' +
       "Источник: monitoring.miccedu.ru. Место — среди вузов Ростовской области, участвовавших в мониторинге. " +
       "Показатель E.3 считается по вузам, у которых он заполнен, поэтому знаменатель меньше." +

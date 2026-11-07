@@ -645,28 +645,31 @@
         row.text + "</span>";
     }).join("");
 
-    var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-100 pb-2 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
-      "<span>Показатель</span>" +
-      years.map(function (y) { return '<span class="text-right">' + y + "</span>"; }).join("") +
-      "</div>";
+    var head = '<div class="overflow-x-auto"><table class="w-full min-w-[620px] text-left text-sm">' +
+      '<thead><tr class="border-b border-slate-100 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
+      '<th scope="col" class="py-2 pr-3 font-semibold">Показатель</th>' +
+      years.map(function (y) {
+        return '<th scope="col" class="whitespace-nowrap px-2 py-2 text-right font-semibold">' + y + "</th>";
+      }).join("") +
+      "</tr></thead><tbody>";
 
     var rows = (data.table || []).map(function (row) {
       var cells = years.map(function (year) {
         var info = row.years[year];
-        if (!info) return '<span class="text-right text-slate-300">—</span>';
+        if (!info) return '<td class="px-2 py-2 text-right align-top text-slate-300">—</td>';
         var tone = info.rank <= 5 ? "text-emerald-600" : info.rank <= 15 ? "text-slate-900" : "text-slate-500";
-        return '<span class="flex flex-col items-end gap-1">' +
+        return '<td class="px-2 py-2 text-right align-top"><span class="inline-flex flex-col items-end gap-1">' +
           '<span class="whitespace-nowrap">' +
           '<span class="font-semibold tabular-nums ' + tone + '">' + num(info.value) + "</span>" +
           '<span class="ml-2 text-[11px] text-slate-400">' + info.rank + "/" + info.total + "</span></span>" +
-          scoreBar(info.percentile) + "</span>";
+          scoreBar(info.percentile) + "</span></td>";
       }).join("");
-      return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
-        '<span class="min-w-0 pr-2 leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
-        ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></span>" + cells + "</div>";
+      return '<tr class="border-b border-slate-50 text-[13px] transition-colors last:border-0 hover:bg-slate-50/60">' +
+        '<td class="min-w-0 py-2 pr-3 align-top leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
+        ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></td>" + cells + "</tr>";
     }).join("");
 
-    $("regionTable").innerHTML = head + rows +
+    $("regionTable").innerHTML = head + rows + "</tbody></table></div>" +
       '<p class="mt-3 text-[11px] leading-snug text-slate-400">' +
       "Место — среди вузов Ростовской области, участвовавших в мониторинге. " +
       "E.3 считается по вузам, у которых показатель заполнен, поэтому знаменатель меньше. " +
