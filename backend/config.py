@@ -15,6 +15,10 @@ DATA_DIR = ROOT / "data"
 LOG_DIR = ROOT / "logs"
 
 DB_PATH = DATA_DIR / "dashboard.db"
+# Отдельная база для чисел мониторинга. Отдельная не для красоты: в
+# dashboard.db лежат хеши паролей и журнал действий, и давать модели
+# доступ к ней нельзя даже на чтение.
+ANALYTICS_DB = DATA_DIR / "analytics.db"
 BACKUP_DIR = DATA_DIR / "backup"
 
 # Локальный сервер Ollama.

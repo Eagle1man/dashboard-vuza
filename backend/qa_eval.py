@@ -26,7 +26,7 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from backend import config, db, llm, retrieve  # noqa: E402
+from backend import analytics, config, db, llm, retrieve  # noqa: E402
 
 NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
@@ -66,14 +66,113 @@ def load_questions(path, split=None, task=None, limit=None):
     return rows
 
 
+def _as_float(value):
+    try:
+        return float(norm_num(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def evaluate_analytics(args, questions):
+    """Замер числового маршрута: покрытие и перехват.
+
+    Что здесь честно измеряется, а что нет. Вопросы и витрина собраны из
+    одного JSON, поэтому совпадение числа почти гарантировано — это не
+    проверка истины, а проверка **маршрута**: попал ли числовой вопрос на
+    числовой путь и не забрал ли он документный. Второе важнее: перехват
+    вопроса «что написано в положении» выдаёт расчёт вместо цитаты.
+    """
+    conn = analytics.connect()
+    results = []
+    for i, q in enumerate(questions, 1):
+        data = analytics.answer(conn, q["question"])
+        expected = [_as_float(v) for v in (q.get("operands") or [])]
+        if q.get("expected_value") is not None:
+            expected.append(_as_float(q["expected_value"]))
+        expected = [v for v in expected if v is not None]
+        numeric = bool(expected)
+        got = [float(v) for v in (data["numbers"] if data else []) if v is not None]
+
+        item = {"id": q["id"], "task": q["task"], "question": q["question"],
+                "numeric": numeric, "answered": data is not None,
+                "kind": data["kind"] if data else None}
+        if numeric:
+            item["exact"] = bool(data) and all(
+                any(abs(g - e) <= 0.06 for g in got) for e in expected)
+            item["expected"] = expected
+            item["got"] = got
+        else:
+            # Два разных «отказа». «Данных нет вообще» — витрина обязана
+            # молчать, ответ считается перехватом. «В этом фрагменте нет
+            # нужного года» — число в источнике есть, и ответ витрины
+            # честный: контекст был узким, а витрина полная.
+            if q.get("refusal_kind") == "year_mismatch":
+                item["recovered"] = data is not None
+            else:
+                item["hijack"] = data is not None
+        results.append(item)
+        if i % 100 == 0:
+            print(f"  {i}/{len(questions)}", flush=True)
+    conn.close()
+
+    numeric_rows = [r for r in results if r["numeric"]]
+    doc_rows = [r for r in results if not r["numeric"]]
+    hijack_rows = [r for r in doc_rows if r.get("hijack") is not None]
+    recovered_rows = [r for r in doc_rows if r.get("recovered") is not None]
+
+    def rate(rows, key):
+        return round(sum(bool(r.get(key)) for r in rows) / len(rows), 3) if rows else None
+
+    summary = {
+        "mode": "analytics",
+        "questions": len(results),
+        "split": args.split or "all",
+        "numeric_questions": len(numeric_rows),
+        "numeric_answered_rate": rate(numeric_rows, "answered"),
+        "numeric_exact_rate": rate(numeric_rows, "exact"),
+        "document_questions": len(doc_rows),
+        "true_refusal_questions": len(hijack_rows),
+        "hijack_rate": rate(hijack_rows, "hijack"),
+        "hijacked": [r["id"] for r in hijack_rows if r.get("hijack")],
+        "year_mismatch_questions": len(recovered_rows),
+        "recovered_rate": rate(recovered_rows, "recovered"),
+        "by_task": {},
+    }
+    for task in sorted({r["task"] for r in results}):
+        part = [r for r in results if r["task"] == task]
+        num = [r for r in part if r["numeric"]]
+        doc = [r for r in part if not r["numeric"]]
+        summary["by_task"][task] = {
+            "count": len(part),
+            "answered": rate(num, "answered") if num else None,
+            "exact": rate(num, "exact") if num else None,
+            "hijack": rate([r for r in doc if r.get("hijack") is not None],
+                           "hijack") if doc else None,
+            "recovered": rate([r for r in doc if r.get("recovered") is not None],
+                              "recovered") if doc else None,
+        }
+
+    out = pathlib.Path(args.out) if args.out else (
+        ROOT / "docs" / "eval" / f"report-{args.split or 'all'}-analytics.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"summary": summary, "results": results},
+                              ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(summary, ensure_ascii=False, indent=1))
+    print("отчёт:", out)
+    return 0
+
+
 def evaluate(args):
-    conn = db.connect()
-    db.init_db(conn)
     questions = load_questions(pathlib.Path(args.questions),
                                args.split, args.task, args.limit)
     if not questions:
         print("вопросов нет — проверьте --split/--task")
         return 1
+    if args.analytics:
+        return evaluate_analytics(args, questions)
+
+    conn = db.connect()
+    db.init_db(conn)
 
     results, failures = [], []
     for i, q in enumerate(questions, 1):
@@ -197,6 +296,8 @@ def main():
     ap.add_argument("--oracle", action="store_true",
                     help="брать контекст из вопроса, а не из поиска: "
                          "отделяет качество модели от качества поиска")
+    ap.add_argument("--analytics", action="store_true",
+                    help="замерить числовой маршрут (витрина), без модели")
     ap.add_argument("--out")
     args = ap.parse_args()
     if not args.model:

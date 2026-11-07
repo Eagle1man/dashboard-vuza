@@ -29,6 +29,7 @@
 import re
 import time
 
+from . import analytics
 from . import config
 from . import db
 from . import grounding
@@ -531,10 +532,31 @@ def run(question, conn, mode="auto", model=None, top_k=0):
     agent = registry.get(agent_id)
     chunks, stats, verdict, why = [], {}, retrieval_judge.GIVE_UP, ""
 
+    # Числа мониторинга считает код, а не модель. Готовый расчёт ставится
+    # первым фрагментом: он гарантированно попадает в контекст (там лимит
+    # на число фрагментов) и получает ссылку [1]. Модель формулирует
+    # ответ по числу, но не выводит его сама — арифметика в ответе модели
+    # была бы лишней точкой отказа.
+    monitor = analytics.try_answer(question)
+    if monitor:
+        chunks.append(analytics.as_chunk(monitor))
+        trace.append({"agent": "analyst", "name": "Витрина мониторинга",
+                      "ok": True, "ms": 0,
+                      "step": "посчитано: " + monitor["code"]})
+        verdict = retrieval_judge.OK
+        stats["monitoring"] = {"kind": monitor["kind"], "code": monitor["code"],
+                               "release": monitor["release"],
+                               "formula": monitor["formula"]}
+
     if resp_mode in ("documents", "both"):
         t0 = time.time()
-        chunks, stats, verdict, why = _collect_docs(question, agent, conn, trace, top_k)
+        doc_chunks, doc_stats, doc_verdict, why = _collect_docs(
+            question, agent, conn, trace, top_k)
         ms = int((time.time() - t0) * 1000)
+        chunks = chunks + doc_chunks
+        stats.update(doc_stats)
+        if doc_verdict != retrieval_judge.GIVE_UP:
+            verdict = doc_verdict
         if verdict == retrieval_judge.GIVE_UP and not metrics_data:
             trace.append({"agent": agent.agent_id, "name": agent.name,
                           "ok": False, "ms": ms,
@@ -629,9 +651,16 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
     grounding_report = None
     if answer and config.STRICT_NUMBERS:
         inside = chunks[:config.CONTEXT_CHUNKS]
+        # Числа витрины дашборда приходят не фрагментом, а отдельным
+        # блоком tools.render. Без них проверка считала посчитанное число
+        # выдуманным и вырезала верное предложение — в режиме «числа и
+        # документы» это снимало весь ответ с цифрой.
+        extra = ""
+        if metrics_data and metrics_data.get("ok"):
+            extra = tools.render(metrics_data)
         answer, grounding_report = grounding.verify(
-            answer, " ".join(c["text"] for c in inside), len(inside),
-            question=question)
+            answer, " ".join(c["text"] for c in inside) + "\n" + extra,
+            len(inside), question=question)
         if not answer.strip():
             nums = (grounding_report.get("unsupported_numbers") or [])
             notes.append("проверка сняла ответ: числа не найдены во фрагментах"
