@@ -129,5 +129,10 @@ def test_analytics_direction_lookup():
         # Явный код E остаётся за E-показателем.
         data = analytics.answer(conn, "Какое значение E.1 у ИУБиП в 2024 году?")
         assert data is not None and data["code"] == "E1"
+
+        # Карточка раздела III — только про ИУБиП: вопрос о другом вузе
+        # не должен получать наше число.
+        data = analytics.answer(conn, "Сколько публикаций в Белом списке у ЮФУ?")
+        assert data is None or data.get("kind") != "direction", data
     finally:
         conn.close()

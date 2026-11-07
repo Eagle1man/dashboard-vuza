@@ -800,11 +800,15 @@ def answer(conn, question: str):
 
     # Раздел III отвечает точнее E-показателей там, где формулировка
     # отличительная («минимальный балл ЕГЭ», «белый список», «из стран
-    # СНГ»). Явный код E.1…E.8 сильнее: его нельзя перебивать.
+    # СНГ»). Явный код E.1…E.8 сильнее: его нельзя перебивать. Карточка
+    # раздела III — только про ИУБиП, поэтому вопрос о другом вузе
+    # оставляем обычному пути: иначе ЮФУ получил бы наше число.
     if level == LEVEL_VO and not CODE_RE.search(question):
-        direction = find_direction(conn, question)
-        if direction:
-            return _answer_direction(conn, direction)
+        other_vuz = find_vuz(conn, question, exclude_iubip=True)
+        if other_vuz is None:
+            direction = find_direction(conn, question)
+            if direction:
+                return _answer_direction(conn, direction)
 
     ind = find_indicator(conn, question, level)
     if not ind:
