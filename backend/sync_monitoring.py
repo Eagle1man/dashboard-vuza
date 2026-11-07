@@ -378,7 +378,7 @@ def sync_once(args):
     info = collect_monitoring.save(directions, card)
     entry = region_entry(directions, card)
 
-    full = bool(args.full or changed_release or changed_site)
+    full = bool(args.full or changed_release or changed_site or not old_entries)
     if full:
         try:
             region_list, region_stats = scrape_region(
@@ -386,6 +386,13 @@ def sync_once(args):
             result["region"] = region_stats
             result["region_mode"] = "full"
         except Exception as exc:  # noqa: BLE001
+            if not old_entries:
+                # Прежних данных за этот выпуск нет: частичная таблица
+                # дала бы места «1 из 1». Лучше не писать ничего и
+                # повторить попытку в следующий раз.
+                raise RuntimeError(
+                    f"полный обход региона не удался, а прежних данных "
+                    f"за {year} нет: {exc}") from exc
             # Регион не собрался — не теряем уже проверенную строку ИУБиП.
             log(f"полный обход региона не удался ({exc}); обновляю только ИУБиП")
             region_list = quick_update(old_entries, entry)
