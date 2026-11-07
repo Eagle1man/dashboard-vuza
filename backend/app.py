@@ -24,7 +24,7 @@ from . import autoconfig
 from . import assets
 from . import auth
 from . import config
-from . import monitoring
+from . import analytics
 from . import consistency
 from . import crew
 from . import db
@@ -33,6 +33,7 @@ from . import ingest as ingest_mod
 from . import intake
 from . import journal
 from . import llm
+from . import monitoring
 from . import retrieve
 from . import review
 from . import uploads
@@ -422,6 +423,18 @@ def _answer_question(question: str, top_k):
             c, question, top_k=top_k or config.RETRIEVE_TOP_K)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Ошибка поиска: {exc}")
+
+    # Числа считает код, модель формулирует. Расчёт по витрине
+    # мониторинга ставится первым фрагментом: он точнее пересказа
+    # таблицы и проходит ту же проверку чисел, что и документы.
+    try:
+        calc = analytics.try_answer(question)
+    except Exception:
+        calc = None
+    if calc:
+        calc_chunk = analytics.as_chunk(calc)
+        calc_chunk["chunk_id"] = 0
+        chunks = [calc_chunk] + list(chunks)
 
     text, meta = llm.answer(question, chunks)
     latency = int((time.time() - t0) * 1000)
