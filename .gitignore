@@ -37,4 +37,5 @@ Thumbs.db
 # Загружается командой, в репозитории не нужен.
 docs/kaggle/upload/
 docs/kaggle/kernel-output/
+docs/kaggle/run*-output/
 docs/kaggle/kernel/finetune_qwen14b.ipynb
