@@ -260,8 +260,13 @@ def score(question, answer):
                                and is_refusal(answer))
     context = " ".join(chunk.get("text", "")
                        for chunk in (question.get("context") or []))
-    row["hallucinated_number"] = int(bool(
-        numbers(answer) - numbers(context) - {2024, 2025}))
+    allowed = (numbers(context) | numbers(question.get("question") or "")
+               | {2024, 2025})
+    # В сравнении разность считается моделью, её нет в контексте:
+    # такой ответ не улика выдумывания, поэтому метрика не считается.
+    row["hallucinated_number"] = (
+        None if question["task"] == "comparison"
+        else int(bool(numbers(answer) - allowed)))
     return row
 
 
@@ -270,6 +275,7 @@ def summarize(rows):
     numeric = [row for row in rows if row["expected"] is not None]
     refusals = [row for row in rows if row["task"] == "refusal"]
     normal = [row for row in rows if row["task"] != "refusal"]
+    checked = [row for row in rows if row["hallucinated_number"] is not None]
     result["numeric_exact_rate"] = (
         round(sum(row["numeric_exact"] for row in numeric) / len(numeric), 3)
         if numeric else None)
@@ -281,8 +287,9 @@ def summarize(rows):
     result["false_refusal_rate"] = (
         round(sum(row["false_refusal"] for row in normal) / len(normal), 3)
         if normal else None)
-    result["hallucinated_number_rate"] = round(
-        sum(row["hallucinated_number"] for row in rows) / len(rows), 3)
+    result["hallucinated_number_rate"] = (
+        round(sum(row["hallucinated_number"] for row in checked)
+              / len(checked), 3) if checked else None)
     return result
 
 

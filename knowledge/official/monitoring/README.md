@@ -35,6 +35,22 @@
 | `source/` | исходные JSON: детальные таблицы и значения по региону |
 | `source/spo_region.json` | карточки всех организаций СПО области (для мест и медиан) |
 
+## Машинная копия
+
+`data/monitoring/structured/` — та же карточка в машинном виде: один факт
+на строку в `observations.jsonl`, те же данные в `monitoring.sqlite`,
+`indicators.json`, `organizations.json`, `cards/*.json` и `manifest.json`
+с контрольными суммами. Собирается без сети:
+
+```
+python -m backend.monitoring_store build
+python -m backend.monitoring_store lookup --level VO --release 2025 --code 1.3
+```
+
+Вопросы чата сначала идут в старую витрину `analytics.db`, а если её
+данных не хватает — в структурированную копию (`analytics.try_answer`).
+Так разделы I, IV, V и СПО отвечают точным числом, а не пересказом.
+
 ## Обновление
 
 Карточку можно перечитать с сайта одной командой:

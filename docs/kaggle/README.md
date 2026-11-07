@@ -78,6 +78,24 @@
 markdown. Это не «идеальный» датасет, но он учит формат и отказы, а не
 запоминание.
 
+## 4.1. Структурированная копия
+
+Рядом с парами лежит машинная копия источника:
+`data/monitoring/structured/` — `observations.jsonl` (один факт на
+строку), `monitoring.sqlite`, `indicators.json`, `organizations.json`,
+`cards/*.json` и `manifest.json` с контрольными суммами. Она собирается
+из уже разобранных JSON, без сети:
+
+```
+python -m backend.monitoring_store build
+python -m backend.monitoring_store lookup --level VO --release 2025 --code 1.3
+```
+
+В датасет Kaggle кладутся и пары, и эта копия: тогда после обучения
+видно, на каких фактах оно построено. В чате `analytics.try_answer`
+сначала пробует старую витрину, а затем структурированную копию — так
+разделы I, IV, V и СПО отвечают точным числом.
+
 ## 5. Порядок работ
 
 1. `python -m backend.monitoring_store build` — собрать структурированную
@@ -104,9 +122,11 @@ markdown. Это не «идеальный» датасет, но он учит 
    даёт 20 ГБ — поэтому GGUF делается отдельно, на машине с диском.
 6. На сервере: слить адаптер, `ollama create rector-qwen -f Modelfile`,
    `python -m backend.models small rector-qwen`.
-7. Сравнить с базовой моделью на `dev` **с тем же контекстом**:
-   `python -m backend.qa_eval --split dev --model qwen2.5:14b` и
-   `--model rector-qwen`. Без этого сравнения обучение не принимается.
+7. Замер уже лежит в `eval_report.json`: адаптер и база отвечают на одни
+   и те же вопросы test с одним и тем же контекстом. Повторить локально
+   можно так: `python -m backend.qa_eval --split test --oracle --limit 20
+   --model qwen2.5:14b` и `--model rector-qwen`. Без этого сравнения
+   обучение не принимается.
 
 Проверки, которые обязаны проходить до обучения:
 

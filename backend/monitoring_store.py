@@ -1103,7 +1103,9 @@ def answer_question(question, path=None):
     if row.get("place") is not None:
         parts.append(f"место в регионе — {row['place']} "
                      f"из {row.get('place_total')}")
-    body = "; ".join(parts) + "."
+    body = "; ".join(parts)
+    if not body.endswith("."):
+        body += "."
     return {
         "kind": "store",
         "level": level,
