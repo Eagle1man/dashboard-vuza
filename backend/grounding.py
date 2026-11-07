@@ -72,12 +72,19 @@ def _present(value: float, pool: list[float]) -> bool:
     return False
 
 
-def verify(answer: str, context: str, chunk_count: int) -> tuple[str, dict]:
+def verify(answer: str, context: str, chunk_count: int,
+           question: str = "") -> tuple[str, dict]:
     """Чистит ответ. Возвращает (текст, отчёт).
 
     Пустой текст означает «показывать нечего»: все утверждения с числами
     не подтвердились. Решение, что показать вместо него, принимает
     вызывающий — у него есть список фрагментов.
+
+    `question` нужен, чтобы не удалять верные ответы. Модель получает
+    вопрос («… в выпуске 2024?») и законно повторяет год в ответе, хотя
+    года нет во фрагментах. Без этого правильное число с верной ссылкой
+    вырезалось целиком как «выдуманное»: проверка наказывала за то, что
+    модель прочитала вопрос.
     """
     report = {
         "ok": True,
@@ -94,6 +101,10 @@ def verify(answer: str, context: str, chunk_count: int) -> tuple[str, dict]:
         return answer, report
 
     pool = [value for value, _raw in extract_numbers(context)]
+    # Числа из вопроса — не «выдуманные»: модель их получила. Год
+    # («в выпуске 2024») чаще всего именно оттуда.
+    if question:
+        pool.extend(value for value, _raw in extract_numbers(question))
 
     # --- ссылки ---------------------------------------------------------
     cited = set()

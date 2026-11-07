@@ -298,7 +298,8 @@ def answer(question: str, chunks, model: str = None):
     if meta.get("llm") and chunks and config.STRICT_NUMBERS:
         inside = chunks[:config.CONTEXT_CHUNKS]
         context = " ".join(ch["text"] for ch in inside)
-        text, report = grounding.verify(text, context, len(inside))
+        text, report = grounding.verify(text, context, len(inside),
+                                        question=question)
         meta["grounding"] = report
         if not text.strip():
             meta["llm"] = False

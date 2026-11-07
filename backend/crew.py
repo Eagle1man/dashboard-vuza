@@ -544,7 +544,8 @@ def run(question, conn, mode="auto", model=None, top_k=0):
             return _pack(None, chunks, agent_id, agent, qtype, resp_mode, mode,
                          trace, notes, {"ok": True, "ran": False,
                                         "reason": "не запускался: нечего проверять"},
-                         metrics_data, stats, True, started)
+                         metrics_data, stats, True, started,
+                         question=question)
     elif resp_mode == "metrics" and metrics_data:
         verdict = retrieval_judge.OK
 
@@ -564,7 +565,7 @@ def run(question, conn, mode="auto", model=None, top_k=0):
                      mode, trace, notes,
                      {"ok": True, "ran": False,
                       "reason": "не запускался: специалист не ответил"},
-                     metrics_data, stats, True, started)
+                     metrics_data, stats, True, started, question=question)
 
     trace.append({"agent": gen_agent.agent_id, "name": gen_agent.name,
                   "ok": True, "ms": ms,
@@ -614,11 +615,12 @@ def run(question, conn, mode="auto", model=None, top_k=0):
                  trace, notes,
                  (verdict_c.as_dict() if verdict_c
                   else {"ok": True, "ran": False, "reason": plan["reason"]}),
-                 metrics_data, stats, False, started)
+                 metrics_data, stats, False, started, question=question)
 
 
 def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
-          notes, verdict, metrics_data, stats, degraded, started):
+          notes, verdict, metrics_data, stats, degraded, started,
+          question=None):
     """Собирает единый ответ экипажа."""
     # Проверка на выдуманные числа и ссылки — та же, что в одиночном
     # пути (grounding). Критик проверяет смысл, а не сверяет цифры с
@@ -628,7 +630,8 @@ def _pack(answer, chunks, agent_id, agent, qtype, resp_mode, mode, trace,
     if answer and config.STRICT_NUMBERS:
         inside = chunks[:config.CONTEXT_CHUNKS]
         answer, grounding_report = grounding.verify(
-            answer, " ".join(c["text"] for c in inside), len(inside))
+            answer, " ".join(c["text"] for c in inside), len(inside),
+            question=question)
         if not answer.strip():
             nums = (grounding_report.get("unsupported_numbers") or [])
             notes.append("проверка сняла ответ: числа не найдены во фрагментах"

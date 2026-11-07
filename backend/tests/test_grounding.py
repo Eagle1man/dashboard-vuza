@@ -103,6 +103,33 @@ def test_repeats_are_collapsed():
     assert "повторы" in grounding.note(rep), grounding.note(rep)
 
 
+def test_year_from_question_does_not_kill_correct_answer():
+    """Год из вопроса — не выдуманное число.
+
+    Проверка нашла это на живой модели: ответ «в выпуске 2024 значение
+    60,74 [1]» удалялся целиком, потому что года 2024 не было во
+    фрагментах. Число и ссылка были верны — проверка наказывала за то,
+    что модель прочитала вопрос.
+    """
+    question = ("Какое значение показателя «E.1 Средний балл ЕГЭ» "
+                "у вуза «ИУБиП» в выпуске 2024?")
+    text, rep = grounding.verify(
+        "В выпуске 2024 значение показателя — 60,74 [1].",
+        "18. ЮЖНЫЙ УНИВЕРСИТЕТ (ИУБиП) — 60.74", 6, question=question)
+    assert "60,74" in text, rep
+    assert rep["removed"] == [], rep
+
+
+def test_invented_number_still_removed_with_question():
+    """Ослаблять проверку нельзя: число не из контекста и не из вопроса — выдумка."""
+    question = "Сколько студентов учится в ИУБиП?"
+    text, rep = grounding.verify("Всего 12 480 студентов [1].",
+                                 "18. ЮЖНЫЙ УНИВЕРСИТЕТ (ИУБиП) — 60.74", 6,
+                                 question=question)
+    assert "12 480" not in text and "12480" not in text, text
+    assert rep["removed"], rep
+
+
 def main():
     failures = 0
     for name, fn in sorted(globals().items()):

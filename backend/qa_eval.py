@@ -29,7 +29,17 @@ sys.path.insert(0, str(ROOT))
 from backend import config, db, llm, retrieve  # noqa: E402
 
 NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
-REFUSAL_MARKS = ("не найден", "нет данных", "не содержится", "отсутству")
+
+# Признаки честного отказа. Список пришлось расширить после проверки на
+# живой модели: ответ «в документе не указаны данные о …» — это отказ, но
+# прежние четыре признака его не ловили и метрика записывала верный ответ
+# в провал. Проверка метрики на самой себе обязательна: измеритель,
+# который ошибается, хуже отсутствия измерителя — он даёт уверенное число.
+REFUSAL_MARKS = (
+    "не найден", "нет данных", "не содержится", "отсутству",
+    "не указан", "не указаны", "не приводятся",
+    "не упомина", "не представлен", "не удалось найти", "не располага",
+)
 
 
 def norm_num(text):
@@ -86,8 +96,10 @@ def evaluate(args):
         item = {
             "id": q["id"], "task": q["task"], "question": q["question"],
             "doc_hit": doc_hit, "value_hit": value_hit,
-            "retrieved": [{"path": c["rel_path"], "heading": c.get("heading"),
-                           "score": c.get("score")} for c in chunks],
+            "retrieved": ([{"path": p, "heading": None, "score": None}
+                           for p in q["expected_paths"]] if args.oracle else
+                          [{"path": c["rel_path"], "heading": c.get("heading"),
+                            "score": c.get("score")} for c in chunks]),
             "fusion": stats.get("fusion"),
         }
 
@@ -109,8 +121,12 @@ def evaluate(args):
             expected_nums = {norm_num(n) for n in (operands or [])}
             if q.get("expected_value"):
                 expected_nums.add(norm_num(q["expected_value"]))
+            # Числа из самого вопроса тоже не выдуманы: модель их получила
+            # в вопросе («в выпуске 2024?») и повторить их — не галлюцинация.
+            # Без этого верный ответ штрафовался за упоминание года.
             item["invented"] = sorted(numbers_in(answer)
-                                      - ctx_nums - expected_nums)
+                                      - ctx_nums - expected_nums
+                                      - numbers_in(q["question"]))
 
         results.append(item)
         if doc_hit is False or value_hit is False:
