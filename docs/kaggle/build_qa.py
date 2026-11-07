@@ -36,6 +36,7 @@ from backend import llm, prompts  # noqa: E402
 KB = ROOT / "knowledge" / "official" / "monitoring"
 OUT_EVAL = ROOT / "docs" / "eval"
 OUT_KAGGLE = ROOT / "docs" / "kaggle"
+STORE = ROOT / "data" / "monitoring" / "structured" / "observations.jsonl"
 
 # Явное разбиение ключевых документов. Региональные таблицы — это
 # проверка обобщения: 2025 не должна встречаться при обучении.
@@ -125,6 +126,12 @@ def add(task, question, answer, chunks, expected_paths,
     rel = expected_paths[0]
     split = split or split_for(rel)
     qid = f"q{len(rows) + 1:04d}"
+    messages = [
+        {"role": "system", "content": prompts.SYSTEM},
+        {"role": "user", "content": prompts.USER_TMPL.format(
+            context=context_text(chunks), question=question)},
+        {"role": "assistant", "content": answer},
+    ]
     rows.append({
         "id": qid,
         "split": split,
@@ -137,6 +144,7 @@ def add(task, question, answer, chunks, expected_paths,
         "source": source,
         "refusal_kind": refusal_kind,
         "context": chunks,
+        "messages": messages,
     })
     counts[(split, task)] = counts.get((split, task), 0) + 1
 
@@ -144,12 +152,7 @@ def add(task, question, answer, chunks, expected_paths,
         "id": qid,
         "split": split,
         "task": task,
-        "messages": [
-            {"role": "system", "content": prompts.SYSTEM},
-            {"role": "user", "content": prompts.USER_TMPL.format(
-                context=context_text(chunks), question=question)},
-            {"role": "assistant", "content": answer},
-        ],
+        "messages": messages,
     })
 
 
@@ -414,6 +417,300 @@ add("structure", "Как читать место вуза в Ростовско�
            "Перцентиль 100 — лучший результат в области, 50 — медиана.")],
     ["official/monitoring/summary.md"])
 
+# ---------- 6. Структурированная копия: направления, карточка, СПО --------
+# Эти пары строятся из data/monitoring/structured/observations.jsonl, а не
+# из markdown. Так обучение видит те же числа, что и точный lookup.
+# Восемь показателей направлений и четыре показателя СПО держим в test:
+# документ тот же, но конкретную строку модель не видела.
+
+def store_rows():
+    if not STORE.exists():
+        raise SystemExit("нет structured/observations.jsonl; сначала: "
+                         "python -m backend.monitoring_store build")
+    return [json.loads(line) for line in
+            STORE.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def held_out(key, total, count):
+    bucket = int(hashlib.sha1(key.encode("utf-8")).hexdigest()[:8], 16)
+    return bucket % total < count
+
+
+def as_float(text):
+    try:
+        return float(norm_num(text))
+    except (TypeError, ValueError):
+        return None
+
+
+def fmt(value):
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        text = f"{value:.2f}".rstrip("0").rstrip(".")
+        return text.replace(".", ",")
+    return str(value)
+
+
+def end(unit):
+    """Точка в конце предложения, но не вторая после «чел.»."""
+    return "" if str(unit or "").endswith(".") else "."
+
+
+METRIC_TITLES = {
+    "contingent": "контингент",
+    "share_org": "доля в организации",
+    "share_region": "доля в регионе",
+    "vuz_count": "число вузов в регионе",
+    "branch_count": "число филиалов в регионе",
+    "subject_share": "доля в субъекте РФ",
+    "city": "число организаций в городе",
+    "region": "число организаций в регионе",
+    "rf": "число организаций в РФ",
+}
+
+store_facts = store_rows()
+
+# 6.1. 57 показателей направлений: извлечение и сравнение с медианами.
+for fact in store_facts:
+    if not (fact["level"] == "VO" and fact["release"] == 2025
+            and fact.get("section") == "III" and fact.get("org_id") == "1971"
+            and fact.get("kind") == "value"):
+        continue
+    code, title = fact["code"], fact["title"]
+    value, unit = fact.get("value_text"), fact.get("unit") or ""
+    med_private = fact.get("median_private")
+    med_region = fact.get("median_region")
+    extra = fact.get("extra") or {}
+    split = "test" if held_out("dir:" + code, 57, 8) else "train"
+    text = f"{code}. {title} — {value} {unit}".strip()
+    if med_private is not None:
+        text += f"; медиана частных вузов — {fmt(med_private)} {unit}"
+    if med_region is not None:
+        text += f"; медиана региона — {fmt(med_region)} {unit}"
+    answer = (f"В выпуске 2025 значение показателя «{title}» "
+              f"у ИУБиП — {value} {unit} [1].")
+    if med_private is not None:
+        answer += (f" Медиана частных вузов — {fmt(med_private)} "
+                   f"{unit}{end(unit)}")
+    if med_region is not None:
+        answer += (f" Медиана региона — {fmt(med_region)} "
+                   f"{unit}{end(unit)}")
+    add("extraction",
+        f"Какое значение показателя «{title}» у ИУБиП в выпуске 2025?",
+        answer,
+        [chunk("ИУБиП, выпуск 2025: направления деятельности",
+               fact.get("block") or "", text)],
+        ["official/monitoring/2025-directions.md"],
+        expected_value=value,
+        source="мониторинг, раздел III, выпуск 2025",
+        split=split)
+    if (med_private is not None and extra.get("comparable_private")
+            and not extra.get("capped_private")):
+        number, median = as_float(value), as_float(med_private)
+        if number is not None and median is not None and abs(number - median) > 1e-9:
+            diff = number - median
+            add("comparison",
+                f"На сколько значение показателя «{title}» у ИУБиП "
+                f"отличается от медианы частных вузов в выпуске 2025?",
+                f"Разница — {fmt(diff)} {unit}: у ИУБиП {value} {unit}, "
+                f"медиана частных вузов {fmt(med_private)} {unit} [1].",
+                [chunk("ИУБиП, выпуск 2025: направления деятельности",
+                       fact.get("block") or "", text)],
+                ["official/monitoring/2025-directions.md"],
+                operands=[value, fmt(med_private)],
+                source="мониторинг, раздел III, выпуск 2025",
+                split=split)
+
+# 6.2. Разделы I и IV: сведения, контингент, отрасли, УГН(С).
+card_facts = [fact for fact in store_facts
+              if fact["level"] == "VO" and fact["release"] == 2025
+              and fact.get("org_id") == "1971"
+              and fact.get("section") in ("I", "IV")
+              and fact.get("kind") in ("profile", "count", "share")]
+for fact in card_facts:
+    code, title = fact["code"], fact["title"]
+    value, unit = fact.get("value_text"), fact.get("unit") or ""
+    metric = (fact.get("extra") or {}).get("metric")
+    split = "train"
+    if code.startswith("info."):
+        if held_out("card:" + code, 10, 1):
+            split = "test"
+        if held_out("card-dev:" + code, 10, 1):
+            split = "dev"
+        question = f"Что известно о «{title}» ИУБиП в карточке мониторинга?"
+        answer = f"В карточке мониторинга «{title}»: {value} [1]."
+        text = f"{title}: {value}"
+    elif code.startswith("branch."):
+        metric_title = METRIC_TITLES.get(metric, metric or "показатель")
+        question = (f"Каков {metric_title} по отрасли «{title}» у ИУБиП "
+                    f"в выпуске 2025?")
+        answer = (f"{metric_title.capitalize()} по отрасли «{title}» — "
+                  f"{value} {unit} [1].")
+        text = f"Отрасль «{title}»: {metric_title} — {value} {unit}"
+    elif (code.startswith("ugn.")
+          or (fact.get("block") == "Реализуемые УГН(С)" and metric)):
+        metric_title = METRIC_TITLES.get(metric, metric or "показатель")
+        question = (f"Каков {metric_title} по УГН(С) {code} «{title}» "
+                    f"у ИУБиП в выпуске 2025?")
+        answer = (f"По УГН(С) {code} «{title}» {metric_title} — "
+                  f"{value} {unit} [1].")
+        text = f"УГН(С) {code} «{title}»: {metric_title} — {value} {unit}"
+    else:
+        question = (f"Какое значение показателя «{title}» у ИУБиП "
+                    f"в выпуске 2025?")
+        answer = f"{title} — {value} {unit} [1]."
+        text = f"{title} — {value} {unit}"
+    add("extraction", question, answer,
+        [chunk("ИУБиП, выпуск 2025: карточка организации",
+               fact.get("block") or "", text)],
+        ["official/monitoring/2025-card.md"],
+        expected_value=None if fact.get("kind") == "profile" else value,
+        source="мониторинг, карточка организации, выпуск 2025",
+        split=split)
+
+# 6.3. СПО: 20 показателей и структурные сведения.
+spo_facts = [fact for fact in store_facts
+             if fact["level"] == "SPO" and fact["release"] == 2025
+             and fact.get("org_id") == "1971"]
+for fact in spo_facts:
+    code, title = fact["code"], fact["title"]
+    value, unit = fact.get("value_text"), fact.get("unit") or ""
+    metric = (fact.get("extra") or {}).get("metric")
+    split = "train"
+    if re.fullmatch(r"\d+\.\d+", str(code)):
+        split = "test" if held_out("spo:" + code, 20, 4) else "train"
+        question = (f"Какое значение показателя «{title}» у ИУБиП "
+                    f"в СПО в выпуске 2025?")
+        answer = f"В СПО значение показателя «{title}» — {value} {unit} [1]."
+        if fact.get("subject_value") is not None:
+            answer += (f" По субъекту РФ — {fmt(fact['subject_value'])} "
+                       f"{unit}{end(unit)}")
+        if fact.get("rf_value") is not None:
+            answer += f" По РФ — {fmt(fact['rf_value'])} {unit}{end(unit)}"
+        if fact.get("place") is not None:
+            answer += (f" Место в области — {fact['place']} "
+                       f"из {fact.get('place_total')}.")
+        if fact.get("median_org") is not None:
+            answer += (f" Медиана по организациям — "
+                       f"{fmt(fact['median_org'])} {unit}{end(unit)}")
+        text = f"{code}. {title} — {value} {unit}"
+        if fact.get("subject_value") is not None:
+            text += f"; по субъекту РФ — {fmt(fact['subject_value'])} {unit}"
+        if fact.get("rf_value") is not None:
+            text += f"; по РФ — {fmt(fact['rf_value'])} {unit}"
+        if fact.get("place") is not None:
+            text += f"; место — {fact['place']} из {fact.get('place_total')}"
+        if fact.get("median_org") is not None:
+            text += f"; медиана — {fmt(fact['median_org'])} {unit}"
+        add("extraction", question, answer,
+            [chunk("ИУБиП, СПО, выпуск 2025", fact.get("block") or "", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            expected_value=value,
+            source="мониторинг СПО, выпуск 2025",
+            split=split)
+        median = as_float(fact.get("median_org"))
+        number = as_float(value)
+        if median is not None and number is not None and abs(number - median) > 1e-9:
+            add("comparison",
+                f"На сколько значение показателя «{title}» у ИУБиП "
+                f"в СПО отличается от медианы по организациям?",
+                f"Разница — {fmt(number - median)} {unit}: у ИУБиП "
+                f"{value} {unit}, медиана {fmt(median)} {unit} [1].",
+                [chunk("ИУБиП, СПО, выпуск 2025", fact.get("block") or "", text)],
+                ["official/monitoring/spo/2025-iubip.md"],
+                operands=[value, fmt(median)],
+                source="мониторинг СПО, выпуск 2025",
+                split=split)
+    elif code.startswith("info."):
+        question = f"Что известно о «{title}» ИУБиП в СПО?"
+        answer = f"В карточке СПО «{title}»: {value} [1]."
+        text = f"{title}: {value}"
+        add("extraction", question, answer,
+            [chunk("ИУБиП, СПО, выпуск 2025: общие сведения",
+                   "Общие сведения", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            source="мониторинг СПО, выпуск 2025",
+            split=split)
+    elif code.startswith("branch."):
+        metric_title = METRIC_TITLES.get(metric, metric or "показатель")
+        question = (f"Каково значение показателя «{metric_title}» "
+                    f"по отрасли «{title}» у ИУБиП в СПО?")
+        answer = (f"По отрасли «{title}» {metric_title} — "
+                  f"{value} {unit} [1].")
+        text = f"Отрасль «{title}»: {metric_title} — {value} {unit}"
+        add("extraction", question, answer,
+            [chunk("ИУБиП, СПО, выпуск 2025",
+                   "Распределение контингента по отраслям наук", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            expected_value=value,
+            source="мониторинг СПО, выпуск 2025",
+            split=split)
+    elif fact.get("block", "").startswith("Укрупнённые") and metric:
+        phrase = {"city": "в городе", "region": "в регионе", "rf": "в РФ"}
+        where = phrase.get(metric, "")
+        question = (f"Сколько организаций СПО {where} реализуют "
+                    f"УГПС {code} «{title}»?")
+        answer = (f"По УГПС {code} «{title}» организаций {where} — "
+                  f"{value} {unit} [1].")
+        text = f"УГПС {code} «{title}»: организаций {where} — {value} {unit}"
+        add("extraction", question, answer,
+            [chunk("ИУБиП, СПО, выпуск 2025: УГПС",
+                   "Укрупнённые группы профессий и специальностей", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            expected_value=value,
+            source="мониторинг СПО, выпуск 2025",
+            split=split)
+    else:
+        question = (f"Какое значение показателя «{title}» у ИУБиП "
+                    f"в СПО в выпуске 2025?")
+        answer = f"{title} — {value} {unit} [1]."
+        text = f"{title} — {value} {unit}"
+        add("extraction", question, answer,
+            [chunk("ИУБиП, СПО, выпуск 2025", fact.get("block") or "", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            expected_value=value,
+            source="мониторинг СПО, выпуск 2025",
+            split=split)
+
+# 6.4. E-показатели ИУБиП: значение и медианы (в региональной таблице
+# медиан нет, поэтому вопрос отдельный, а не дубль региональной строки).
+for fact in store_facts:
+    if not (fact["level"] == "VO" and fact["release"] == 2025
+            and fact.get("section") == "II" and fact.get("org_id") == "1971"
+            and fact.get("kind") == "value" and fact.get("year") == 2025):
+        continue
+    title, value, unit = fact["title"], fact.get("value_text"), fact.get("unit") or ""
+    parts = [f"{title} — {value} {unit}"]
+    if fact.get("median_region") is not None:
+        parts.append(f"медиана региона — {fmt(fact['median_region'])} {unit}")
+    if fact.get("median_rf") is not None:
+        parts.append(f"медиана РФ — {fmt(fact['median_rf'])} {unit}")
+    if fact.get("median_department") is not None:
+        parts.append(f"медиана ведомства — {fmt(fact['median_department'])} {unit}")
+    if fact.get("place") is not None:
+        parts.append(f"место — {fact['place']} из {fact.get('place_total')}")
+    text = "; ".join(parts)
+    answer = f"У ИУБиП показатель «{title}»: {value} {unit} [1]."
+    if fact.get("median_region") is not None:
+        answer += (f" Медиана региона — {fmt(fact['median_region'])} "
+                   f"{unit}{end(unit)}")
+    if fact.get("median_rf") is not None:
+        answer += (f" Медиана РФ — {fmt(fact['median_rf'])} "
+                   f"{unit}{end(unit)}")
+    if fact.get("place") is not None:
+        answer += f" Место — {fact['place']} из {fact.get('place_total')}."
+    add("extraction",
+        f"Какое значение показателя «{title}» у ИУБиП в выпуске 2025 "
+        f"и каковы медианы?",
+        answer,
+        [chunk("ИУБиП, выпуск 2025: E-показатели",
+               "Показатели мониторинга эффективности", text)],
+        ["official/monitoring/region-2025.md"],
+        expected_value=value,
+        source="мониторинг, E-показатели, выпуск 2025",
+        split="test")
+
 # ---------- запись -------------------------------------------------------
 OUT_EVAL.mkdir(parents=True, exist_ok=True)
 (OUT_EVAL / "questions.jsonl").write_text(
@@ -434,6 +731,8 @@ for split in ("train", "dev", "test"):
     report.append(f"{split}: {sum(by_task.values())} — " +
                   ", ".join(f"{t} {n}" for t, n in by_task.items()))
 report += ["", f"всего вопросов: {len(rows)}",
+           "held-out внутри документов: 8 показателей направлений и "
+           "4 показателя СПО (только test)",
            f"отброшено проверкой «есть во фрагменте»: {len(dropped)}", ""]
 for item in dropped[:20]:
     report.append(f"  - [{item['task']}] {item['question']} | нет: {item['missing']}")

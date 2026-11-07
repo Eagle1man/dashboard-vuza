@@ -1034,15 +1034,26 @@ def try_answer(question: str, path: pathlib.Path = None):
     Витрина — ускоритель, а не обязательный узел: если база не собрана
     (свежая установка, обновление), вопрос должен уйти в обычный поиск, а
     не упасть с ошибкой. Поэтому отсутствие файла здесь не исключение.
+
+    Если старая витрина не ответила, пробуем структурированную копию:
+    она знает разделы I, IV, V и СПО, которых в analytics.db нет.
     """
     try:
         conn = connect(pathlib.Path(path) if path else None)
     except FileNotFoundError:
-        return None
+        conn = None
+    if conn is not None:
+        try:
+            result = answer(conn, question)
+        finally:
+            conn.close()
+        if result:
+            return result
     try:
-        return answer(conn, question)
-    finally:
-        conn.close()
+        from . import monitoring_store
+        return monitoring_store.answer_question(question)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------- CLI

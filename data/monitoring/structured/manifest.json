@@ -1,0 +1,53 @@
+{
+ "schema_version": "1.0",
+ "generated_at": "2026-11-08T00:08:04",
+ "sources": [
+  {
+   "id": "vo-2025",
+   "level": "VO",
+   "release": 2025,
+   "data_year": 2024,
+   "url": "https://monitoring.miccedu.ru/iam/2025/_vpo/inst.php?id=1971",
+   "release_date": "2026-02-03"
+  },
+  {
+   "id": "vo-2024",
+   "level": "VO",
+   "release": 2024,
+   "data_year": 2023,
+   "url": "https://monitoring.miccedu.ru/iam/2024/_vpo/inst.php?id=1971"
+  },
+  {
+   "id": "spo-2025",
+   "level": "SPO",
+   "release": 2025,
+   "data_year": 2024,
+   "url": "https://monitoring.miccedu.ru/iam/2025/_spo/inst.php?id=1971"
+  },
+  {
+   "id": "spo-2024",
+   "level": "SPO",
+   "release": 2024,
+   "data_year": 2023,
+   "url": "https://monitoring.miccedu.ru/iam/2024/_spo/inst.php?id=1971"
+  }
+ ],
+ "counts": {
+  "observations": 2124,
+  "organizations": 180,
+  "indicators": 198,
+  "by_release": {
+   "SPO-2024": 46,
+   "SPO-2025": 69,
+   "VO-2024": 1036,
+   "VO-2025": 973
+  }
+ },
+ "checksums": {
+  "observations.jsonl": "f993365303680927df5f5b554087e5e2d3f4b507a6ecf1768a904c3439e83e16",
+  "observations.csv": "7c70a82d55e0f7544f10e34d71108d9cb17d0d089bf9108347ced497dc80a9ed",
+  "organizations.json": "de03a2a8d4beebce2df86c9f8e710f851d9d9f104c1e2ad876b93a061ca8d1a5",
+  "indicators.json": "5e84ff1e8845c504f8925c3a6b6c71a1e4ab12fb3447517265377df6a98d570d",
+  "monitoring.sqlite": "da307d389fe9922177664bba488e32d7f76b98138a2a7f4f69b90f8a07eac581"
+ }
+}

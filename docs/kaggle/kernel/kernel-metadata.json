@@ -1,0 +1,15 @@
+{
+ "id": "orel1986/rector-qlora-qwen2-5-14b",
+ "title": "Rector QLoRA Qwen2.5-14B",
+ "code_file": "finetune_qwen14b.ipynb",
+ "language": "python",
+ "kernel_type": "notebook",
+ "is_private": true,
+ "enable_gpu": true,
+ "enable_internet": true,
+ "dataset_sources": [
+  "orel1986/monitoring-qa"
+ ],
+ "competition_sources": [],
+ "kernel_sources": []
+}

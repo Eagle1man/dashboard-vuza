@@ -14,6 +14,30 @@ CARD_HTML = """
 <table id="info">
   <tr><td>наименование образовательной организации</td><td>ЧОУ ВО "ЮЖНЫЙ УНИВЕРСИТЕТ (ИУБиП)"</td></tr>
   <tr><td>субъект РФ, адрес</td><td>Ростовская область</td></tr>
+  <tr><td>web-сайт</td><td>http://www.iubip.ru</td></tr>
+</table>
+<table>
+  <tr><td>142</td><td>организации, реализующие программы СПО(из числа принявших участие в мониторинге)</td></tr>
+  <tr><td>116 764</td><td>студента среднего профессионального образования</td></tr>
+</table>
+<table>
+  <tr><td>40</td><td>организаций, реализующих программы СПО список</td></tr>
+</table>
+<table>
+  <tr><td>обучается 1 131</td><td>студент среднего профессионального образования(0,97% от контингента по субъекту РФ)</td></tr>
+  <tr><td>в т.ч. 1 131</td><td>очной формы обучения</td></tr>
+</table>
+<table>
+  <tr><td>за счет бюджетных ассигнований</td><td>5,7%</td><td></td><td>94,3%</td><td>по договорам об оказании платных образовательных услуг</td></tr>
+</table>
+<table id="kont_by_otr">
+  <tr><td></td><td>Доля в субъекте РФ</td><td>Контингент студентов</td></tr>
+  <tr><td>Науки об обществе</td><td>2,4%</td><td>778 чел.</td></tr>
+</table>
+<table class="table_ugs">
+  <tr><td></td><td>Число других организаций</td></tr>
+  <tr><td>в городе</td><td>в субъекте РФ</td><td>на территории РФ</td></tr>
+  <tr><td>09.00.00 - Информатика и вычислительная техника</td><td>6</td><td>47</td><td>1 639</td></tr>
 </table>
 <table class="napde">
   <tr><td>Наименование показателя</td><td>Значение показателя по организации</td>
@@ -39,6 +63,29 @@ def test_parse_card_reads_indicators():
     assert card["indicators"]["1.1"]["region"] == 116764.0
     assert card["indicators"]["1.1"]["rf"] == 3800333.0
     assert card["indicators"]["1.2"]["org"] == 100.0
+
+
+def test_parse_card_reads_region_contingent_and_ugps():
+    card = spo.parse_card(CARD_HTML)
+    assert card["region"] == {"organizations": 142, "students": 116764}
+    assert card["city"] == {"organizations": 40}
+    assert card["contingent"]["total"] == 1131
+    assert card["contingent"]["full_time"] == 1131
+    assert card["contingent"]["subject_share"] == 0.97
+    assert card["contingent"]["budget_share"] == 5.7
+    assert card["contingent"]["paid_share"] == 94.3
+    assert card["branches"] == [{
+        "name": "Науки об обществе",
+        "subject_share": 2.4,
+        "contingent": 778.0,
+    }]
+    assert card["ugps"] == [{
+        "code": "09.00.00",
+        "name": "Информатика и вычислительная техника",
+        "city": 6,
+        "region": 47,
+        "rf": 1639,
+    }]
 
 
 def test_region_ids_deduplicates():

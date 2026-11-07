@@ -42,7 +42,7 @@ md("""# QLoRA для ассистента ректора (Qwen2.5-14B)
 
 **Что изменилось после замера.** Вопросы и ответы теперь в боевом
 формате (`prompts.SYSTEM`, ссылки `[1]`), данные разделены по документам
-(608 train / 180 dev / 185 test), обучение — одна эпоха на 1024 токенах:
+(829 train / 182 dev / 207 test), обучение — одна эпоха на 1024 токенах:
 в датасете максимум ~490 токенов, вторая эпоха была бы переобучением.
 
 Перед запуском добавьте датасет `orel1986/monitoring-qa` и включите GPU.
@@ -115,7 +115,7 @@ rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines
         if line.strip()]
 bad = [r for r in rows
        if len(r["messages"]) != 3
-       or "Фрагмент:" not in r["messages"][1]["content"]
+       or "ВОПРОС:" not in r["messages"][1]["content"]
        or "[" not in r["messages"][2]["content"]]
 assert not bad, f"примеров не в боевом формате: {len(bad)}"
 print("примеров:", len(rows))
@@ -144,8 +144,8 @@ trainer = SFTTrainer(
     packing=False,
     args=TrainingArguments(
         per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,   # эффективный batch 16, ~38 шагов
-        num_train_epochs=1,              # 608 примеров; вторая эпоха = переобучение
+        gradient_accumulation_steps=8,   # эффективный batch 16, ~52 шага
+        num_train_epochs=1,              # 829 примеров; вторая эпоха = переобучение
         learning_rate=2e-4,
         lr_scheduler_type="cosine",
         warmup_ratio=0.03,
@@ -175,56 +175,178 @@ tokenizer.save_pretrained("/kaggle/working/lora_adapter")
 !cd /kaggle/working && zip -qr lora_adapter.zip lora_adapter && ls -lh lora_adapter.zip
 """)
 
-md("""## 7. GGUF — только при достатке диска
+md("""## 7. Замер: база и адаптер
 
-`save_pretrained_gguf` сначала сливает модель в fp16: для 14B это ~28 ГБ,
-а `/kaggle/working` даёт 20 ГБ. Поэтому шаг не обязательный: если места
-мало, он честно пропускается, а адаптер остаётся. Слить и
-сквантовать можно на машине с диском ~40 ГБ.
+Одни и те же вопросы test, один и тот же контекст. Сначала отвечает
+адаптер, потом адаптер отключается и отвечает база. Числа считает код:
+`numeric_exact`, `citation_present`, `refusal_correct`,
+`hallucinated_number_rate`. Это и есть приёмка: без сравнения обучение
+не принимается.
 """)
-code("""import shutil
+code("""import collections
+import json
+import pathlib
+import random
+import re
 
-free_gb = shutil.disk_usage("/kaggle/working").free / 1e9
-print("свободно, ГБ:", round(free_gb, 1))
-if free_gb < 35:
-    print("GGUF пропущен: для merge 14B в fp16 нужно ~28 ГБ. "
-          "Скачайте lora_adapter.zip — слить можно на сервере.")
+qpath = pathlib.Path("/kaggle/input/monitoring-qa/questions.jsonl")
+if not qpath.exists():
+    matches = list(pathlib.Path("/kaggle/input").rglob("questions.jsonl"))
+    assert matches, "questions.jsonl не найден в /kaggle/input"
+    qpath = matches[0]
+questions = [json.loads(line) for line in
+             qpath.read_text(encoding="utf-8").splitlines() if line.strip()]
+test = [q for q in questions if q.get("split") == "test"]
+random.Random(42).shuffle(test)
+by_task = collections.defaultdict(list)
+for q in test:
+    by_task[q["task"]].append(q)
+sample = []
+for task, limit in (("extraction", 24), ("comparison", 10),
+                    ("refusal", 8), ("structure", 6)):
+    sample += by_task.get(task, [])[:limit]
+print("вопросов в замере:", len(sample),
+      collections.Counter(q["task"] for q in sample))
+
+
+def generate(messages, max_new_tokens=220):
+    inputs = tokenizer.apply_chat_template(
+        messages, tokenize=True, add_generation_prompt=True,
+        return_tensors="pt").to("cuda")
+    out = model.generate(input_ids=inputs, max_new_tokens=max_new_tokens,
+                         do_sample=False)
+    return tokenizer.decode(out[0][inputs.shape[1]:],
+                            skip_special_tokens=True).strip()
+
+
+def numbers(text):
+    text = re.sub(r"\\[\\d+(?:\\s*,\\s*\\d+)*\\]", " ", str(text))
+    out = set()
+    for match in re.findall(r"-?\\d+(?:[.,]\\d+)?", text.replace(" ", "")):
+        try:
+            out.add(round(float(match.replace(",", ".")), 2))
+        except ValueError:
+            pass
+    return out
+
+
+def expected_number(value):
+    if value is None:
+        return None
+    try:
+        return round(float(str(value).replace(" ", "").replace(",", ".")), 2)
+    except ValueError:
+        return None
+
+
+REFUSAL = ("не найден", "нет данных", "не содержится", "не удалось",
+           "отсутств", "не указан")
+
+
+def is_refusal(text):
+    low = str(text).lower()
+    return any(marker in low for marker in REFUSAL)
+
+
+def score(question, answer):
+    expected = expected_number(question.get("expected_value"))
+    row = {"id": question["id"], "task": question["task"],
+           "answer": answer, "expected": expected}
+    row["numeric_exact"] = int(expected is not None and expected in numbers(answer))
+    row["citation_present"] = int(bool(re.search(r"\\[\\d+", answer)))
+    row["refusal_correct"] = int(question["task"] == "refusal"
+                                 and is_refusal(answer))
+    row["false_refusal"] = int(question["task"] != "refusal"
+                               and is_refusal(answer))
+    context = " ".join(chunk.get("text", "")
+                       for chunk in (question.get("context") or []))
+    row["hallucinated_number"] = int(bool(
+        numbers(answer) - numbers(context) - {2024, 2025}))
+    return row
+
+
+def summarize(rows):
+    result = {"n": len(rows)}
+    numeric = [row for row in rows if row["expected"] is not None]
+    refusals = [row for row in rows if row["task"] == "refusal"]
+    normal = [row for row in rows if row["task"] != "refusal"]
+    result["numeric_exact_rate"] = (
+        round(sum(row["numeric_exact"] for row in numeric) / len(numeric), 3)
+        if numeric else None)
+    result["citation_present_rate"] = round(
+        sum(row["citation_present"] for row in rows) / len(rows), 3)
+    result["refusal_correct_rate"] = (
+        round(sum(row["refusal_correct"] for row in refusals) / len(refusals), 3)
+        if refusals else None)
+    result["false_refusal_rate"] = (
+        round(sum(row["false_refusal"] for row in normal) / len(normal), 3)
+        if normal else None)
+    result["hallucinated_number_rate"] = round(
+        sum(row["hallucinated_number"] for row in rows) / len(rows), 3)
+    return result
+
+
+FastLanguageModel.for_inference(model)
+adapter_rows = [score(q, generate(q["messages"][:2])) for q in sample]
+
+disabled = hasattr(model, "disable_adapter_layers")
+base_rows = []
+if disabled:
+    model.disable_adapter_layers()
+    FastLanguageModel.for_inference(model)
+    base_rows = [score(q, generate(q["messages"][:2])) for q in sample]
 else:
-    model.save_pretrained_gguf("/kaggle/working/gguf", tokenizer,
-                               quantization_method="q4_k_m")
-    !ls -lh /kaggle/working/gguf
+    print("disable_adapter_layers недоступен: база не замерена")
+
+report = {"sample": len(sample),
+          "adapter": summarize(adapter_rows),
+          "base": summarize(base_rows) if base_rows else None,
+          "details": {"adapter": adapter_rows, "base": base_rows}}
+pathlib.Path("/kaggle/working/eval_report.json").write_text(
+    json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+print(json.dumps({"adapter": report["adapter"],
+                  "base": report["base"]}, ensure_ascii=False, indent=1))
 """)
 
-md("""## 8. Проверка перед скачиванием
+md("""## 8. GGUF — только при достатке диска
 
-Смотрим, что модель отвечает по фрагменту и ставит ссылку. Это не замер
-качества (он делается на dev в проекте), а проверка, что адаптер жив.
+`save_pretrained_gguf` сначала сливает 14B в fp16 (~28 ГБ). В
+`/kaggle/working` только 20 ГБ, поэтому merge идёт в `/tmp`, а в
+`/kaggle/working` копируется только готовый `.gguf` (~9 ГБ). Если места
+не хватает, шаг пропускается, адаптер остаётся.
 """)
-code(f"""FastLanguageModel.for_inference(model)
+code("""import pathlib
+import shutil
 
-question = "Какое место занимает ИУБиП по объёму НИОКР среди вузов области в 2025?"
-context = ("[1] Документ: «Вузы Ростовской области в мониторинге, выпуск 2025», "
-           "раздел: E.2 Объём НИОКР на одного НПР, тыс. руб.\\n"
-           "5. ЮЖНЫЙ УНИВЕРСИТЕТ (ИУБиП) — 419.85")
-
-messages = [
-    {{"role": "system", "content": {SYSTEM!r}}},
-    {{"role": "user", "content": f"Документы-фрагменты:\\n\\n{{context}}\\n\\n---\\n"
-                                  f"ВОПРОС: {{question}}\\n\\n"
-                                  f"ОТВЕТ (только по фрагментам выше, со ссылками [номер]):"}},
-]
-inputs = tokenizer.apply_chat_template(messages, tokenize=True,
-                                       add_generation_prompt=True,
-                                       return_tensors="pt").to("cuda")
-out = model.generate(input_ids=inputs, max_new_tokens=180,
-                     temperature=0.15, do_sample=True)
-print(tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True))
+free_tmp = shutil.disk_usage("/tmp").free / 1e9
+free_work = shutil.disk_usage("/kaggle/working").free / 1e9
+print("свободно: /tmp", round(free_tmp, 1),
+      "ГБ; /kaggle/working", round(free_work, 1), "ГБ")
+try:
+    if free_tmp < 35:
+        print("GGUF пропущен: для merge 14B в fp16 нужно ~28 ГБ в /tmp.")
+    else:
+        model.save_pretrained_gguf("/tmp/gguf", tokenizer,
+                                   quantization_method="q4_k_m")
+        ggufs = sorted(pathlib.Path("/tmp/gguf").glob("*.gguf"))
+        assert ggufs, "GGUF не создан"
+        for source in ggufs:
+            size_gb = source.stat().st_size / 1e9
+            if size_gb + 1 < free_work:
+                shutil.copy(source, "/kaggle/working/" + source.name)
+                print("скопирован:", source.name, round(size_gb, 1), "ГБ")
+            else:
+                print("не скопирован (мало места):", source.name,
+                      round(size_gb, 1), "ГБ")
+except Exception as exc:
+    print("GGUF не получился:", exc)
+!ls -lh /kaggle/working
 """)
 
 md("""## 9. Что делать с файлами
 
-1. Скачать `lora_adapter.zip` (~300 МБ) — обязательно.
-2. Если получился `gguf/` — скачать и его, это готовая модель для Ollama.
+1. Скачать `lora_adapter.zip` (~300 МБ) и `eval_report.json` — обязательно.
+2. Если получился `.gguf` — скачать и его, это готовая модель для Ollama.
 3. Если GGUF не получился, слить на машине с диском ~40 ГБ:
 
 ```
@@ -238,15 +360,15 @@ PY
 ```
 
 4. Дальше — `llama.cpp` → `q4_k_m` → `Modelfile` → `ollama create rector-qwen`.
-5. **Обязательно** сравнить с базовой моделью на dev:
+5. Замер уже лежит в `eval_report.json`. Повторить локально можно так:
 
 ```
-python -m backend.qa_eval --split dev --model qwen2.5:14b
-python -m backend.qa_eval --split dev --model rector-qwen
+python -m backend.qa_eval --split test --oracle --limit 20 --model qwen2.5:14b
+python -m backend.qa_eval --split test --oracle --limit 20 --model rector-qwen
 ```
 
-Адаптер принимается, только если `refusal_correct` и `citation_present`
-выросли, а `numeric_exact` не упал и выдуманных чисел нет.
+Адаптер принимается, только если `citation_present` и `refusal_correct`
+выросли, `numeric_exact` не упал, а `hallucinated_number_rate` не вырос.
 """)
 
 nb = {

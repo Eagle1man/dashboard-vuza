@@ -37,8 +37,117 @@ def region_url(year, region_id=REGION_ID):
     return f"{SITE}/iam/{year}/_spo/material.php?type=2&id={region_id}"
 
 
+def _cells(row):
+    return [cell["t"] for cell in row]
+
+
+def _table_by_id(tables, table_id):
+    return next((t for t in tables if t["attrs"].get("id") == table_id), None)
+
+
+def _table_by_class(tables, class_name):
+    return next((t for t in tables
+                 if class_name in (t["attrs"].get("class") or "")), None)
+
+
+def _parse_region(tables):
+    """Итоги региона: организаций и студентов СПО."""
+    for table in tables:
+        rows = table["rows"]
+        if len(rows) < 2:
+            continue
+        first, second = _cells(rows[0]), _cells(rows[1])
+        if (first and first[0].strip().isdigit()
+                and len(first) > 1
+                and "организации, реализующие программы СПО" in first[1]):
+            return {
+                "organizations": int(first[0]),
+                "students": int(cm.norm_num(second[0]) or 0),
+            }
+    return {}
+
+
+def _parse_city(tables):
+    """Итоги города: число организаций СПО."""
+    for table in tables:
+        for row in table["rows"]:
+            cells = _cells(row)
+            if (cells and cells[0].strip().isdigit()
+                    and len(cells) > 1
+                    and "организаций, реализующих программы СПО" in cells[1]):
+                return {"organizations": int(cells[0])}
+    return {}
+
+
+def _parse_contingent(tables):
+    """Контингент организации, очная форма и доли бюджета/платных мест."""
+    out = {}
+    for table in tables:
+        for row in table["rows"]:
+            cells = _cells(row)
+            if not cells:
+                continue
+            head = cells[0].lower()
+            if head.startswith("обучается"):
+                out["total"] = int(cm.norm_num(cells[0]) or 0)
+                if len(cells) > 1:
+                    match = re.search(r"\(([\d.,]+)\s*%", cells[1])
+                    if match:
+                        out["subject_share"] = float(
+                            match.group(1).replace(",", "."))
+            elif head.startswith("в т.ч."):
+                out["full_time"] = int(cm.norm_num(cells[0]) or 0)
+            elif head.startswith("за счет бюджетных ассигнований"):
+                if len(cells) > 1:
+                    out["budget_share"] = cm.norm_num(cells[1])
+                if len(cells) > 3:
+                    out["paid_share"] = cm.norm_num(cells[3])
+    return out
+
+
+def _parse_branches(tables):
+    """Распределение контингента по отраслям наук."""
+    table = _table_by_id(tables, "kont_by_otr")
+    if not table:
+        return []
+    out = []
+    for row in table["rows"][1:]:
+        cells = _cells(row)
+        if len(cells) < 3 or not cells[0]:
+            continue
+        out.append({
+            "name": cells[0],
+            "subject_share": cm.norm_num(cells[1]),
+            "contingent": cm.norm_num(cells[2]),
+        })
+    return out
+
+
+def _parse_ugps(tables):
+    """УГПС, по которым организация реализует подготовку кадров."""
+    table = _table_by_class(tables, "table_ugs")
+    if not table:
+        return []
+    out = []
+    for row in table["rows"]:
+        cells = _cells(row)
+        if len(cells) < 4:
+            continue
+        match = re.match(r"(\d{2}\.\d{2}\.\d{2})\s*[-–—]\s*(.+)", cells[0])
+        if not match:
+            continue
+        out.append({
+            "code": match.group(1),
+            "name": match.group(2).strip(),
+            "city": int(cm.norm_num(cells[1]) or 0),
+            "region": int(cm.norm_num(cells[2]) or 0),
+            "rf": int(cm.norm_num(cells[3]) or 0),
+        })
+    return out
+
+
 def parse_card(html_text):
-    """Карточка СПО: сведения и 20 показателей org/region/rf."""
+    """Карточка СПО: сведения, контингент, УГПС и 20 показателей."""
     tables = cm.parse_tables(html_text)
     info = {str(key).lower(): value
             for key, value in cm.parse_info(tables).items()}
@@ -47,7 +156,7 @@ def parse_card(html_text):
         if "napde" not in (table["attrs"].get("class") or ""):
             continue
         for row in table["rows"]:
-            cells = [cell["t"] for cell in row]
+            cells = _cells(row)
             if len(cells) < 4:
                 continue
             match = CODE_RE.match(cells[0])
@@ -63,6 +172,11 @@ def parse_card(html_text):
     return {
         "info": info,
         "name": info.get("наименование образовательной организации") or "",
+        "region": _parse_region(tables),
+        "city": _parse_city(tables),
+        "contingent": _parse_contingent(tables),
+        "branches": _parse_branches(tables),
+        "ugps": _parse_ugps(tables),
         "indicators": indicators,
     }
 
@@ -149,15 +263,65 @@ def write_spo_md(spo, release, path):
         index = years.index(release)
         if index > 0:
             previous = years[index - 1]
+    release_data = (spo.get("years") or {}).get(str(release)) or {}
+    info = release_data.get("info") or {}
+    region = release_data.get("region") or {}
+    city = release_data.get("city") or {}
+    contingent = release_data.get("contingent") or {}
+    branches = release_data.get("branches") or []
+    ugps = release_data.get("ugps") or []
+
     lines = [
         "# ИУБиП: среднее профессиональное образование, мониторинг СПО",
         "",
         "Источник: monitoring.miccedu.ru, карточка организации id=1971.",
         f"Выпуск {release} — самый свежий; предыдущий: {previous or '—'}.",
         "",
-        "## Показатели организации, области и РФ",
-        "",
     ]
+    if info:
+        lines += ["## Общие сведения", ""]
+        for key, value in info.items():
+            if key and value:
+                lines.append(f"- {key}: {value}")
+        lines.append("")
+    if region or city or contingent:
+        lines += ["## Роль организации в системе подготовки кадров", ""]
+        if region.get("organizations"):
+            lines.append(f"- Организаций СПО в регионе: {region['organizations']}")
+        if region.get("students"):
+            lines.append(f"- Студентов СПО в регионе: {region['students']}")
+        if city.get("organizations"):
+            lines.append(f"- Организаций СПО в городе: {city['organizations']}")
+        if contingent.get("total") is not None:
+            lines.append(f"- Обучается студентов: {contingent['total']}")
+        if contingent.get("full_time") is not None:
+            lines.append(f"- В том числе очной формы: {contingent['full_time']}")
+        if contingent.get("subject_share") is not None:
+            lines.append(f"- Доля от контингента субъекта РФ: "
+                         f"{contingent['subject_share']}%")
+        if contingent.get("budget_share") is not None:
+            lines.append(f"- За счёт бюджетных ассигнований: "
+                         f"{contingent['budget_share']}%")
+        if contingent.get("paid_share") is not None:
+            lines.append(f"- По договорам о платных услугах: "
+                         f"{contingent['paid_share']}%")
+        if branches:
+            lines += ["", "### Распределение контингента по отраслям наук", ""]
+            for branch in branches:
+                lines.append(
+                    f"- {branch['name']}: доля в субъекте "
+                    f"{branch.get('subject_share')}%, контингент "
+                    f"{branch.get('contingent')} чел.")
+        lines.append("")
+    if ugps:
+        lines += ["## Укрупнённые группы профессий и специальностей (УГПС)", ""]
+        for item in ugps:
+            lines.append(
+                f"- {item['code']} — {item['name']}: организаций в городе "
+                f"{item.get('city')}, в регионе {item.get('region')}, "
+                f"в РФ {item.get('rf')}")
+        lines.append("")
+    lines += ["## Показатели организации, области и РФ", ""]
     indicators = (spo.get("years", {}).get(str(release), {})
                   .get("indicators") or {})
     for code, ind in indicators.items():

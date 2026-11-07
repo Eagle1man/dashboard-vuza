@@ -211,9 +211,19 @@ def sync_once(args):
     spo_data["source"] = "Мониторинг СПО, monitoring.miccedu.ru"
     spo_data["vuz"] = {"id": spo.VUZ_ID,
                        "name": "Южный университет (ИУБиП), СПО"}
+    existed = spo_data["years"].get(release) or {}
     spo_data["years"][release] = {
         "total": len(organizations),
         "indicators": release_indicators,
+        # Сведения, контингент и УГПС нужны структурированной копии
+        # и датасету; при повторной сборке не затираем их пустотой.
+        "info": card.get("info") or existed.get("info") or {},
+        "region": card.get("region") or existed.get("region") or {},
+        "city": card.get("city") or existed.get("city") or {},
+        "contingent": (card.get("contingent")
+                       or existed.get("contingent") or {}),
+        "branches": card.get("branches") or existed.get("branches") or [],
+        "ugps": card.get("ugps") or existed.get("ugps") or [],
     }
     sm.save_json(SPO_JSON, spo_data)
     spo.write_spo_md(spo_data, release, md_path)

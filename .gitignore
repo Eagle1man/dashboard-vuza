@@ -32,3 +32,9 @@ Thumbs.db
 # Локальное окружение редактора
 .vscode/
 .idea/
+
+# Staging для Kaggle: дублирует train/dev/test и структурированную копию.
+# Загружается командой, в репозитории не нужен.
+docs/kaggle/upload/
+docs/kaggle/kernel-output/
+docs/kaggle/kernel/finetune_qwen14b.ipynb
