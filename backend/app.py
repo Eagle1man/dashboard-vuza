@@ -24,6 +24,7 @@ from . import autoconfig
 from . import assets
 from . import auth
 from . import config
+from . import monitoring
 from . import consistency
 from . import crew
 from . import db
@@ -338,6 +339,33 @@ def _answer_with_crew(question: str, mode: str, top_k):
 @app.get("/api/metrics")
 def metrics():
     return db.load_vitrine(conn())
+
+
+@app.get("/api/monitoring")
+def monitoring_view():
+    """Место вуза среди вузов Ростовской области за 2024 и 2025 годы.
+
+    Источник — открытые материалы monitoring.miccedu.ru; файл
+    data/monitoring.json собирается скриптом (см. backend/monitoring.py).
+    Если файла нет, отдаём available=false, а не пустые графики.
+    """
+    return monitoring.load()
+
+
+@app.get("/api/monitoring/detail")
+def monitoring_detail():
+    """Все показатели карточки вуза за 2024 и 2025 с изменением.
+
+    Нужно для раздела «Мониторинг»: там два больших блока — динамика по
+    вузу и сравнение с вузами области. Здесь первый.
+    """
+    return monitoring.detail()
+
+
+@app.get("/api/monitoring/spo")
+def monitoring_spo():
+    """СПО: показатели организации за 2024 и 2025, область и РФ, место."""
+    return monitoring.spo()
 
 
 @app.get("/api/docs")

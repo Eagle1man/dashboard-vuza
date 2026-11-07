@@ -294,6 +294,153 @@
     dot.className = "h-2 w-2 rounded-full " + (h && h.totals ? "bg-emerald-500" : "bg-rose-500");
   }
 
+  // Сегментная полоса как в референсе: 20 делений, заполнено по значению,
+  // цвет по коридору — зелёный от 66, жёлтый от 33, красный ниже.
+  function scoreBar(pct) {
+    var total = 20;
+    var value = Math.max(0, Math.min(100, Number(pct) || 0));
+    var filled = Math.round(value / 100 * total);
+    var color = value >= 66 ? "bg-emerald-500" : value >= 33 ? "bg-amber-400" : "bg-rose-500";
+    var parts = [];
+    for (var i = 0; i < total; i++) {
+      parts.push('<span class="h-1.5 w-1.5 rounded-[2px] ' + (i < filled ? color : "bg-slate-200") + '"></span>');
+    }
+    return '<span class="inline-flex items-center gap-[2px]">' + parts.join("") + "</span>";
+  }
+
+  // ---------- Место среди вузов области: радар ----------
+  // Полные названия осей не влезают вокруг радара — на графике короткие,
+  // полные остаются в таблице справа.
+  var MON_SHORT = {
+    E1: "Образование",
+    E2: "Наука",
+    E3: "Международная",
+    E4: "Финансы",
+    E8: "Доп. показатель"
+  };
+
+  function wrapLabel(axis) {
+    var short = MON_SHORT[axis.code];
+    if (short) return short;
+    var text = String(axis.label || "").replace(/^E\.\d+\.\s*/, "");
+    if (text.length <= 14) return text;
+    var words = text.split(" ");
+    var mid = Math.ceil(words.length / 2);
+    return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+  }
+
+  function renderMonitoring(data) {
+    if (!data || !data.available) {
+      $("monitoringSection").hidden = true;
+      return;
+    }
+    $("monitoringSection").hidden = false;
+
+    var years = Object.keys(data.years || {}).sort();
+    var axes = data.axes || [];
+    var table = data.table || [];
+    var first = years[0], last = years[years.length - 1];
+
+    $("monitoringYears").textContent = years.length
+      ? data.years[first].total + " → " + data.years[last].total + " вузов"
+      : "";
+
+    var avgFirst = data.years[first] ? data.years[first].average_percentile : 0;
+    var avgLast = data.years[last] ? data.years[last].average_percentile : 0;
+    $("monitoringAvg").textContent = "средний процентиль " + avgFirst + " → " + avgLast;
+
+    var colors = ["#94a3b8", "#2563eb", "#0d9488"];
+    var datasets = years.map(function (year, i) {
+      var color = colors[i] || colors[colors.length - 1];
+      return {
+        label: year,
+        data: data.series[year] || [],
+        borderColor: color,
+        backgroundColor: color + "1f",
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: color,
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2,
+        fill: true
+      };
+    });
+
+    if (state.radar) state.radar.destroy();
+    state.radar = new Chart($("radarChart"), {
+      type: "radar",
+      data: { labels: axes.map(function (a) { return wrapLabel(a); }), datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: 6 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0f1115", padding: 10, cornerRadius: 10,
+            callbacks: {
+              label: function (ctx) {
+                var row = table[ctx.dataIndex];
+                var info = row && row.years[ctx.dataset.label];
+                var extra = info ? " · место " + info.rank + " из " + info.total : "";
+                return ctx.dataset.label + ": " + ctx.parsed.r + " процентиль" + extra;
+              }
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0,
+            max: 100,
+            ticks: { stepSize: 25, showLabelBackdrop: false, color: "#94a3b8", font: { size: 10 } },
+            grid: { color: "#e8edf3" },
+            angleLines: { color: "#e8edf3" },
+            pointLabels: { color: "#475569", font: { size: 11 } }
+          }
+        }
+      }
+    });
+
+    // Легенда своим HTML: в канвасе она не влезала под радар и обрезалась.
+    $("radarLegend").innerHTML = years.map(function (year, i) {
+      var color = colors[i] || colors[colors.length - 1];
+      return '<span class="inline-flex items-center gap-2">' +
+        '<span class="h-2.5 w-2.5 rounded-full" style="background:' + color + '"></span>' +
+        year + "</span>";
+    }).join("");
+
+    // Таблица: значение и место по каждому показателю за оба года.
+    var head = '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-100 pb-2 text-[11px] uppercase tracking-[0.06em] text-slate-400">' +
+      "<span>Показатель</span>" +
+      years.map(function (y) { return '<span class="text-right">' + y + "</span>"; }).join("") +
+      "</div>";
+
+    var rows = table.map(function (row) {
+      var cells = years.map(function (year) {
+        var info = row.years[year];
+        if (!info) return '<span class="text-right text-slate-300">—</span>';
+        var tone = info.rank <= 5 ? "text-emerald-600" : info.rank <= 15 ? "text-slate-900" : "text-slate-500";
+        return '<span class="flex flex-col items-end gap-1">' +
+          '<span class="whitespace-nowrap">' +
+          '<span class="font-semibold tabular-nums ' + tone + '">' + num(info.value) + "</span>" +
+          '<span class="ml-2 text-[11px] text-slate-400">' + info.rank + "/" + info.total + "</span></span>" +
+          scoreBar(info.percentile) +
+          "</span>";
+      }).join("");
+      return '<div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b border-slate-50 py-2 text-[13px] last:border-0">' +
+        '<span class="min-w-0 pr-2 leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
+        ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></span>" + cells +
+        "</div>";
+    }).join("");
+
+    $("monitoringTable").innerHTML = head + rows +
+      '<p class="mt-3 text-[11px] leading-snug text-slate-400">' +
+      "Источник: monitoring.miccedu.ru. Место — среди вузов Ростовской области, участвовавших в мониторинге. " +
+      "Показатель E.3 считается по вузам, у которых он заполнен, поэтому знаменатель меньше." +
+      "</p>";
+  }
+
   // ---------- Блоки ----------
   function matches(metric) {
     if (state.block !== "all" && metric.block !== state.block) return false;
@@ -461,7 +608,8 @@
     Promise.all([
       get("/api/metrics"),
       get("/api/docs").catch(function () { return { documents: [] }; }),
-      get("/api/health").catch(function () { return null; })
+      get("/api/health").catch(function () { return null; }),
+      get("/api/monitoring").catch(function () { return null; })
     ]).then(function (res) {
       var metrics = res[0] || {};
       state.metrics = metrics.metrics || [];
@@ -479,6 +627,7 @@
       renderKpi();
       renderTrend();
       renderSources();
+      renderMonitoring(res[3]);
       renderGoals();
       renderBlocks();
       renderDocs();

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора — Мониторинг</title>
+
+  <script src="/js/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+          colors: { ink: "#0f1115", canvas: "#f7f8fa" },
+          boxShadow: {
+            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+          },
+          letterSpacing: { display: "-0.02em" },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="/css/vendor/golos.css" />
+  <script src="/js/vendor/chart.umd.min.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+
+<body class="overflow-x-hidden bg-canvas font-sans text-slate-900 antialiased">
+  <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
+
+  <aside id="rail"
+         class="fixed inset-y-0 left-0 z-40 flex w-[76px] -translate-x-full flex-col items-center bg-ink py-4 transition-transform duration-300 ease-out lg:translate-x-0">
+    <a href="/overview.html" class="mb-6 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10" title="Дашборд ректора">
+      <img src="/img/iubip-logo.svg" alt="ИУБиП" class="h-7 w-auto brightness-0 invert" />
+    </a>
+
+    <nav class="flex flex-1 flex-col items-center gap-1.5">
+      <a href="/overview.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Обзор">
+        <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+      </a>
+      <a href="/dashboard.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Лента показателей">
+        <i data-lucide="chart-line" class="h-5 w-5"></i>
+      </a>
+      <a href="/monitoring.html" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white" title="Мониторинг">
+        <i data-lucide="telescope" class="h-5 w-5"></i>
+      </a>
+      <a href="/upload.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Загрузка данных">
+        <i data-lucide="upload" class="h-5 w-5"></i>
+      </a>
+      <a href="/uploads.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Мои загрузки">
+        <i data-lucide="inbox" class="h-5 w-5"></i>
+      </a>
+      <a href="/journal.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Журнал событий">
+        <i data-lucide="history" class="h-5 w-5"></i>
+      </a>
+      <span class="my-2 h-px w-8 bg-white/10"></span>
+      <a href="/dashboard.html#assistant" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Спросить ассистента">
+        <i data-lucide="sparkles" class="h-5 w-5"></i>
+      </a>
+    </nav>
+
+    <div class="flex flex-col items-center gap-3">
+      <span id="railStatus" class="h-2 w-2 rounded-full bg-slate-600" title="Состояние сервера"></span>
+      <a href="/index.html" class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-xs font-semibold text-white" title="Аккаунт">Р</a>
+      <button id="closeRail" class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-4 w-4"></i>
+      </button>
+    </div>
+  </aside>
+
+  <div class="lg:pl-[76px]">
+    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+
+      <header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="flex items-start gap-3">
+          <button id="openRail" class="mt-1 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+          <div>
+            <a href="/overview.html" class="text-[13px] text-slate-500 transition hover:text-slate-700">← Обзор</a>
+            <h1 class="mt-1 text-[26px] font-semibold leading-tight tracking-display text-slate-900 sm:text-[30px]">Мониторинг эффективности</h1>
+            <p class="mt-1 text-sm text-slate-500" id="subtitle">выпуск 2025 · данные за 2024 год · Ростовская область</p>
+          </div>
+        </div>
+        <a href="/dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
+          <i data-lucide="sparkles" class="h-4 w-4"></i>
+          Спросить ассистента
+        </a>
+      </header>
+
+      <!-- Раздел 1: вуз, 2025 против 2024 -->
+      <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="ИУБиП: 2025 против 2024">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">ИУБиП: 2025 против 2024</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Все показатели карточки вуза, как в первоисточнике</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2" id="detailStats"></div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                <th scope="col" class="px-5 py-2.5 font-semibold">Показатель</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2024</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2025</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Изменение</th>
+              </tr>
+            </thead>
+            <tbody id="detailTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="detailNote">
+          Источник: monitoring.miccedu.ru, карточка вуза id=1971.
+        </p>
+      </section>
+
+      <!-- Раздел 2: сравнение с областью -->
+      <section class="rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="ИУБиП среди вузов области">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">ИУБиП среди вузов Ростовской области</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Сводные E-показатели · процентиль: 100 — лучший результат в области</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="regionAvg">—</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <div>
+            <div class="relative h-[330px]">
+              <canvas id="radarChart" aria-label="Профиль вуза среди вузов области" role="img"></canvas>
+            </div>
+            <div id="radarLegend" class="mt-2 flex items-center justify-center gap-5 text-xs text-slate-600"></div>
+          </div>
+          <div class="min-w-0" id="regionTable"></div>
+        </div>
+      </section>
+
+      <!-- Раздел 3: СПО -->
+      <section class="mt-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="СПО: 2025 против 2024">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">СПО: 2025 против 2024</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Среднее профессиональное образование · ИУБиП, область и РФ</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="spoTotal">—</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[860px] text-left text-sm">
+            <thead>
+              <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                <th scope="col" class="px-5 py-2.5 font-semibold">Показатель</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2024</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2025</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Δ</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Место в области</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Область</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">РФ</th>
+              </tr>
+            </thead>
+            <tbody id="spoTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="spoNote">
+          Источник: monitoring.miccedu.ru, СПО, карточка организации id=1971.
+        </p>
+      </section>
+
+      <p class="py-8 text-center text-xs text-slate-400">
+        Дашборд ректора · ЧОУ ВО «Южный университет (ИУБиП)»
+      </p>
+    </main>
+  </div>
+
+  <script src="/js/monitoring.js"></script>
+</body>
+</html>

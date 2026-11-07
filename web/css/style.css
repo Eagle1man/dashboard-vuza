@@ -263,11 +263,25 @@ html[data-theme="dark"] .widget-value { color: #fff; }
 .section-card h3 { font-size: 16px; margin-bottom: 12px; }
 .chart-wrap { width: 100%; overflow-x: auto; }
 .chart-svg { width: 100%; min-width: 360px; height: auto; display: block; }
-.metric-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
-/* Второй уровень — линия, а не ещё одна карточка в карточке. */
-.metric-cell { background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 12px 0 0; }
-.metric-cell .label { font-size: 12px; color: var(--muted); }
-.metric-cell .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+.metric-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+/* Плитка показателя — карточка, а не строка списка: в детализации блока
+   чисел много, и без рамок они сливаются в полотно, где не видно, где
+   кончается один показатель. */
+.metric-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.metric-cell:hover { border-color: var(--border-strong); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+.metric-cell .metric-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-height: 36px; }
+.metric-cell .label { font-size: 13px; line-height: 1.35; color: var(--muted); }
+.metric-cell .value { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; }
+.metric-cell .value small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.metric-cell .metric-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-height: 20px; }
+.metric-note { font-size: 12px; color: var(--muted); }
 /* ============ Таблицы ============ */
 .table-wrap { overflow-x: auto; }
 table.data { width: 100%; border-collapse: collapse; font-size: 13px; }

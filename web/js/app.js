@@ -507,11 +507,20 @@ function updateStamp() {
       var dc = good ? "up" : "down";
       var value = metricValueForDept(m, state.dept);
       var st = statusForValue(m, value);
+      // Статус — плашкой в правом верхнем углу, как в макете. «Без порога»
+      // плашкой не рисуем: у официальных показателей цели нет, и серая
+      // капсула читалась бы как отдельное состояние тревоги.
+      var pill = (st && st !== "none")
+        ? '<span class="status-pill ' + statusClass(st) + '">' + statusTxt(st) + "</span>"
+        : "";
+      var foot = ds.none
+        ? '<span class="metric-note">нет динамики</span>'
+        : '<span class="delta ' + dc + '">' + ds.s + "</span>";
+      if (st === "none") foot += ' <span class="metric-note">без порога</span>';
       h += '<div class="metric-cell clickable-cell" data-metric="' + m.id + '" title="Клик — детализация записей">' +
-        '<div class="label">' + esc(m.title) + '</div>' +
-        '<div class="value">' + fmtFull(value) + ' <small>' + esc(m.unit) + "</small></div>" +
-        '<div><span class="delta ' + dc + '" style="font-size:12px">' + ds.s + "</span> " +
-        '<span class="status-pill ' + statusClass(st) + '" style="font-size:11px">' + statusTxt(st) + "</span></div></div>";
+        '<div class="metric-head"><span class="label">' + esc(m.title) + "</span>" + pill + "</div>" +
+        '<div class="value">' + fmtFull(value) + " <small>" + esc(m.unit) + "</small></div>" +
+        '<div class="metric-foot">' + foot + "</div></div>";
     });
     h += "</div>";
 
