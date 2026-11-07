@@ -315,6 +315,36 @@
     }
   };
 
+  // Шкала прогресса цели: заливка — 2025 к цели, метка — 2024,
+  // правый край — цель. Стиль — как у диаграмм ленты (синяя заливка,
+  // зелёная — когда цель выполнена).
+  function goalBarHtml(row) {
+    var cur = row.cur, goal = row.goal, old = row.old;
+    var pctVal = goal ? Math.max(0, Math.min(100, Math.round(cur / goal * 100))) : 0;
+    var oldPct = (goal && old !== null && old !== undefined)
+      ? Math.min(100, Math.round(old / goal * 100)) : null;
+    var done = cur >= goal;
+    var fill = done ? "#16a34a" : "#2563eb";
+    var diff = Math.round((goal - cur) * 10) / 10;
+    var chip = done
+      ? '<span class="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700">цель достигнута</span>'
+      : '<span class="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700">' +
+        (diff > 0 ? "ещё +" : "") + num(diff) + (row.unit ? " " + esc(row.unit) : "") + " до цели</span>";
+    var tick = oldPct !== null
+      ? '<span class="absolute -top-0.5 bottom-0 w-0.5 rounded bg-slate-400" style="left:' + oldPct +
+        '%" title="2024: ' + num(old) + '"></span>'
+      : "";
+    return '<div class="mt-2 flex items-center gap-3">' +
+      '<div class="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100" title="цель: ≥ ' + num(goal) + '">' +
+        '<span class="absolute inset-y-0 left-0 rounded-full" style="width:' + pctVal + "%;background:" + fill + '"></span>' +
+        tick +
+      "</div>" +
+      '<span class="w-10 text-right text-[11px] font-semibold tabular-nums ' +
+        (done ? "text-emerald-600" : "text-slate-500") + '">' + pctVal + " %</span>" +
+      chip +
+    "</div>";
+  }
+
   function renderGoals() {
     var data = state.monitoring;
     var share = $("goalsShare");
@@ -385,7 +415,8 @@
     note.textContent = "База — " + last + ". Цель: превысить " + last +
       " на 5% по позитивным показателям; негативные снизить на 5%. " +
       "Позитивных: " + rows.length + ", негативных: 0. " +
-      "Под каждой целью ниже — что это за показатель, почему он важен для места и как его достичь.";
+      "Шкала под каждой целью: синяя заливка — " + last + " к цели, серый штрих — " +
+      (prev || "предыдущий выпуск") + ", правый край — цель. Ниже — что это за показатель, почему он важен и как его достичь.";
 
     var detail = $("goalsDetail");
     if (detail) {
@@ -403,9 +434,9 @@
               ? " · медиана региона " + num(med.region) + (row.unit ? " " + esc(row.unit) : "") : "") + "</p>"
           : "");
         return '<div class="border-t border-slate-100 py-3 first:border-t-0 first:pt-1">' +
-          '<div class="flex flex-wrap items-baseline justify-between gap-2">' +
-            '<p class="font-semibold text-slate-800"><span class="font-mono text-[11px] text-slate-400">' +
-            esc(row.code) + "</span> " + esc(label) +
+          '<div class="flex flex-wrap items-center justify-between gap-2">' +
+            '<p class="font-semibold text-slate-800"><span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10.5px] text-slate-500">' +
+            esc(row.code) + "</span> <span class=\"ml-1.5\">" + esc(label) + "</span>" +
             ' <span class="text-[11px] font-normal text-slate-400">' + esc(row.unit || "") + "</span></p>" +
             '<p class="whitespace-nowrap tabular-nums text-[12px]">' +
               '<span class="text-slate-400">' + (row.old === null ? "—" : num(row.old)) + "</span>" +
@@ -414,7 +445,7 @@
               ' <span class="text-slate-300">→</span> ' +
               '<span class="font-semibold text-emerald-700">' + mark + " " + num(row.goal) + "</span>" +
             "</p>" +
-          "</div>" + meta +
+          "</div>" + goalBarHtml(row) + meta +
           '<p class="mt-1.5 text-[12.5px] leading-relaxed text-slate-600"><span class="font-semibold text-slate-700">Что это.</span> ' + esc(guide.what) + "</p>" +
           '<p class="mt-1 text-[12.5px] leading-relaxed text-slate-600"><span class="font-semibold text-slate-700">Почему важно.</span> ' + esc(guide.why) + "</p>" +
           '<p class="mt-1 text-[12.5px] leading-relaxed text-slate-600"><span class="font-semibold text-slate-700">Как достичь.</span> ' + esc(guide.how) + "</p>" +
