@@ -34,6 +34,51 @@ _SUFFIXES = [
 
 _TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+")
 
+# Вопрос «у нас» / «ИУБиП» — про наш вуз. В таком вопросе нельзя
+# отвечать числом другого вуза из региональной таблицы: строка
+# Таганрогского института не становится ответом про ИУБиП. Другой вуз
+# допустим только там, где вопрос явно про сравнение.
+_SUBJECT_ONLY_RE = re.compile(
+    r"\b(?:иубип|южный университет|у нас|наш(?:его|ем|ей|у|и|а)?)\b",
+    re.IGNORECASE)
+_COMPARE_RE = re.compile(
+    r"на сколько|разниц|отлича|сравн|\bвыше\b|\bниже\b|\bбольше\b|\bменьше\b|"
+    r"\bчем\b|\bпротив\b|\bvs\b",
+    re.IGNORECASE)
+# Признак, что сравнивать действительно есть с кем: назван другой вуз,
+# среднее по региону/стране или «другой». Голое «больше» или «выше»
+# относится к нашему же значению — «у нас больше 90» остаётся вопросом
+# об ИУБиП, и чужие строки в нём не нужны.
+_OTHER_SUBJECT_RE = re.compile(
+    r"\b(?:вуз|институт|академи|филиал|политех|юфу|дгту|кфу|мгу|вшэ|ринх|"
+    r"друг|регион|рф|росси|област|кра[йя])\w*",
+    re.IGNORECASE)
+
+
+def _subject_only(question: str) -> bool:
+    q = (question or "").lower().replace("ё", "е")
+    if not _SUBJECT_ONLY_RE.search(q):
+        return False
+    if not _COMPARE_RE.search(q):
+        return True
+    rest = q
+    for alias in ("иубип", "южный университет"):
+        rest = rest.replace(alias, " ")
+    return not _OTHER_SUBJECT_RE.search(rest)
+
+
+def _is_iubip_chunk(row) -> bool:
+    text = " ".join((row["doc_title"] or "", row["heading"] or "",
+                     row["text"] or "")).lower().replace("ё", "е")
+    if "иубип" in text or "южный университет" in text:
+        return True
+    path = (row["rel_path"] or "").lower()
+    # Региональные таблицы и карточки других вузов — чужие строки.
+    if path.startswith("official/monitoring/by-vuz") or path.startswith("official/monitoring/region-"):
+        return False
+    return True
+
+
 # Точное название в кавычках — сильнейший признак, какой именно вуз
 # имеется в виду. Без него у официальных названий («Федеральное
 # государственное бюджетное образовательное учреждение…») поиск
@@ -394,9 +439,12 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
     scored.sort(key=lambda x: -x[1])
     results = []
     per_doc = {}
+    subject_only = _subject_only(question)
     for cid, score, cov, parts, r in scored:
         if len(results) >= top_k:
             break
+        if subject_only and not _is_iubip_chunk(r):
+            continue
         doc_id = r["doc_id"]
         if per_doc.get(doc_id, 0) >= config.CONTEXT_MAX_PER_DOC:
             continue

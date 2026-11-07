@@ -36,6 +36,7 @@ from . import llm
 from . import monitoring
 from . import retrieve
 from . import review
+from . import tools
 from . import uploads
 
 _conn = None
@@ -435,6 +436,29 @@ def _answer_question(question: str, top_k):
         calc_chunk = analytics.as_chunk(calc)
         calc_chunk["chunk_id"] = 0
         chunks = [calc_chunk] + list(chunks)
+    else:
+        # Нет расчёта по мониторингу — пробуем витрину дашборда
+        # (трудоустройство, контингент, доходы…). Иначе вопрос
+        # «почему 90 процентов у нас» уходил в поиск, и модель
+        # отвечала числом другого вуза из региональной таблицы.
+        try:
+            metric = tools.query(question, c)
+        except Exception:
+            metric = None
+        if metric and metric.get("ok"):
+            metric_chunk = {
+                "chunk_id": 0,
+                "doc_title": "Витрина дашборда: " + metric["metric"]["title"],
+                "heading": "официальное значение",
+                "text": tools.render(metric),
+                "rel_path": "dashboard:metric:" + metric["metric"]["id"],
+                "doc_type": "dashboard",
+                "is_demo": False,
+                "score": None,
+                "coverage": None,
+                "found_by": "tools",
+            }
+            chunks = [metric_chunk] + list(chunks)
 
     text, meta = llm.answer(question, chunks)
     latency = int((time.time() - t0) * 1000)

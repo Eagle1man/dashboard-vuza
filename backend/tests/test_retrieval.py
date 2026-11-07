@@ -91,5 +91,42 @@ def main():
     return 1 if failed else 0
 
 
+def test_value_words_do_not_disable_subject_filter():
+    """«У нас больше 90» — про наше значение, а не сравнение с вузом.
+
+    Голое «больше/выше/чем» раньше выключало защиту, и в ответ могли
+    попасть строки других вузов. Сравнение разрешается только тогда,
+    когда в вопросе действительно назван другой субъект.
+    """
+    assert retrieve._subject_only(
+        "у нас больше 90 процентов трудоустройство выпускников")
+    assert retrieve._subject_only(
+        "почему у нас выше, чем в прошлом году")
+    assert not retrieve._subject_only(
+        "сравни трудоустройство у нас и в ЮФУ")
+
+
+def test_subject_question_excludes_other_universities():
+    """Вопрос «у нас» не должен получать строку другого вуза из региона."""
+    conn = db.connect()
+    db.init_db(conn)
+    try:
+        chunks, _stats = retrieve.search(
+            conn, "трудоустройство почему 90 процентов у нас", top_k=10)
+    finally:
+        conn.close()
+    offenders = []
+    for chunk in chunks:
+        path = chunk["rel_path"] or ""
+        text = (chunk["text"] or "").lower().replace("ё", "е")
+        if path.startswith("official/monitoring/region-"):
+            if "иубип" not in text and "южный университет" not in text:
+                offenders.append(path)
+        elif path.startswith("official/monitoring/by-vuz/"):
+            if "1971" not in path and "иубип" not in text:
+                offenders.append(path)
+    assert not offenders, offenders
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
