@@ -42,8 +42,9 @@ md("""# QLoRA для ассистента ректора (Qwen2.5-14B)
 
 **Что изменилось после замера.** Вопросы и ответы теперь в боевом
 формате (`prompts.SYSTEM`, ссылки `[1]`), данные разделены по документам
-(829 train / 182 dev / 207 test), обучение — одна эпоха на 1024 токенах:
-в датасете максимум ~490 токенов, вторая эпоха была бы переобучением.
+(829 train / 182 dev / 207 test), обучение — одна эпоха на 1280 токенах:
+системный промпт и самые длинные вопросы занимают больше 1024, вторая
+эпоха была бы переобучением.
 
 Перед запуском добавьте датасет `orel1986/monitoring-qa` и включите GPU.
 """)
@@ -69,9 +70,10 @@ print(subprocess.run(["pip", "freeze"], capture_output=True, text=True).stdout[-
 md("## 2. Модель и токенизатор\n")
 code("""from unsloth import FastLanguageModel
 
-# 1024 достаточно: самый длинный пример ~490 токенов. Меньше контекста —
-# быстрее шаг и меньше памяти, а качество на этих данных не страдает.
-MAX_SEQ = 1024
+# С системным промптом первый пример занимает 973 токена, а самые длинные
+# вопросы направлений — больше. 1280 оставляет запас, чтобы ответ в конце
+# примера не обрезался.
+MAX_SEQ = 1280
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="unsloth/Qwen2.5-14B-Instruct-bnb-4bit",
@@ -129,7 +131,13 @@ def to_text(row):
 
 
 dataset = Dataset.from_list(rows).map(to_text, remove_columns=["messages"])
-print("токенов в первом примере:", len(tokenizer(dataset[0]["text"])["input_ids"]))
+lengths = [len(tokenizer(text)["input_ids"]) for text in dataset["text"]]
+lengths.sort()
+print("токенов: первый", len(tokenizer(dataset[0]["text"])["input_ids"]),
+      "| максимум", lengths[-1],
+      "| p95", lengths[int(len(lengths) * 0.95)])
+if lengths[-1] > MAX_SEQ:
+    print("внимание: примеры длиннее MAX_SEQ будут обрезаны:", lengths[-1])
 """)
 
 md("## 5. Обучение\n")
@@ -149,7 +157,7 @@ trainer = SFTTrainer(
         num_train_epochs=1,              # 829 примеров; вторая эпоха = переобучение
         learning_rate=2e-4,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=3,
         optim="adamw_8bit",
         weight_decay=0.01,
         logging_steps=5,
