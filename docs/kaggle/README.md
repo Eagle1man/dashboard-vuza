@@ -43,9 +43,9 @@
 |---|---|
 | Модель | `unsloth/Qwen2.5-14B-Instruct-bnb-4bit` (4 бита, ~8,5 ГБ) |
 | Метод | QLoRA: r=16, alpha=32, dropout=0.05 |
-| Железо | Kaggle T4×2 (16 ГБ на GPU) или P100 |
-| Время | 3–6 часов на 1–2 эпохи, лимит сессии 12 часов |
-| Датасет | 800–2000 пар «вопрос → ответ по фрагменту» |
+| Железо | одна T4 (16 ГБ); T4×2 тратит квоту вдвое |
+| Время | ~2–3 часа на 1 эпоху, лимит сессии 12 часов |
+| Датасет | 608 пар «вопрос → ответ по фрагменту», dev/test отдельно |
 | Экспорт | merge LoRA → GGUF `q4_k_m` (~9 ГБ), скачать, `ollama create` |
 
 Квота Kaggle — около 30 часов GPU в неделю; одна попытка укладывается.
@@ -80,23 +80,41 @@ markdown. Это не «идеальный» датасет, но он учит 
 
 ## 5. Порядок работ
 
-1. `python docs/kaggle/dataset_build.py` — собрать `train.jsonl`
-   (сейчас 753 примера из всех материалов; каждый ответ проверен на
-   присутствие во фрагменте, см. `dataset-report.txt`).
-2. Загрузить `train.jsonl` в Kaggle как **Dataset** с именем
-   `monitoring-qa` (Notebook → Add Data → Upload).
-3. Открыть `docs/kaggle/finetune_qwen14b.ipynb`, включить GPU T4 и Run all.
-4. Скачать получившийся GGUF (~9 ГБ) из `/kaggle/working`.
-5. На сервере: `ollama create rector-qwen -f Modelfile`, затем
+1. `python docs/kaggle/build_qa.py` — собрать вопросы и датасет. Скрипт
+   делает три файла: `train.jsonl` (608), `dev.jsonl` (180), `test.jsonl`
+   (185) и `docs/eval/questions.jsonl`. Разбиение — **по документам**,
+   поэтому карточка вуза из train не встречается в test. Каждый ответ
+   проверен: число обязано быть во фрагменте, иначе пример отбрасывается
+   (см. `dataset-report.txt`).
+2. Замерить поиск до обучения:
+   `python -m backend.qa_eval --split test`. Это не про модель, а про то,
+   доходит ли факт до неё. Сейчас: документ 100%, число 100%.
+3. Загрузить `train.jsonl` в Kaggle как **Dataset** `monitoring-qa`
+   (уже создан: `orel1986/monitoring-qa`).
+4. Открыть `docs/kaggle/finetune_qwen14b.ipynb`, включить **одну** T4
+   и Run all. T4×2 расходует квоту вдвое, а 14B в 4 битах помещается
+   в 16 ГБ.
+5. Скачать из `/kaggle/working` сначала **адаптер** (~300 МБ), потом,
+   если получится, GGUF. Merge в fp16 требует ~28 ГБ, а `/kaggle/working`
+   даёт 20 ГБ — поэтому GGUF делается отдельно, на машине с диском.
+6. На сервере: слить адаптер, `ollama create rector-qwen -f Modelfile`,
    `python -m backend.models small rector-qwen`.
-6. Прогнать `python -m backend.smoke --ask "..."` и сравнить с базовой
-   моделью по тем же вопросам.
+7. Сравнить с базовой моделью на `dev` **с тем же контекстом**:
+   `python -m backend.qa_eval --split dev --model qwen2.5:14b` и
+   `--model rector-qwen`. Без этого сравнения обучение не принимается.
 
-Проверка, что база знаний вообще находится поиском (до обучения):
+Проверки, которые обязаны проходить до обучения:
 
 ```
+python -m pytest backend/tests -q
 python -m pytest backend/tests/test_monitoring_retrieval.py -q
 ```
+
+**Чего ждать от замера.** 100% на поиске не значит «модель отвечает
+правильно»: это значит, что нужное число попало в контекст. Ответ
+проверяется отдельно, метриками `numeric_exact`, `refusal_correct`,
+`citation_present` и `hallucinated_number_rate` — на одной и той же
+модели до и после обучения.
 
 ## 6. Чего ждать по скорости
 

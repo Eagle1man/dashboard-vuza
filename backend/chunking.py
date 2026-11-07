@@ -67,7 +67,11 @@ def _split_sections(text: str):
 
     for line in lines:
         stripped = line.strip()
-        if stripped and HEADING_RE.match(stripped):
+        # Строка таблицы «2. Вуз — 76.09» по форме похожа на заголовок
+        # («2. Квоты приёма»), но заголовком не является: иначе таблица
+        # рвётся на куски по одной строке и теряет раздел.
+        if (stripped and not ROW_LINE_RE.match(stripped)
+                and HEADING_RE.match(stripped)):
             body = "\n".join(cur_lines).strip()
             if body:
                 sections.append((cur_head, body))
@@ -89,6 +93,27 @@ def _tail_overlap(text: str, overlap_chars: int) -> str:
     return text[-overlap_chars:]
 
 
+# Строка таблицы «5. Название вуза — 419.85» (иногда с пометкой ← ИУБиП).
+# Такие строки нельзя резать и нельзя складывать по десять в один кусок:
+# у официальных названий общий длинный префикс («Федеральное
+# государственное бюджетное образовательное учреждение…»), и поиск
+# цепляется за префикс, выдавая чужой вуз. Замер на отложенной выборке
+# показал: нужное число доходило до модели лишь в 48% случаев.
+ROW_LINE_RE = re.compile(
+    r"^\s*\d+\.\s+\S.*?\s+—\s+-?[\d.,]+\s*(?:←.*)?$")
+
+
+def _table_rows(body: str):
+    """Возвращает строки таблицы, если раздел — это таблица, иначе None."""
+    lines = [l for l in body.splitlines() if l.strip()]
+    if len(lines) < 3:
+        return None
+    rows = [l for l in lines if ROW_LINE_RE.match(l)]
+    if len(rows) >= max(3, int(len(lines) * 0.8)):
+        return rows
+    return None
+
+
 def chunk_text(text: str, chunk_tokens: int = None, overlap: int = None,
                max_chars: int = 1600):
     """Режет текст на куски.
@@ -106,6 +131,14 @@ def chunk_text(text: str, chunk_tokens: int = None, overlap: int = None,
     out = []
     for head, body in _split_sections(text):
         if not body:
+            continue
+        rows = _table_rows(body)
+        if rows:
+            # Одна строка таблицы — один фрагмент. Раздел остаётся в
+            # заголовке, поэтому «E.1 …» продолжает участвовать в поиске,
+            # но число больше не отделено от названия вуза соседями.
+            for row in rows:
+                out.append({"heading": head, "text": row.strip()})
             continue
         if len(body) <= limit:
             out.append({"heading": head, "text": body})

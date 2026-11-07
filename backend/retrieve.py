@@ -34,6 +34,13 @@ _SUFFIXES = [
 
 _TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+")
 
+# Точное название в кавычках — сильнейший признак, какой именно вуз
+# имеется в виду. Без него у официальных названий («Федеральное
+# государственное бюджетное образовательное учреждение…») поиск
+# цепляется за общий префикс и выдаёт чужую строку таблицы.
+_QUOTED_RE = re.compile(r"«([^»]{6,})»")
+_YEAR_RE = re.compile(r"\b(20\d\d)\b")
+
 # Слова, которые не несут смысла при поиске по документам
 _STOPWORDS = {
     # вопросительные
@@ -97,6 +104,19 @@ def fts_expression(query: str) -> str:
 # В теле абзаца то же слово может встретиться десять раз по разным
 # поводам. Поэтому покрытие считается с весами по полям.
 FIELD_WEIGHTS = (("title", 3.0), ("heading", 2.0), ("text", 1.0))
+
+
+def _norm_field(text: str) -> str:
+    """Нормализация для точного сравнения названий.
+
+    Кавычки в источниках разные: «ёлочки», "лапки", иногда немецкие.
+    Человек в вопросе ставит любые — поэтому перед сравнением все виды
+    кавычек приводятся к одной.
+    """
+    s = str(text or "").lower()
+    for q in "«»„“”\"'":
+        s = s.replace(q, '"')
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def weighted_coverage(stems, title, heading, text) -> float:
@@ -239,7 +259,7 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
        чем подсунуть нерелевантные фрагменты.
     """
     top_k = top_k or config.RETRIEVE_TOP_K
-    pool = pool or max(top_k * 3, 30)
+    pool = pool or max(top_k * 3, config.RETRIEVE_POOL)
     # Демо-документы показываются, только если настоящих нет: в корпусе
     # с настоящими документами вымышленные числа в ответе опаснее, чем
     # отсутствие ответа.
@@ -249,6 +269,20 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
                                include_demo=include_demo)
     vec, vec_backend, max_cos = _vector_search(conn, question, pool, blocks=blocks,
                                                 include_demo=include_demo)
+
+    # Отдельный канал «субъект вопроса». В сравнении «ИУБиП против вуза X»
+    # длинное официальное название X приносит десяток совпавших слов, а
+    # «ИУБиП» — одно: строка университета уходила на 176-е место и не
+    # попадала в пул. Канал гарантирует, что субъект вообще есть среди
+    # кандидатов; окончательный порядок всё равно решают покрытие и
+    # надбавки, а не сам факт упоминания.
+    subject_hits = []
+    question_low = question.lower()
+    subject_alias = next((a for a in config.SUBJECT_ALIASES
+                          if a in question_low), None)
+    if subject_alias:
+        subject_hits, _ = _fts_search(conn, subject_alias, 40, blocks=blocks,
+                                      include_demo=include_demo)
 
     # --- решения о доверии каналам -------------------------------
     w_fts = 1.0 if fts else 0.0
@@ -291,11 +325,14 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
         ranks.setdefault(cid, {})["fts"] = (pos + 1, score)
     for pos, (cid, score) in enumerate(vec):
         ranks.setdefault(cid, {})["vec"] = (pos + 1, score)
+    for pos, (cid, score) in enumerate(subject_hits):
+        ranks.setdefault(cid, {})["subj"] = (pos + 1, score)
 
     merged = []
     for cid, parts in ranks.items():
         rrf = 0.0
-        for key, weight in (("fts", w_fts), ("vec", w_vec)):
+        for key, weight in (("fts", w_fts), ("vec", w_vec),
+                            ("subj", 1.0 if subject_hits else 0.0)):
             if key in parts and weight:
                 rrf += weight / (config.RRF_K + parts[key][0])
         if rrf <= 0:
@@ -303,7 +340,10 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
         merged.append((cid, rrf, parts))
 
     merged.sort(key=lambda x: -x[1])
-    merged = merged[:top_k]
+    # НЕ обрезаем здесь до top_k. Надбавки за точное название и год
+    # применяются ниже, и обрезка до них лишала кандидата из глубины
+    # шанса подняться: строка ИУБиП с рангом 90 в FTS не могла попасть
+    # в ответ, хотя после переранжирования была второй.
 
     if not merged:
         return [], stats
@@ -324,17 +364,43 @@ def search(conn, question: str, top_k: int = None, pool: int = None,
     # «преподаватель», тогда как нужный документ содержит только
     # первое — но зато в самом названии.
     stems = query_stems(question)
+    quoted = [_norm_field(s) for s in _QUOTED_RE.findall(question)]
+    year_match = _YEAR_RE.search(question)
+    year = year_match.group(1) if year_match else None
+    question_low = question.lower()
+    subject = any(alias in question_low for alias in config.SUBJECT_ALIASES)
     scored = []
     for cid, rrf, parts in merged:
         r = by_id.get(cid)
         if not r:
             continue
         cov = weighted_coverage(stems, r["doc_title"], r["heading"], r["text"])
-        scored.append((cid, rrf + config.COVERAGE_WEIGHT * cov, cov, parts, r))
+        field = _norm_field(" ".join((r["doc_title"] or "", r["heading"] or "",
+                                      r["text"] or "")))
+        bonus = 0.0
+        # Название/раздел в кавычках совпал дословно — это тот самый вуз
+        # или тот самый показатель, а не «похожий по префиксу».
+        for span in quoted:
+            if span and span in field:
+                bonus += config.QUOTED_BONUS
+        # Вопрос про конкретный выпуск — не подмешиваем другой год.
+        if year and year in (r["doc_title"] or ""):
+            bonus += config.YEAR_BONUS
+        if subject and "иубип" in field:
+            bonus += config.SUBJECT_BONUS
+        scored.append((cid, rrf + config.COVERAGE_WEIGHT * cov + bonus,
+                       cov, parts, r))
 
     scored.sort(key=lambda x: -x[1])
     results = []
+    per_doc = {}
     for cid, score, cov, parts, r in scored:
+        if len(results) >= top_k:
+            break
+        doc_id = r["doc_id"]
+        if per_doc.get(doc_id, 0) >= config.CONTEXT_MAX_PER_DOC:
+            continue
+        per_doc[doc_id] = per_doc.get(doc_id, 0) + 1
         results.append({
             "chunk_id": cid,
             "doc_id": r["doc_id"],
