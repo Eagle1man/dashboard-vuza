@@ -64,6 +64,9 @@
     // Витрина метрик из базы вместо генератора в браузере
     metrics: function () { return get("/api/metrics", 10000); },
 
+    // Мониторинг эффективности: E-показатели, места, перцентили
+    monitoring: function () { return get("/api/monitoring", 10000); },
+
     // Состояние системы: сервер, модель, размер индекса
     health: function () { return get("/api/health", 6000); },
 

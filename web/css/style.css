@@ -270,6 +270,37 @@ html[data-theme="dark"] .widget-value { color: #fff; }
 .standards-chevron { margin-left: auto; color: var(--muted); transition: transform .15s ease; }
 .standards-details[open] > summary { margin-bottom: 12px; }
 .standards-details[open] > summary .standards-chevron { transform: rotate(90deg); }
+
+/* ---------- Графики и диаграммы ленты ---------- */
+.charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
+.chart-panel { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-card); padding: 14px 16px 16px; }
+.chart-panel h4 { font-size: 13.5px; font-weight: 700; margin: 0 0 2px; }
+.chart-hint { font-size: 11.5px; color: var(--muted); margin: 0 0 10px; }
+.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.chart-donut { width: 100%; max-width: 210px; height: auto; }
+.chart-donut path.seg { transition: opacity .15s, transform .15s; transform-box: fill-box; transform-origin: center; }
+.chart-donut path.seg:hover { transform: scale(1.04); opacity: .85; }
+.donut-legend { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.legend-row .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.legend-label { flex: 1; color: var(--text); }
+.legend-value { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hbars { display: flex; flex-direction: column; gap: 9px; }
+.hbar-row { display: grid; grid-template-columns: 150px 1fr 130px; gap: 8px; align-items: center; font-size: 12px; }
+.hbar-label { color: var(--text); }
+.hbar-track { background: var(--border); border-radius: 999px; height: 14px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 999px; transition: width .6s ease; }
+.hbar-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.heatmap { display: grid; gap: 6px; align-items: center; }
+.heat-corner { font-size: 11px; color: var(--muted); }
+.heat-head { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; }
+.heat-rowlabel { font-size: 12px; color: var(--text); }
+.heat-cell { border-radius: 8px; text-align: center; font-weight: 700; padding: 9px 4px; color: #fff; font-size: 12.5px; font-variant-numeric: tabular-nums; transition: transform .12s; cursor: default; }
+.heat-cell:hover { transform: scale(1.06); }
+.gauge { position: relative; width: 190px; height: 190px; margin: 0 auto; }
+.gauge svg { width: 100%; height: 100%; }
+.gauge-arc { transition: stroke-dasharray .8s ease; }
+.gauge-value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 800; color: var(--text); }
 .chart-wrap { width: 100%; overflow-x: auto; }
 .chart-svg { width: 100%; min-width: 360px; height: auto; display: block; }
 .metric-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }

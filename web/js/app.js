@@ -25,7 +25,8 @@
     alerts: {},
     seed: 2026,
     server: false,     // поднят ли локальный сервер
-    health: null       // его /api/health
+    health: null,      // его /api/health
+    monitoring: null   // /api/monitoring: E-показатели и места
   };
 
   function $(id) { return document.getElementById(id); }
@@ -699,6 +700,7 @@ function updateStamp() {
         }
         applyAlertsIndicators();
         renderDashboard();
+        renderCharts();
         updateStamp();
       } catch (err) {
         showToast("Не удалось обновить: " + err.message, "warn");
@@ -1183,6 +1185,175 @@ $("btnExportPdf").addEventListener("click", function () {
     addAiMessage("ai", h);
   }
 
+  // ---------- Графики и диаграммы ленты ----------
+  // Рисуются только из реальных данных: структура контингента, план ФХД,
+  // перцентили и места E-показателей, трудоустройство. Рядов нет —
+  // документы дают одну точку, поэтому вместо трендов — доли, бары,
+  // тепловая карта и шкала.
+  function chartPanel(title, hint, body) {
+    return '<div class="chart-panel"><h4>' + esc(title) + "</h4>" +
+      '<p class="chart-hint">' + esc(hint) + "</p>" + body + "</div>";
+  }
+
+  function donutSVG(parts) {
+    var total = parts.reduce(function (a, b) { return a + b.value; }, 0) || 1;
+    var R = 78, r = 50, cx = 100, cy = 100;
+    var acc = 0, segs = "";
+    parts.forEach(function (p) {
+      var frac = p.value / total;
+      var a0 = acc * 2 * Math.PI - Math.PI / 2;
+      var a1 = (acc + frac) * 2 * Math.PI - Math.PI / 2;
+      var x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0);
+      var x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+      var xi0 = cx + r * Math.cos(a1), yi0 = cy + r * Math.sin(a1);
+      var xi1 = cx + r * Math.cos(a0), yi1 = cy + r * Math.sin(a0);
+      var large = frac > 0.5 ? 1 : 0;
+      segs += '<path class="seg" d="M ' + x0.toFixed(1) + " " + y0.toFixed(1) +
+        " A " + R + " " + R + " 0 " + large + " 1 " + x1.toFixed(1) + " " + y1.toFixed(1) +
+        " L " + xi0.toFixed(1) + " " + yi0.toFixed(1) +
+        " A " + r + " " + r + " 0 " + large + " 0 " + xi1.toFixed(1) + " " + yi1.toFixed(1) + " Z" +
+        '" fill="' + p.color + '"><title>' + esc(p.label) + ": " + fmtFull(p.value) +
+        " (" + Math.round(frac * 100) + " %)</title></path>";
+      acc += frac;
+    });
+    var legend = parts.map(function (p) {
+      return '<div class="legend-row"><span class="dot" style="background:' + p.color + '"></span>' +
+        '<span class="legend-label">' + esc(p.label) + "</span>" +
+        '<span class="legend-value">' + fmtFull(p.value) + " · " + Math.round(p.value / total * 100) + " %</span></div>";
+    }).join("");
+    return '<div class="donut-wrap"><svg class="chart-donut" viewBox="0 0 200 200" role="img">' + segs +
+      '<text x="100" y="94" text-anchor="middle" font-size="19" font-weight="800" fill="var(--text)">' +
+      fmtFull(total) + "</text>" +
+      '<text x="100" y="114" text-anchor="middle" font-size="10.5" fill="var(--muted)">итого</text></svg>' +
+      '<div class="donut-legend">' + legend + "</div></div>";
+  }
+
+  function hbars(rows, max) {
+    max = max || rows.reduce(function (a, b) { return Math.max(a, b.value); }, 0) || 1;
+    return '<div class="hbars">' + rows.map(function (r) {
+      var w = Math.max(2, Math.min(100, Math.round(r.value / max * 100)));
+      return '<div class="hbar-row"><span class="hbar-label">' + esc(r.label) + "</span>" +
+        '<span class="hbar-track"><span class="hbar-fill" data-w="' + w + '%" style="width:0;background:' +
+        (r.color || "#2563eb") + '"></span></span>' +
+        '<span class="hbar-value">' + esc(r.text) + "</span></div>";
+    }).join("") + "</div>";
+  }
+
+  function gauge(value, label) {
+    var R = 80, C = 2 * Math.PI * R;
+    var arc = Math.round(C * 0.75);
+    var used = Math.round(arc * Math.max(0, Math.min(100, value || 0)) / 100);
+    return '<div class="gauge"><svg viewBox="0 0 200 200" role="img">' +
+      '<circle cx="100" cy="100" r="80" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round" ' +
+      'stroke-dasharray="' + arc + " " + C + '" transform="rotate(135 100 100)"/>' +
+      '<circle class="gauge-arc" cx="100" cy="100" r="80" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" ' +
+      'stroke-dasharray="0 ' + C + '" data-arc="' + used + " " + C + '" transform="rotate(135 100 100)"><title>' +
+      esc(label) + "</title></circle></svg>" +
+      '<div class="gauge-value"><span>' + fmtFull(value) + " %</span></div></div>";
+  }
+
+  function toneColor(p) {
+    return p >= 66 ? "#16a34a" : p >= 33 ? "#f59e0b" : "#ef4444";
+  }
+
+  function renderCharts() {
+    var grid = $("chartsGrid");
+    if (!grid) return;
+    var m = function (id) { return state.data.metrics.find(function (x) { return x.id === id; }); };
+    var val = function (id) { var x = m(id); return x ? Number(x.current) || 0 : 0; };
+    var html = "";
+
+    html += chartPanel("Структура контингента", "всего обучающихся на 01.04.2026 · отчёт о самообследовании",
+      donutSVG([
+        { label: "СПО", value: val("continuer-spo"), color: "#2563eb" },
+        { label: "Бакалавриат", value: val("continuer-ba"), color: "#14b8a6" },
+        { label: "Магистратура", value: val("continuer-ma"), color: "#f59e0b" },
+        { label: "Аспиранты", value: val("continuer-aspir"), color: "#8b5cf6" }
+      ]));
+
+    var income = val("income");
+    var edu = val("income-edu"), sub = val("subsidy");
+    var otherInc = Math.max(0, Math.round(income - edu - sub));
+    html += chartPanel("План ФХД 2026: доходы", "образовательные услуги, субсидия и прочие поступления",
+      donutSVG([
+        { label: "Образовательные услуги", value: edu, color: "#2563eb" },
+        { label: "Прочие поступления", value: otherInc, color: "#8b5cf6" },
+        { label: "Субсидия", value: sub, color: "#f59e0b" }
+      ]));
+
+    var fot = val("fot");
+    var rent = Math.round(income * val("arenda-share") / 100);
+    var otherExp = Math.max(0, Math.round(income - fot - rent));
+    html += chartPanel("План ФХД 2026: расходы", "структура расходной части плана",
+      hbars([
+        { label: "Фонд оплаты труда", value: fot, color: "#2563eb",
+          text: fmtFull(fot) + " · " + Math.round(fot / income * 100) + " %" },
+        { label: "Аренда", value: rent, color: "#14b8a6",
+          text: fmtFull(rent) + " · " + Math.round(rent / income * 100) + " %" },
+        { label: "Прочие расходы", value: otherExp, color: "#8b5cf6",
+          text: fmtFull(otherExp) + " · " + Math.round(otherExp / income * 100) + " %" }
+      ], income));
+
+    var mon = state.monitoring;
+    if (mon && mon.available) {
+      var years = Object.keys(mon.years).sort();
+      var last = mon.years[years[years.length - 1]];
+      var E_SHORT = {
+        E1: "E.1 Образование", E2: "E.2 Наука", E3: "E.3 Международная",
+        E4: "E.4 Финансы", E8: "E.8 НПР со степенями"
+      };
+      var codes = ["E1", "E2", "E3", "E4", "E8"];
+      var pRows = codes.map(function (code) {
+        var ind = last.indicators[code];
+        if (!ind) return null;
+        return {
+          label: E_SHORT[code], value: ind.percentile || 0, color: toneColor(ind.percentile),
+          text: ind.percentile + " · место " + ind.rank + " из " + ind.total
+        };
+      }).filter(Boolean);
+      html += chartPanel("Перцентили E-показателей (2025)", "100 — лучший результат в области",
+        hbars(pRows, 100));
+
+      var hmHead = '<div class="heat-corner"></div>' +
+        years.map(function (y) { return '<div class="heat-head">' + esc(y) + "</div>"; }).join("");
+      var hmBody = "";
+      codes.forEach(function (code) {
+        hmBody += '<div class="heat-rowlabel">' + esc(E_SHORT[code]) + "</div>";
+        years.forEach(function (y) {
+          var ind = mon.years[y].indicators[code];
+          if (!ind || ind.percentile === null || ind.percentile === undefined) {
+            hmBody += '<div class="heat-cell" style="background:#cbd5e1;color:#475569" title="' +
+              esc(E_SHORT[code]) + " · " + y + ': нет данных">—</div>';
+            return;
+          }
+          var p = ind.percentile;
+          hmBody += '<div class="heat-cell" style="background:hsl(' + Math.round(p * 1.2) + ",62%,42%)\" title=\"" +
+            esc(E_SHORT[code]) + " · " + y + " · перцентиль " + p + " · место " + ind.rank + " из " + ind.total + '">' +
+            p + "</div>";
+        });
+      });
+      html += chartPanel("Тепловая карта: перцентили 2024 → 2025", "зелёный — сильная позиция, красный — слабая",
+        '<div class="heatmap" style="grid-template-columns:1fr repeat(' + years.length + ',auto)">' +
+        hmHead + hmBody + "</div>");
+    } else {
+      html += chartPanel("E-показатели мониторинга", "сервер недоступен — данные мониторинга не загружены",
+        '<p class="muted">Запустите сервер, чтобы увидеть перцентили и места.</p>');
+    }
+
+    html += chartPanel("Трудоустройство выпускников", "отчёт о самообследовании на 01.04.2026, стр. 15: «более 90 %»",
+      gauge(val("trudoustroystvo"), "Трудоустройство выпускников"));
+
+    grid.innerHTML = html;
+    requestAnimationFrame(function () {
+      grid.querySelectorAll(".hbar-fill").forEach(function (el) {
+        el.style.width = el.getAttribute("data-w");
+      });
+      grid.querySelectorAll(".gauge-arc").forEach(function (el) {
+        el.setAttribute("stroke-dasharray", el.getAttribute("data-arc"));
+      });
+    });
+  }
+
   // ---------- Подключение к локальному серверу ----------
   // Сервер поднимает start.bat. Если его нет (например, index.html
   // открыли двойным кликом), дашборд продолжает работать на значениях
@@ -1200,6 +1371,12 @@ $("btnExportPdf").addEventListener("click", function () {
         renderDashboard();
         updateStamp();
       }
+      try {
+        state.monitoring = await API.monitoring();
+      } catch (err) {
+        state.monitoring = null;
+      }
+      renderCharts();
       setStatus(h);
     } catch (err) {
       // Раньше здесь стоял молчаливый catch, и любая ошибка выглядела
@@ -1318,6 +1495,7 @@ $("btnExportPdf").addEventListener("click", function () {
     applyRole();
     renderDashboard();
     renderStandards();
+    renderCharts();
     bindGridClicks();
     bindDetailClicks();
     bindControls();
