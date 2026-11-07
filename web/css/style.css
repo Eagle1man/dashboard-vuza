@@ -262,6 +262,14 @@ html[data-theme="dark"] .widget-value { color: #fff; }
 /* ============ Детализация блока ============ */
 .section-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
 .section-card h3 { font-size: 16px; margin-bottom: 12px; }
+/* Справочник ФГОС: свёрнут по умолчанию, список раскрывается по клику */
+.standards-details > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; user-select: none; }
+.standards-details > summary::-webkit-details-marker { display: none; }
+.standards-details > summary:hover .standards-title { color: var(--primary); }
+.standards-title { font-size: 16px; font-weight: 700; }
+.standards-chevron { margin-left: auto; color: var(--muted); transition: transform .15s ease; }
+.standards-details[open] > summary { margin-bottom: 12px; }
+.standards-details[open] > summary .standards-chevron { transform: rotate(90deg); }
 .chart-wrap { width: 100%; overflow-x: auto; }
 .chart-svg { width: 100%; min-width: 360px; height: auto; display: block; }
 .metric-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }

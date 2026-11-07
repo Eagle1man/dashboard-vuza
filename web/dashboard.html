@@ -87,26 +87,32 @@
 
       <!-- Справочник образовательных программ по ФГОС.
            Коды и годы — реальные, с сайта университета. Численность
-           обучающихся по программам на сайте не публикуется. -->
+           обучающихся по программам на сайте не публикуется.
+           Свёрнут по умолчанию: список раскрывается по клику. -->
       <div class="section-card" id="standardsCard">
-        <h3>Образовательные программы по ФГОС</h3>
-        <p class="sub" id="standardsSummary"></p>
-        <div class="table-wrap">
-          <table class="data" id="standardsTable">
-            <thead>
-              <tr>
-                <th>Код</th><th>Программа</th><th>Уровень</th>
-                <th>Утверждён</th><th>Изменён</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p class="muted" style="font-size:12px;margin-top:10px">
-          ⚠ — стандарт не менялся более трёх лет: кандидат на пересмотр,
-          а не ошибка в данных. Численность обучающихся по программам
-          на сайте не публикуется.
-        </p>
+        <details id="standardsDetails" class="standards-details">
+          <summary class="standards-summary">
+            <span class="standards-title">Образовательные программы по ФГОС</span>
+            <span class="sub" id="standardsSummary"></span>
+            <span class="standards-chevron" aria-hidden="true">▸</span>
+          </summary>
+          <div class="table-wrap">
+            <table class="data" id="standardsTable">
+              <thead>
+                <tr>
+                  <th>Код</th><th>Программа</th><th>Уровень</th>
+                  <th>Утверждён</th><th>Изменён</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" style="font-size:12px;margin-top:10px">
+            ⚠ — стандарт не менялся более трёх лет: кандидат на пересмотр,
+            а не ошибка в данных. Численность обучающихся по программам
+            на сайте не публикуется.
+          </p>
+        </details>
       </div>
     </section>
 
