@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Схема хранилища и перенос демонстрационных метрик в базу.
+Схема хранилища и наполнение витрины официальными значениями.
 
 Одно хранилище, четыре слоя:
   1. справочники (dim_*)      — что вообще измеряем
@@ -40,9 +40,10 @@ CREATE TABLE IF NOT EXISTS dim_metric (
   unit      TEXT,
   dir       TEXT,          -- 'higher' | 'lower'
   target    REAL,
-  -- 'official' — число взято из документа университета,
-  -- 'demo'     — демонстрационное, историю за ним нет.
-  source    TEXT DEFAULT 'demo',
+  -- 'official' — число взято из документа университета.
+  -- Демонстрационных значений в витрине больше нет: число без
+  -- документа выглядело настоящим, и подписать его было нечем.
+  source    TEXT DEFAULT 'official',
   -- Год и название документа-источника для официальных чисел.
   src_note  TEXT,
   ord       INTEGER
@@ -443,7 +444,7 @@ def _migrate(conn):
         ("doc", "block_id", "TEXT"),
         ("dim_org", "parent_id", "TEXT"),
         ("dim_org", "kind", "TEXT"),
-        ("dim_metric", "source", "TEXT DEFAULT 'demo'"),
+        ("dim_metric", "source", "TEXT DEFAULT 'official'"),
         ("dim_metric", "src_note", "TEXT"),
         # Конвейер загрузки (ТЗ 2.0): исходное имя, найденный формат,
         # кто загрузил, текст ошибки без путей сервера.
@@ -584,6 +585,11 @@ ACADEMIES = [o for o in ORGS if o[4] == "academy"]
 
 # metric_id, block_id, title, unit, dir, target
 # target = None — целевого порога в документах нет, статус не считается.
+#
+# Здесь только метрики, у которых есть источник. Демонстрационные
+# показатели (успеваемость, ВНОКО, ЭИОС и т. п.) удалены: число без
+# документа выглядит настоящим, и подписать его нечем. Пустой блок
+# честнее выдуманного ряда.
 METRICS = [
     # --- Академическая политика: числа из отчёта о самообследовании ---
     ("continuer-total",   "academic", "Контингент обучающихся",        "чел.", "higher", None),
@@ -595,17 +601,9 @@ METRICS = [
     ("graduate-2025",     "academic", "Выпуск 2025",                   "чел.", "higher", None),
     ("foreign",           "academic", "Иностранцы",                    "чел.", "higher", None),
     ("programs",          "academic", "Действующие образовательные программы", "шт.", "higher", None),
-    # демо — по приёму целевого порога в документах нет
-    ("plan-enroll",       "academic", "Выполнение плана приёма",       "%",    "higher", 90),
 
     # --- Учебные результаты ---
     ("trudoustroystvo",   "results",  "Трудоустройство выпускников",   "%",    "higher", None),
-    ("sredniy-ball",      "results",  "Средний балл ЕГЭ",              "балл", "higher", 70),
-    ("uspevaemost",       "results",  "Успеваемость (без двоек)",      "%",    "higher", 90),
-    ("kachestvo",         "results",  "Качество знаний (без троек)",   "%",    "higher", 65),
-    ("zadolzhennosti",    "results",  "Доля задолженностей",           "%",    "lower",  8),
-    ("otlichniki",        "results",  "Доля отличников",               "%",    "higher", 12),
-    ("sga",               "results",  "Средний семестровый балл",       "балл", "higher", 4.0),
 
     # --- Финансово-хозяйственная деятельность: план ФХД на 2026 год ---
     ("income",            "finance",  "Доходы (план 2026)",                 "тыс ₽", "higher", None),
@@ -617,35 +615,9 @@ METRICS = [
     ("arenda-share",      "finance",  "Доля аренды в расходах",             "%",     "lower",  None),
     ("subsidy-share",     "finance",  "Доля субсидии в доходах",            "%",     "higher", None),
 
-    # --- Качество образования (ВНОКО) ---
-    ("vnoko-employers",   "vnoko", "Опрос работодателей",                  "%",    "higher", 85),
-    ("vnoko-staff",       "vnoko", "Опрос педагогических работников",       "%",    "higher", 85),
-    ("vnoko-parents",     "vnoko", "Опрос родителей",                      "%",    "higher", 85),
-    ("vnoko-students",    "vnoko", "Опрос обучающихся",                    "%",    "higher", 85),
-    ("vnoko-vpr",         "vnoko", "Средний балл ВПР (СПО)",               "балл", "higher", 4.0),
-    ("vnoko-planfact",    "vnoko", "Доля ООП с опубликованным планом-фактом", "%", "higher", 95),
-
     # --- Наука ---
     ("nir",               "science", "Объём НИР за 2025",               "млн ₽",  "higher", None),
     ("biblioteka",        "science", "Библиотечный фонд",              "экз.",    "higher", None),
-    ("granty",            "science", "Объём грантов",                   "млн ₽",   "higher", 420),
-    ("publ-scopus",       "science", "Публикации Scopus/WoS",           "шт.",     "higher", 700),
-    ("publ-rinc",         "science", "Публикации РИНЦ",                 "шт.",     "higher", 1400),
-    ("citiruemost",       "science", "Цитируемость",                    "индекс",  "higher", 12),
-    ("patenty",           "science", "Патенты и РИД",                   "шт.",     "higher", 40),
-
-    # --- Воспитательная работа и молодёжная политика ---
-    ("studcouncil",       "upr", "Мероприятия студсовета",               "шт./год", "higher", 60),
-    ("clinic",            "upr", "Дела юридической клиники",             "шт.",     "higher", 40),
-    ("career-centre",     "upr", "Обращений в центр карьеры",             "тыс",     "higher", 12),
-    ("vovlechennost",     "upr", "Вовлечённость в воспитательные мероприятия", "%", "higher", 70),
-
-    # --- Цифровые сервисы и ЭИОС ---
-    ("napolnyaemost",     "digital", "Наполняемость аудиторий",         "%",    "higher", 75),
-    ("nagruzka-pps",      "digital", "Средняя нагрузка ППС",            "час.", "lower",  900),
-    ("lms-activity",      "digital", "Активность в LMS",                "индекс", "higher", 55),
-    ("cifrovyye",         "digital", "Цифровые сервисы (внедрённые)",  "шт.",   "higher", 30),
-    ("eios",              "digital", "Доля курсов в ЭИОС",              "%",     "higher", 90),
 ]
 
 # Официальные значения: метрика -> (значение, источник).
@@ -820,97 +792,11 @@ FREQ_DAYS = {
     "ежегодно": 365,
 }
 
-LASTNAMES = ["Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов",
-             "Волков", "Лебедев", "Козлов", "Новиков", "Морозов"]
-FIRSTNAMES = ["Алексей", "Мария", "Дмитрий", "Анна", "Иван",
-              "Елена", "Никита", "Ольга", "Сергей", "Наталья"]
-REASONS = ["академическая задолженность", "неуспеваемость",
-           "семейные обстоятельства", "перевод в другой вуз",
-           "по собственному желанию", "непрохождение аттестации"]
+# Демонстрационные ряды удалены вместе с генератором: числа без
+# документа не должны попадать в витрину. Официальная метрика имеет
+# одну точку — этого достаточно, чтобы показать факт, и недостаточно,
+# чтобы нарисовать несуществующую историю.
 
-# base / vol — параметры генератора для ДЕМО-метрик.
-# Официальных метрик здесь нет: у них одна точка, а не ряд.
-GEN = {
-    "plan-enroll": (96, 8),
-    "sredniy-ball": (74, 3), "uspevaemost": (94, 2), "kachestvo": (68, 3),
-    "zadolzhennosti": (9.4, 1), "otlichniki": (13.5, 1.5), "sga": (4.1, 0.15),
-    "vnoko-employers": (88, 2), "vnoko-staff": (86, 2), "vnoko-parents": (84, 2),
-    "vnoko-students": (89, 2), "vnoko-vpr": (4.2, 0.1), "vnoko-planfact": (80, 3),
-    "granty": (390, 25), "publ-scopus": (680, 40), "publ-rinc": (1080, 70),
-    "citiruemost": (12.8, 0.8), "patenty": (38, 4),
-    "studcouncil": (52, 5), "clinic": (34, 4), "career-centre": (11, 1),
-    "vovlechennost": (66, 4),
-    "napolnyaemost": (78, 4), "nagruzka-pps": (780, 60), "lms-activity": (62, 6),
-    "cifrovyye": (20, 3), "eios": (85, 3),
-}
-
-
-def mulberry32(seed):
-    """Побайтово тот же генератор, что в web/js/data.js.
-
-    В JS все операции 32-битные со знаком, поэтому каждое
-    промежуточное значение маскируется. Math.round в JS округляет
-    к +Inf, а не как round() в Python (тот округляет к чётному) —
-    это тоже учитывается в js_round.
-    """
-    state = {"a": seed & U32}
-
-    def rnd():
-        # a = (a + 0x6D2B79F5) | 0
-        a = (state["a"] + 0x6D2B79F5) & U32
-        state["a"] = a
-        # t = Math.imul(a ^ (a >>> 15), 1 | a)
-        t0 = ((a ^ (a >> 15)) * (1 | a)) & U32
-        # t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-        t1 = ((t0 ^ (t0 >> 7)) * (61 | t0)) & U32
-        t = ((t0 + t1) & U32) ^ t0
-        # ((t ^ (t >>> 14)) >>> 0) / 2**32
-        return ((t ^ (t >> 14)) & U32) / 4294967296.0
-
-    return rnd
-
-
-def js_round(x):
-    """Math.round: к +Infinity. Python round() округляет к чётному — не то."""
-    return math.floor(x + 0.5)
-
-
-def make_series(metric_id, seed):
-    base, vol = GEN[metric_id]
-    rnd = mulberry32(seed)
-    points = 12
-    arr = []
-    v = base * (0.9 + rnd() * 0.2)
-    drift = (base - v) / points
-    for _ in range(points):
-        v += drift + (rnd() - 0.5) * vol * 0.5
-        arr.append(max(0, js_round(v * 10) / 10))
-    return arr
-
-
-def make_drill(metric_id, seed, dept_name, dept_id, direction):
-    base, _ = GEN[metric_id]
-    rnd = mulberry32(seed)
-    count = 5 + int(rnd() * 6)
-    rows = []
-    for i in range(count):
-        fio = LASTNAMES[int(rnd() * len(LASTNAMES))] + " " + \
-              FIRSTNAMES[int(rnd() * len(FIRSTNAMES))]
-        if direction == "lower":
-            value = js_round(base * (0.6 + rnd() * 0.8) * 10) / 10
-        else:
-            value = js_round(base * (0.85 + rnd() * 0.3) * 10) / 10
-        reason = REASONS[int(rnd() * len(REASONS))]
-        rows.append({"id": f"{dept_id}-{i}", "fio": fio, "dept": dept_name,
-                     "value": value, "reason": reason})
-    return rows
-
-
-# Единицы, для которых разбивка по кафедрам осмысленна: это счётные
-# величины. Для процентов, баллов, индексов и часов разбивка бессмысленна:
-# кафедра получает долю от процента, и «успеваемость 11,4 %» выглядит
-# как провал, хотя на деле это доля университетских 94 % (0,82 · 11,4).
-COUNT_UNITS = {"чел.", "шт.", "шт./год", "тыс", "млн ₽"}
 
 
 def compute_status(value, direction, target):
@@ -929,89 +815,47 @@ def compute_status(value, direction, target):
     return "red"
 
 
-def build_demo(seed=config.DEMO_SEED):
-    """Полный срез витрины — та же логика, что build() в data.js.
+def build_vitrine():
+    """Витрина из официальных значений: одна точка на показатель.
 
-    У метрик две разные природы, и различать их приходится прямо здесь.
-
-    * Официальные — значение взято из документа университета. Ряда у
-      него нет: отчёт даёт одну точку на 01.04.2026, план ФХД — одну на
-      2026 год. Поэтому series состоит из одного значения, разбивки по
-      кафедрам нет (её нет и в документах), prev и delta равны None.
-      Придумывать к такому числу одиннадцать прошлых месяцев нельзя:
-      ровный график ректор прочтёт как историю.
-    * Демонстрационные — полный ряд, разбивка по кафедрам, drill-down.
-      Это единственные числа, которых в документах не существует.
+    У каждой метрики значение взято из документа университета. Ряда у
+    него нет: отчёт даёт одну точку на 01.04.2026, план ФХД — одну на
+    2026 год. Поэтому series состоит из одного значения, разбивки по
+    кафедрам нет, prev и delta равны None. Придумывать к такому числу
+    одиннадцать прошлых месяцев нельзя: ровный график ректор прочтёт
+    как историю.
     """
-    rnd = mulberry32(seed)
     year = 2026
     periods = [(f"{year}-{m:02d}", m) for m in range(1, 13)]
 
     metrics = []
-    for i, (mid, block, title, unit, direction, target) in enumerate(METRICS):
-        official = mid in OFFICIAL
-
-        if official:
-            current, src_note = OFFICIAL[mid]
-            series = [current]
-            prev = delta = None
-            dept_values, drill = [], {}
-        else:
-            series = make_series(mid, seed + i * 101)
-            current = series[-1]
-            prev = series[-2] if len(series) > 1 else series[0]
-            delta = ((current - prev) / prev * 100) if prev else 0.0
-            src_note = None
-
-            # Доли подразделений обязаны в сумме давать итог по университету.
-            # Раньше каждое подразделение получало base * (0.82...1.18)
-            # независимо, и девять таких значений давали примерно девятикратный
-            # итог. Дефект был не виден, пока цифры показывались только общей
-            # строкой; как только агенты стали считать разбивку по кафедрам,
-            # части перестали сходиться с целым.
-            #
-            # Разбивка строится только для счётных величин. Для процентов
-            # она бессмысленна: кафедра получила бы долю от процента, и
-            # «успеваемость 11,4 %» читалось бы как провал там, где
-            # на деле 94 % по университету.
-            if unit in COUNT_UNITS:
-                weights = [0.82 + rnd() * 0.36 for _ in DEPTS]
-                wsum = sum(weights)
-                dept_values = []
-                for di, org in enumerate(DEPTS):
-                    dept_id, dept_name = org[0], org[1]
-                    v = current * (weights[di] / wsum)
-                    rounded = js_round(v * 10) / 10
-                    dept_values.append({
-                        "dept_id": dept_id, "dept_name": dept_name,
-                        "value": rounded,
-                        "share": (rounded / current * 100) if current else 0.0,
-                    })
-            else:
-                dept_values = []
-
-            drill = {}
-            if dept_values:
-                for di, org in enumerate(DEPTS):
-                    drill[org[0]] = make_drill(mid, seed + i * 7 + di, org[1],
-                                               org[0], direction)
-
+    for mid, block, title, unit, direction, target in METRICS:
+        current, src_note = OFFICIAL[mid]
         metrics.append({
             "metric_id": mid, "block_id": block, "title": title,
             "unit": unit, "direction": direction, "target": target,
-            "source": "official" if official else "demo",
+            "source": "official",
             "src_note": src_note,
-            "has_history": not official,
-            "series": series, "current": current, "prev": prev, "delta": delta,
+            "has_history": False,
+            "series": [current], "current": current, "prev": None, "delta": None,
             "status": compute_status(current, direction, target),
-            "dept": dept_values, "drill": drill,
+            "dept": [], "drill": {},
         })
     return {"periods": periods, "metrics": metrics}
 
 
-def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
-    """Наполняет витрину демо-данными. Идемпотентно."""
-    data = build_demo(seed)
+# Прежнее имя оставлено для совместимости со скриптами, которые уже
+# вызывают build_demo(): демонстрационных метрик в нём больше нет.
+build_demo = build_vitrine
+
+
+def seed_metrics(conn, seed=None, force=False):
+    """Наполняет витрину официальными значениями. Идемпотентно.
+
+    Демонстрационные метрики удаляются: раньше они наполняли витрину
+    рядами, которых нет ни в одном документе.
+    """
+    data = build_vitrine()
 
     if force:
         conn.execute("DELETE FROM fact_metric")
@@ -1043,6 +887,8 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
                              (row["metric_id"],))
                 conn.execute("DELETE FROM metric_alias WHERE metric_id = ?",
                              (row["metric_id"],))
+                conn.execute("DELETE FROM metric_source WHERE metric_id = ?",
+                             (row["metric_id"],))
                 conn.execute("DELETE FROM dim_metric WHERE metric_id = ?",
                              (row["metric_id"],))
 
@@ -1056,13 +902,13 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
             "INSERT OR REPLACE INTO dim_org(org_id, title, parent_id, kind, ord)"
             " VALUES(?,?,?,?,?)", (oid, title, parent, kind, order))
     for i, (mid, block, title, unit, direction, target) in enumerate(METRICS):
-        src = OFFICIAL.get(mid)
+        src = OFFICIAL[mid]
         conn.execute(
             "INSERT OR REPLACE INTO dim_metric"
             "(metric_id, block_id, title, unit, dir, target, source, src_note, ord)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
             (mid, block, title, unit, direction, target,
-             "official" if src else "demo", src[1] if src else None, i))
+             "official", src[1], i))
         for alias in ALIASES.get(mid, []):
             conn.execute("INSERT OR REPLACE INTO metric_alias(metric_id, alias)"
                          " VALUES(?,?)", (mid, alias))
@@ -1104,10 +950,13 @@ def seed_metrics(conn, seed=config.DEMO_SEED, force=False):
                      None, r["fio"], r["value"], r["reason"]))
 
     conn.commit()
-    set_meta(conn, "demo_seeded", "1")
-    set_meta(conn, "demo_seed", str(seed))
     set_meta(conn, "schema_version", "1")
-    set_meta(conn, "demo_data_notice", config.DEMO_BANNER)
+    # Следы прежней демонстрационной витрины убираются из meta: иначе
+    # интерфейс продолжит показывать баннер «демонстрационные данные»
+    # после того, как самих демо-чисел уже нет.
+    for key in ("demo_seeded", "demo_seed", "demo_data_notice"):
+        conn.execute("DELETE FROM meta WHERE key = ?", (key,))
+    conn.commit()
     return len(data["metrics"])
 
 
@@ -1390,7 +1239,7 @@ def load_vitrine(conn):
     return {"blocks": blocks, "metrics": metrics,
             "dept": depts, "academies": academies,
             "standards": standards,
-            "labels": labels, "periods": periods, "demo": True}
+            "labels": labels, "periods": periods}
 
 
 if __name__ == "__main__":

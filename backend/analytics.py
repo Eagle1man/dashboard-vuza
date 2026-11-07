@@ -39,6 +39,7 @@ ANALYTICS_DB = ROOT / "data" / "analytics.db"
 KB = ROOT / "knowledge" / "official" / "monitoring"
 REGION_JSON = KB / "source" / "region_indicators.json"
 DETAIL_JSON = KB / "source" / "iubip-detail.json"
+DIRECTIONS_JSON = KB / "source" / "iubip-directions.json"
 SPO_JSON = ROOT / "data" / "spo.json"
 
 IUBIP_ALIASES = ("иубип", "южный университет")
@@ -90,6 +91,63 @@ SPO_KEYWORDS = {
     "5.2": ("штатных преподавателей", "мастеров производственного обучения"),
     "7.4": ("медал", "абилимпикс"),
 }
+
+# Раздел III карточки мониторинга: направления деятельности. Ключи
+# подобраны так, чтобы не перехватывать вопросы про E-показатели:
+# «средний балл ЕГЭ» остаётся за E.1, а «минимальный балл ЕГЭ» — за 1.4.
+# Это второй, более узкий слой после E-показателей и СПО.
+DIRECTION_KEYWORDS = {
+    "1.4": ("минимальный балл егэ", "усредненный по реализуемым направлениям"),
+    "1.9": ("доля магистратуры", "удельный вес магистратуры"),
+    "1.11": ("диплом бакалавра", "диплом специалиста или магистра других"),
+    "1.13": ("аспирантов на 100 студентов", "в расчете на 100 студентов"),
+    "1.14": ("слушателей из сторонних организаций",),
+    "2.1": ("цитирований", "цитируемость публикаций"),
+    "2.2": ("публикаций организации", "публикаций в ринц"),
+    "2.3": ("белый список", "белом списке"),
+    "2.4": ("общий объем ниокр", "объем научно-исследовательских"),
+    "2.5": ("удельный вес доходов от ниокр",),
+    "2.6": ("собственными силами",),
+    "2.7": ("доходы от ниокр",),
+    "2.8": ("лицензионных соглашений",),
+    "2.9": ("результатов интеллектуальной деятельности",),
+    "2.10": ("без ученой степени", "нпр без ученой"),
+    "2.11": ("защитивших кандидатские", "защитивших диссертации"),
+    "2.12": ("научных журналов",),
+    "2.13": ("грантов на выполнение", "грантов на 100"),
+    "3.1": ("кроме стран снг", "иностранных студентов кроме"),
+    "3.2": ("иностранных студентов из снг", "стран снг"),
+    "3.3": ("иностранных студентов, завершивших", "завершивших освоение"),
+    "3.4": ("завершивших", "кроме стран снг"),
+    "3.5": ("завершивших", "из стран снг"),
+    "3.6": ("прошедших обучение за рубежом",),
+    "3.7": ("иностранных образовательных организаций",),
+    "3.8": ("иностранных граждан из числа нпр",),
+    "3.9": ("зарубежных ведущих профессоров",),
+    "3.10": ("иностранных аспирантов",),
+    "3.11": ("иностранных аспирантов", "из стран снг"),
+    "3.12": ("ниокр от иностранных",),
+    "3.13": ("образовательной деятельности от иностранных",),
+    "4.1": ("приносящей доход деятельности",),
+    "4.2": ("доля доходов из средств от приносящей доход",),
+    "4.3": ("доходы на численность студентов", "доходы в расчете на студента"),
+    "5.1": ("общая площадь учебно-лабораторных",),
+    "5.2": ("на праве собственности",),
+    "5.3": ("оперативного управления",),
+    "5.4": ("безвозмездное пользование",),
+    "5.5": ("предоставленных в аренду",),
+    "5.6": ("персональных компьютеров",),
+    "5.7": ("машин и оборудования не старше 5 лет",),
+    "5.8": ("печатных учебных изданий",),
+    "6.1": ("кандидата наук",),
+    "6.2": ("доктора наук",),
+    "6.3": ("кандидата и доктора",),
+    "6.4": ("число нпр", "нпр на 100 студентов"),
+    "6.5": ("штатных работников ппс",),
+}
+
+DIRECTION_CODE_RE = re.compile(r"\b([1-6])\.(\d{1,2})\b")
+DIRECTION_HINT = re.compile(r"показател|мониторинг|направлен", re.IGNORECASE)
 
 # Сокращения, которыми люди называют вузы в жизни. В сгенерированных
 # вопросах названия официальные, но реальный вопрос ректора выглядит как
@@ -229,6 +287,25 @@ CREATE TABLE IF NOT EXISTS spo_value (
     percentile INTEGER,
     median     REAL,
     PRIMARY KEY (year, code)
+);
+-- Раздел III карточки мониторинга: 57 показателей по направлениям.
+-- Медианы на сайте показаны отношением «значение / медиана», поэтому
+-- точное число есть только там, где шкала не обрезана (иначе NULL и
+-- флаг capped).
+CREATE TABLE IF NOT EXISTS direction_indicator (
+    release          INTEGER NOT NULL,
+    section          TEXT NOT NULL,
+    code             TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    unit             TEXT,
+    value            REAL,
+    median_private   REAL,
+    median_region    REAL,
+    ratio_private    REAL,
+    ratio_region     REAL,
+    capped_private   INTEGER DEFAULT 0,
+    capped_region    INTEGER DEFAULT 0,
+    PRIMARY KEY (release, code)
 );
 CREATE INDEX IF NOT EXISTS idx_value_lookup ON value (level, release, code, year);
 CREATE INDEX IF NOT EXISTS idx_value_vuz ON value (level, vuz_id, code);
@@ -385,6 +462,28 @@ def build(path: pathlib.Path = None, verbose: bool = True) -> dict:
                  norm_num(raw)))
             stats["detail"] += 1
 
+    # ---- раздел III: направления деятельности (57 показателей) --------
+    stats["directions"] = 0
+    if DIRECTIONS_JSON.exists():
+        directions = json.loads(DIRECTIONS_JSON.read_text(encoding="utf-8"))
+        release = int(directions.get("release") or 2025)
+        for section in directions.get("sections") or []:
+            for ind in section.get("indicators") or []:
+                conn.execute(
+                    "INSERT OR REPLACE INTO direction_indicator"
+                    "(release, section, code, title, unit, value,"
+                    " median_private, median_region, ratio_private, ratio_region,"
+                    " capped_private, capped_region)"
+                    " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (release, section.get("title"), ind.get("code"),
+                     ind.get("title"), ind.get("unit"), ind.get("value"),
+                     ind.get("median_private"), ind.get("median_region"),
+                     ind.get("median_private_ratio"),
+                     ind.get("median_region_ratio"),
+                     1 if ind.get("median_private_capped") else 0,
+                     1 if ind.get("median_region_capped") else 0))
+                stats["directions"] += 1
+
     conn.commit()
     conn.close()
     if path.exists():
@@ -395,6 +494,7 @@ def build(path: pathlib.Path = None, verbose: bool = True) -> dict:
         print(f"витрина собрана: {path}")
         print(f"  ВО: организаций {stats['vo_vuz']}, значений {stats['vo_values']}")
         print(f"  СПО: показателей {stats['spo']}, своя карточка: {stats['detail']}")
+        print(f"  направления деятельности: {stats.get('directions', 0)}")
     return stats
 
 
@@ -608,6 +708,82 @@ def _where(row):
             f", перцентиль {row['percentile']}")
 
 
+def find_direction(conn, question: str):
+    """Показатель раздела III по коду или отличительной формулировке."""
+    q = norm_name(question)
+    if DIRECTION_HINT.search(question):
+        m = DIRECTION_CODE_RE.search(q)
+        if m:
+            code = f"{m.group(1)}.{m.group(2)}"
+            row = conn.execute(
+                "SELECT * FROM direction_indicator WHERE code=?"
+                " ORDER BY release DESC LIMIT 1", (code,)).fetchone()
+            if row:
+                return row
+
+    best, best_len = None, 0
+    for code, keys in DIRECTION_KEYWORDS.items():
+        for key in keys:
+            if key in q and len(key) > best_len:
+                row = conn.execute(
+                    "SELECT * FROM direction_indicator WHERE code=?"
+                    " ORDER BY release DESC LIMIT 1", (code,)).fetchone()
+                if row:
+                    best, best_len = row, len(key)
+    return best
+
+
+def _render_direction(row):
+    """Текст расчёта по разделу III: значение и сравнение с медианами."""
+    def unit(value):
+        text = (row["unit"] or "").strip()
+        if text.endswith("."):
+            text = text[:-1]
+        return (value + (" " + text if text else "")).strip()
+
+    lines = [
+        "ПОСЧИТАНО ПО ВИТРИНЕ МОНИТОРИНГА (расчёт по данным источника, "
+        "не цитата из документа).",
+        f"Показатель {row['code']} «{row['title']}». "
+        f"ИУБиП: {unit(_fmt(row['value']))}. Выпуск {row['release']}.",
+    ]
+    for scope, label in (("private", "частных вузов"),
+                         ("region", "вузов региона")):
+        median = row[f"median_{scope}"]
+        ratio = row[f"ratio_{scope}"]
+        capped = row[f"capped_{scope}"]
+        if capped:
+            lines.append(
+                f"Медиана {label}: значение вуза не менее чем в 2 раза выше "
+                "медианы (на сайте шкала сравнения обрезана, точное число "
+                "медианы не публикуется).")
+        elif median is not None and ratio is not None:
+            lines.append(
+                f"Медиана {label}: {unit(_fmt(median))}; "
+                f"отношение значения вуза к медиане {ratio:.2f}.")
+        else:
+            lines.append(f"Сравнение с медианой {label}: нет данных.")
+    return "\n".join(lines)
+
+
+def _answer_direction(conn, row):
+    return {
+        "kind": "direction",
+        "level": LEVEL_VO,
+        "release": row["release"],
+        "code": row["code"],
+        "title": row["title"],
+        "unit": row["unit"],
+        "numbers": [row["value"], row["median_private"], row["median_region"]],
+        "sources": [{
+            "rel_path": "official/monitoring/2025-directions.md",
+            "doc_title": "ИУБиП в мониторинге, выпуск 2025: направления деятельности",
+        }],
+        "text": _render_direction(row),
+        "formula": "значение и медианы из раздела III карточки мониторинга",
+    }
+
+
 # -------------------------------------------------------------------- запрос
 
 def answer(conn, question: str):
@@ -621,6 +797,15 @@ def answer(conn, question: str):
 
     level = LEVEL_SPO if re.search(r"\bСПО\b|среднего профессионального",
                                    question, re.IGNORECASE) else LEVEL_VO
+
+    # Раздел III отвечает точнее E-показателей там, где формулировка
+    # отличительная («минимальный балл ЕГЭ», «белый список», «из стран
+    # СНГ»). Явный код E.1…E.8 сильнее: его нельзя перебивать.
+    if level == LEVEL_VO and not CODE_RE.search(question):
+        direction = find_direction(conn, question)
+        if direction:
+            return _answer_direction(conn, direction)
+
     ind = find_indicator(conn, question, level)
     if not ind:
         return None

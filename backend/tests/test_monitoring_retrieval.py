@@ -27,6 +27,17 @@ CASES = [
      ["official/monitoring/spo/2025-iubip.md"]),
     ("Доходы вуза из всех источников по мониторингу",
      ["official/monitoring/2025-iubip.md", "official/monitoring/2024-iubip.md"]),
+    # Раздел III: документ обязан находиться по содержательным вопросам.
+    # Вопрос «Сколько публикаций в Белом списке у ИУБиП?» отвечает
+    # детерминированная витрина analytics (см. test_monitoring_card), а
+    # не поиск: в вопросе есть название вуза, и оно перетягивает ранжирование.
+    ("Иностранные студенты из СНГ по мониторингу",
+     ["official/monitoring/2025-directions.md"]),
+    ("Сколько персональных компьютеров на одного студента",
+     ["official/monitoring/2025-directions.md"]),
+    ("Доля магистратуры в контингенте",
+     ["official/monitoring/2025-directions.md",
+      "official/monitoring/2025-card.md"]),
 ]
 
 

@@ -136,8 +136,7 @@
       var d = (p.uploaded_at || "").slice(0, 10);
       return "загружено: " + p.division + (d ? " · " + d : "");
     }
-    if (m.source === "official") return m.srcNote || "документы университета";
-    return "демонстрационные данные витрины";
+    return m.srcNote || "документы университета";
   }
   // Перевод способа извлечения значения на человеческий язык (ТЗ §5.5):
   // провенанс обязан быть читаемым, а не набором кодов из базы.
@@ -174,15 +173,16 @@
         return r.json();
       })
       .then(function (data) {
-        // Значения без загрузки — демонстрационные или внесённые руками:
-        // цепочка до документа у них честно отсутствует.
+        // Значения без загрузки — внесённые вручную или из документа,
+        // который подключён без анкеты: цепочка до подразделения у них
+        // честно отсутствует.
         var vals = (data.values || []).filter(function (v) {
           return v.upload_id || v.source_file_name;
         });
         if (!vals.length) {
           box.innerHTML = '<p class="muted">За этот показатель пока нет значений, ' +
-            'опубликованных из документов: в витрине демонстрационные или ' +
-            'внесённые вручную числа. Цепочка «число → документ → подразделение» ' +
+            'опубликованных из документов: число внесено из документа напрямую ' +
+            'или вручную. Цепочка «число → документ → подразделение» ' +
             'появится после загрузки файла и кнопки «Принять» на экране проверки.</p>';
           return;
         }
@@ -289,9 +289,8 @@ function updateStamp() {
     updateFooterNote();
   }
 
-  // Сколько в ленте настоящих и демонстрационных цифр. Подвал обещает
-  // «часть показателей демонстрационная и помечена», но не говорит
-  // сколько каких — приходится считать самому. Считаем по флагу source.
+  // Сколько в ленте чисел из документов. Демонстрационных значений
+  // больше нет: каждое число подписано источником.
   function updateFooterNote() {
     var el = $("footerCounts");
     if (!el || !state.data || !state.data.metrics) return;
@@ -300,8 +299,7 @@ function updateStamp() {
     for (var i = 0; i < ms.length; i++) {
       if (ms[i].source === "official") official++;
     }
-    el.textContent = official + " из " + ms.length + " — из документов, " +
-      (ms.length - official) + " — демонстрационных";
+    el.textContent = official + " из " + ms.length + " — из документов";
   }
 
   // ---------- Справочник образовательных программ ----------
@@ -440,20 +438,13 @@ function updateStamp() {
         ((p0.uploaded_at || "") ? " · " + esc(p0.uploaded_at.slice(0, 10)) : "") +
         (overdue ? ' · <span style="color:var(--red);font-weight:600">просрочено</span>' : "");
       srcLine = '<div class="widget-src" title="' + esc(full0) + '">' + short0 + "</div>";
-    } else if (m.source === "official" && m.srcNote) {
+    } else if (m.srcNote) {
       srcLine = '<div class="widget-src" title="' + esc(m.srcNote) + '">' +
         esc(shortSource(m.srcNote)) + "</div>";
-    } else if (m.source !== "official") {
-      // Подвал обещает «часть демонстрационная и помечена» — на самой
-      // карточке пометки быть иначе негде: цифра выглядит настоящей.
-      srcLine = '<div class="widget-src">демонстрационные данные — источник не подтверждён загрузкой</div>';
     }
-    var demoTag = m.source !== "official"
-      ? '<span class="tag-demo" title="Цифра демонстрационная, не подтверждена документом">демо</span>'
-      : "";
     return '<div class="metric-widget" data-metric="' + m.id + '" title="Клик — детализация">' +
       '<div class="widget-head"><span class="widget-title">' + esc(m.title) + '</span>' +
-      '<span class="widget-badges">' + demoTag +
+      '<span class="widget-badges">' +
       '<span class="status-pill ' + statusClass(status) + '">' + statusTxt(status) + "</span></span></div>" +
       '<div class="widget-value">' + fmtFull(value) + ' <span class="widget-unit">' + esc(m.unit) + "</span></div>" +
       srcLine +
@@ -635,10 +626,9 @@ function updateStamp() {
         "по уровням образования. Разбивки по кафедрам в документах тоже нет — " +
         "это можно увидеть на странице показателя.</p>";
     } else h += "<p class='muted'>Записей не найдено.</p>";
-    // У официального показателя назван конкретный документ, у
-    // демонстрационного — витрина. Обещание «данные обезличены
-    // (152-ФЗ)» убрали и отсюда: оно стояло в подвале и в этой
-    // строке, подтверждения ему в проекте нет, а решение по такой
+    // У каждого показателя назван конкретный документ. Обещание
+    // «данные обезличены (152-ФЗ)» убрали: оно стояло в подвале и в
+    // этой строке, подтверждения ему в проекте нет, а решение по такой
     // формулировке за владельцем.
     h += '<p class="muted" style="margin-top:10px">Источник: ' + esc(metricSourceNote(m)) + ".</p>";
     h += "<h3 style='margin:12px 0 6px'>Провенанс числа</h3>";
@@ -699,9 +689,8 @@ function updateStamp() {
           state.data = fresh;
           showToast("Данные перечитаны из базы", "ok");
         } else {
-          state.seed = (state.seed + 1) % 100000;
-          state.data = D.build(state.seed);
-          showToast("Демо-режим: сгенерирован новый срез витрины", "warn");
+          state.data = D.build();
+          showToast("Сервер не запущен: показаны значения из документов", "warn");
         }
         applyAlertsIndicators();
         renderDashboard();
@@ -729,8 +718,8 @@ $("btnExportPdf").addEventListener("click", function () {
   window.print();
 });
     $("btnExportXlsx").addEventListener("click", function () {
-      // Сервер собирает книгу из той же витрины, что и карточки
-      // (включая провенанс и пометку «демо») и отдаёт файлом.
+      // Сервер собирает книгу из той же витрины, что и карточки,
+      // включая провенанс каждого числа, и отдаёт файлом.
       window.location.href = "/api/export/xlsx";
       showToast("Excel собирается на сервере — начнётся загрузка файла", "ok");
     });
@@ -796,9 +785,9 @@ $("btnExportPdf").addEventListener("click", function () {
 // ---------- Роли ----------
   function applyRole() {
     var role = state.role;
-    var hint = role === "rector" ? "Ректор — полный доступ (демо-переключатель, реальных прав не даёт)"
-      : role === "prorector" ? "Проректор — финансовый блок скрыт (зона ответственности; демо-переключатель)"
-      : "Администратор — полный доступ + настройка порогов (демо-переключатель)";
+    var hint = role === "rector" ? "Ректор — полный доступ (вид по роли, права не проверяются)"
+      : role === "prorector" ? "Проректор — финансовый блок скрыт (зона ответственности; вид по роли)"
+      : "Администратор — полный доступ (вид по роли)";
     var el = document.createElement("div");
     el.className = "toast";
     el.textContent = "Роль: " + hint;
@@ -994,13 +983,13 @@ $("btnExportPdf").addEventListener("click", function () {
 
   // Числа из витрины показываются отдельным блоком, а не только текстом
   // ответа: их посчитал код по таблице, и человек должен видеть, откуда
-  // они взялись и что они демонстрационные.
+  // они взялись.
   function renderMetrics(m) {
     var met = m.metric;
     var h = '<div class="metrics-box">' +
       '<div class="metrics-head">' +
       '<span class="metrics-title">' + esc(met.title) + "</span>" +
-      '<span class="metrics-demo">' + esc(m.label || "демо-данные") + "</span>" +
+      '<span class="metrics-source">' + esc(m.label || "из документа") + "</span>" +
       "</div>";
 
     if (m.current !== null && m.current !== undefined) {
@@ -1150,9 +1139,8 @@ $("btnExportPdf").addEventListener("click", function () {
       h += '<details class="src-list"><summary>Источники (' +
         res.sources.length + ")</summary>";
       res.sources.forEach(function (s) {
-        var tag = s.is_demo ? " <span class='tag-demo'>демо</span>" : "";
         h += '<div class="src-item"><div class="src-head">' +
-          esc("[" + s.n + "] ") + esc(s.title) + tag +
+          esc("[" + s.n + "] ") + esc(s.title) +
           (s.heading ? '<span class="src-sec"> — ' + esc(s.heading) + "</span>" : "") +
           '</div><div class="src-file">' + esc(s.rel_path || "") + "</div>" +
           '<div class="src-snip">' + esc(s.snippet) + "</div></div>";
@@ -1192,10 +1180,10 @@ $("btnExportPdf").addEventListener("click", function () {
 
   // ---------- Подключение к локальному серверу ----------
   // Сервер поднимает start.bat. Если его нет (например, index.html
-  // открыли двойным кликом), дашборд продолжает работать на демо-данных
-  // и честно пишет об этом в шапке.
+  // открыли двойным кликом), дашборд продолжает работать на значениях
+  // из документов и честно пишет об этом в шапке.
   async function connectServer() {
-    if (!API) { setStatus({ demo: true }); return; }
+    if (!API) { setStatus({ offline: true }); return; }
     try {
       var h = await API.health();
       state.server = true;
@@ -1215,7 +1203,7 @@ $("btnExportPdf").addEventListener("click", function () {
       // в шапке. Теперь причина попадает и в консоль, и в подсказку.
       console.error("[dashboard] не удалось подключиться к серверу:", err);
       state.server = false;
-      setStatus({ demo: true, error: err && err.message });
+      setStatus({ offline: true, error: err && err.message });
     }
   }
 
@@ -1224,15 +1212,15 @@ $("btnExportPdf").addEventListener("click", function () {
     var el = $("sysStatus");
     if (!el) return;
     el.className = "sys-status";
-    if (h && h.demo) {
-      el.classList.add("is-demo");
+    if (h && h.offline) {
+      el.classList.add("is-offline");
       if (h.error) {
         // Сервер ответил, но с данными что-то не так — это не то же
         // самое, что «сервер не запущен».
         el.textContent = "ошибка данных: " + h.error;
         el.title = "Подробности в консоли браузера (F12 → Console)";
       } else {
-        el.textContent = "демо-режим · сервер не запущен";
+        el.textContent = "сервер не запущен · показаны значения из документов";
         el.title = "Откройте дашборд через start.bat — тогда заработает поиск по документам";
       }
       return;
@@ -1262,12 +1250,12 @@ $("btnExportPdf").addEventListener("click", function () {
     var el = $("aiStatus");
     if (!el) return;
     var o = (h && h.ollama) || {};
-    if (h && !h.demo && o.available && o.llm_installed) {
+    if (h && !h.offline && o.available && o.llm_installed) {
       el.textContent = "Онлайн · " + (o.llm_model || "модель");
       el.title = "Проверено по /api/health: Ollama отвечает, модель " +
         (o.llm_model || "") + " установлена";
       el.style.color = "";
-    } else if (h && !h.demo) {
+    } else if (h && !h.offline) {
       el.textContent = o.available ? "Модель не скачана" : "Модель недоступна";
       el.title = "Проверено по /api/health при загрузке страницы";
       el.style.color = "var(--red)";

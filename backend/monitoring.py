@@ -52,6 +52,9 @@ def load():
             if ind:
                 row["years"][year] = {
                     "value": ind["value"],
+                    "values": ind.get("values") or {},
+                    "delta_pct": ind.get("delta_pct"),
+                    "medians": ind.get("medians") or {},
                     "rank": ind["rank"],
                     "total": ind["total"],
                     "percentile": ind["percentile"],
@@ -65,10 +68,14 @@ def load():
         "source": raw.get("source"),
         "vuz": raw.get("vuz", {}),
         "axes": axes,
+        "e_axes": raw.get("e_axes") or axes,
+        "notes": raw.get("notes") or {},
         "years": {
             year: {
                 "total": raw["years"][year].get("total"),
                 "average_percentile": raw["years"][year].get("average_percentile"),
+                "values_years": raw["years"][year].get("years") or [],
+                "indicators": raw["years"][year].get("indicators") or {},
             }
             for year in years
         },
@@ -83,6 +90,51 @@ def load():
     }
     CACHE.update({"mtime": mtime, "data": data})
     return data
+
+
+def _board_path(name: str):
+    return config.ROOT / "knowledge" / "official" / "monitoring" / "source" / name
+
+
+def directions():
+    """Раздел III: результаты по направлениям деятельности (57 показателей).
+
+    Источник — iubip-directions.json, собранный backend.collect_monitoring
+    из карточки monitoring.miccedu.ru. Если файла нет, отдаём
+    available=false, а не пустые таблицы.
+    """
+    path = _board_path("iubip-directions.json")
+    if not path.exists():
+        return {"available": False, "sections": []}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        "available": True,
+        "source": raw.get("source"),
+        "release": raw.get("release"),
+        "vuz": raw.get("vuz", {}),
+        "sections": raw.get("sections") or [],
+    }
+
+
+def card():
+    """Разделы I и IV: общие сведения, контингент и УГН(С)."""
+    path = _board_path("iubip-card.json")
+    if not path.exists():
+        return {"available": False}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        "available": True,
+        "source": raw.get("source"),
+        "release": raw.get("release"),
+        "vuz": raw.get("vuz", {}),
+        "info": raw.get("info") or {},
+        "contingent": raw.get("contingent") or {},
+        "region": raw.get("region") or {},
+        "branches": raw.get("branches") or [],
+        "ugns": raw.get("ugns") or [],
+        "additional": raw.get("additional") or [],
+        "e_table": raw.get("e_table") or {},
+    }
 
 
 def spo():

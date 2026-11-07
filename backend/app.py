@@ -46,8 +46,9 @@ def conn():
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
         _conn = db.connect()
         db.init_db(_conn)
-        if not db.get_meta(_conn, "demo_seeded"):
-            db.seed_metrics(_conn)
+        # Витрина идемпотентна: вызов на старте заодно убирает
+        # демонстрационные метрики, оставшиеся от прежних версий.
+        db.seed_metrics(_conn)
         db.seed_divisions(_conn)
     return _conn
 
@@ -260,7 +261,6 @@ def health():
         "profile": profile,
         "hardware": hw,
         "last_ingest": db.get_meta(c, "last_ingest"),
-        "demo_notice": db.get_meta(c, "demo_data_notice"),
     }
 
 
@@ -332,7 +332,6 @@ def _answer_with_crew(question: str, mode: str, top_k):
          len(out["sources"]), out["latency_ms"]))
     c.commit()
 
-    out["demo_notice"] = db.get_meta(c, "demo_data_notice")
     return out
 
 
@@ -366,6 +365,22 @@ def monitoring_detail():
 def monitoring_spo():
     """СПО: показатели организации за 2024 и 2025, область и РФ, место."""
     return monitoring.spo()
+
+
+@app.get("/api/monitoring/directions")
+def monitoring_directions():
+    """Раздел III карточки: 57 показателей по направлениям деятельности.
+
+    Медианы на сайте показаны отношением «значение / медиана», поэтому
+    точное число восстановлено только там, где шкала не обрезана.
+    """
+    return monitoring.directions()
+
+
+@app.get("/api/monitoring/card")
+def monitoring_card():
+    """Разделы I и IV: общие сведения, контингент и УГН(С)."""
+    return monitoring.card()
 
 
 @app.get("/api/docs")
@@ -442,7 +457,6 @@ def _answer_question(question: str, top_k):
             "retrieved": len(chunks),
             "search": stats,
         },
-        "demo_notice": db.get_meta(c, "demo_data_notice"),
     }
 
 
@@ -746,7 +760,7 @@ def export_xlsx():
     ws.title = "Показатели"
     ws.append(["Блок", "Показатель", "Значение", "Единица", "Статус",
                "Цель", "Природа", "Подразделение", "Период", "Документ",
-               "Обновлено", "Демо"])
+               "Обновлено"])
     for m in vit["metrics"]:
         p0 = (m["prov"] or [{}])[0]
         ws.append([
@@ -756,12 +770,11 @@ def export_xlsx():
             m["unit"] or "",
             status_ru.get(m["status"], m["status"]),
             m["target"] if m["target"] is not None else "",
-            "официальный документ" if m["source"] == "official" else "демонстрационный",
+            "документ университета",
             p0.get("division", ""),
             p0.get("period", ""),
             p0.get("title", ""),
             p0.get("uploaded_at", ""),
-            "нет" if m["source"] == "official" else "да",
         ])
     ws.freeze_panes = "A2"
     journal.log(conn(), "export", detail=f"XLSX, {len(vit['metrics'])} показателей")

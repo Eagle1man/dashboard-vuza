@@ -119,9 +119,7 @@ MODELS_LARGE = ["qwen2.5:14b"]
 EMBED_TINY = ["nomic-embed-text"]
 EMBED_MEDIUM = ["bge-m3"]
 
-# Сид демонстрационных метрик. Тот же, что в web/js/data.js,
-# чтобы числа на экране и в базе совпадали.
-DEMO_SEED = 2026
+# Сид демонстрационных метрик больше не нужен: демо-ряды удалены.
 
 SUPPORTED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".md", ".txt",
                  ".html", ".htm", ".csv"}
@@ -138,5 +136,3 @@ SUM_TOLERANCE = float(os.environ.get("RECTOR_SUM_TOLERANCE", "0.01"))
 LOGIN_LIMIT_ON = os.environ.get("RECTOR_LOGIN_LIMIT", "1") != "0"
 LOGIN_MAX_ATTEMPTS = int(os.environ.get("RECTOR_LOGIN_MAX_ATTEMPTS", "5"))
 LOGIN_WINDOW_MIN = int(os.environ.get("RECTOR_LOGIN_WINDOW_MIN", "15"))
-
-DEMO_BANNER = "демонстрационные данные"

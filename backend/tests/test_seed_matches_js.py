@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Демо-цифры в базе должны совпадать с тем, что рисует браузер.
+"""Официальные числа в базе должны совпадать с тем, что рисует браузер.
 
-Зачем этот тест. Генератор в web/js/data.js детерминированный, и мы
-перенесли его в Python, чтобы база была единственным источником
-данных. Если две реализации разойдутся хотя бы на копейку в
-округлении, на экране и в ответах ИИ будут разные числа — и это
-будет выглядеть не как баг, а как «ну, демо-данные». Поэтому
-совпадение проверяется сравнением с реальным выводом Node.
+Зачем этот тест. В web/js/data.js лежит резерв для режима без сервера:
+если страницу открыли двойным кликом, числа берутся оттуда. Резерв
+обязан совпадать с базой, иначе в офлайне ректор увидит одно значение,
+а с сервером — другое, и подписать это будет нечем.
+
+Демонстрационных метрик в проекте больше нет: каждое число подписано
+документом. Тест заодно проверяет, что выдуманной истории не появилось.
 
 Запуск:  python -m backend.tests.test_seed_matches_js
 """
@@ -23,8 +24,7 @@ from backend.db import build_demo  # noqa: E402
 
 def dump_js():
     # encoding="utf-8" обязателен: без него на Windows Python декодирует
-    # вывод Node в cp1251 и падает на любой кириллице, а не «молча
-    # отдаёт мусор».
+    # вывод Node в cp1251 и падает на любой кириллице.
     out = subprocess.run(
         ["node", str(ROOT / "backend" / "tests" / "dump_js_values.js")],
         capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
@@ -38,21 +38,15 @@ def close(a, b, tol=1e-9):
 
 
 def main():
-    js_all = dump_js()
-    js = js_all["demo"]
-    js_official = js_all["official"]
-    all_metrics = build_demo()["metrics"]
-    # Сверяется слой ДЕМО: официальные числа приходят из базы, а не из
-    # генератора. В data.js они лежат отдельно — как резерв для режима
-    # без сервера, — и сверяются тоже, отдельной проверкой ниже.
-    py = [m for m in all_metrics if m["source"] == "demo"]
+    js = dump_js()["official"]
+    py = build_demo()["metrics"]
     failures = []
     checked = 0
 
-    official = [m for m in all_metrics if m["source"] == "official"]
-    if not official:
-        failures.append("в витрине нет ни одной официальной метрики")
-    for m in official:
+    for m in py:
+        if m["source"] != "official":
+            failures.append(f"{m['metric_id']}: в витрине осталась "
+                            f"демонстрационная метрика ({m['source']})")
         if m["has_history"]:
             failures.append(f"{m['metric_id']}: у официальной метрики "
                             f"не должно быть истории")
@@ -63,17 +57,15 @@ def main():
             failures.append(f"{m['metric_id']}: у официальной метрики не должно "
                             f"быть разбивки по кафедрам")
 
-    # Резерв в data.js обязан совпадать с базой: иначе без сервера
-    # ректор увидит одно число, а с сервером — другое, и подписать
-    # это будет нечем.
-    if len(js_official) != len(official):
-        failures.append(f"официальных метрик: js={len(js_official)} "
-                        f"python={len(official)}")
+    if len(js) != len(py):
+        failures.append(f"официальных метрик: js={len(js)} python={len(py)}")
     else:
-        for j, m in zip(js_official, official):
+        for j, m in zip(js, py):
             if j["id"] != m["metric_id"]:
-                failures.append(f"{j['id']}: порядок официальных метрик разошёлся")
+                failures.append(f"{j['id']}: порядок метрик разошёлся")
                 continue
+            if j["source"] != "official":
+                failures.append(f"{j['id']}: в data.js метрика не официальная")
             if j["current"] is None or not close(j["current"], m["current"]):
                 failures.append(f"{j['id']}: значение в data.js "
                                 f"js={j['current']} py={m['current']}")
@@ -82,52 +74,13 @@ def main():
                                 f"не должно быть истории")
             checked += 1
 
-    if len(js) != len(py):
-        raise SystemExit(f"метрик: js={len(js)}, python={len(py)}")
-
-    for j, p in zip(js, py):
-        mid = j["id"]
-        checked += 1
-        if mid != p["metric_id"]:
-            failures.append(f"{mid}: порядок метрик разошёлся ({p['metric_id']})")
-            continue
-        if j["series"] != p["series"]:
-            failures.append(f"{mid}: series\n  js={j['series']}\n  py={p['series']}")
-        if not close(j["current"], p["current"]):
-            failures.append(f"{mid}: current js={j['current']} py={p['current']}")
-        if j["status"] != p["status"]:
-            failures.append(f"{mid}: status js={j['status']} py={p['status']}")
-
-        for jd, pd in zip(j["dept"], p["dept"]):
-            if jd["deptId"] != pd["dept_id"]:
-                failures.append(f"{mid}: порядок подразделений разошёлся")
-            elif not close(jd["value"], pd["value"]):
-                failures.append(f"{mid}/{pd['dept_id']}: dept value "
-                                f"js={jd['value']} py={pd['value']}")
-
-        for jrows, prows in zip(j["drill"], [p["drill"][k] for k in sorted(p["drill"])]):
-            if len(jrows) != len(prows):
-                failures.append(f"{mid}: число записей drill-down разошлось "
-                                f"js={len(jrows)} py={len(prows)}")
-                continue
-            for jr, pr in zip(jrows, prows):
-                if jr["fio"] != pr["fio"]:
-                    failures.append(f"{mid}: ФИО js={jr['fio']!r} py={pr['fio']!r}")
-                if not close(jr["value"], pr["value"]):
-                    failures.append(f"{mid}: drill value js={jr['value']} py={pr['value']}")
-                if jr["reason"] != pr["reason"]:
-                    failures.append(f"{mid}: reason js={jr['reason']!r} py={pr['reason']!r}")
-
     if failures:
         print(f"НЕ СОВПАДАЕТ: расхождений {len(failures)} (проверено {checked} метрик)")
         for f in failures[:20]:
             print("  -", f)
         return 1
-    print(f"СОВПАДАЕТ: {checked} метрик (ряды, статусы, подразделения "
-          f"и все записи drill-down идентичны выводу Node; официальные "
-          f"значения в data.js совпадают с базой); "
-          f"{len(official)} официальных метрик проверены на отсутствие "
-          f"выдуманной истории")
+    print(f"СОВПАДАЕТ: {checked} официальных метрик (значения и отсутствие "
+          f"выдуманной истории); демонстрационных метрик нет")
     return 0
 
 

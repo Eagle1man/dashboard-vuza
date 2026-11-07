@@ -13,7 +13,6 @@
     periods: [],
     docs: [],
     health: null,
-    demo: false,
     query: "",
     block: "all",
     span: 13,
@@ -38,7 +37,7 @@
     none: { text: "без цели", cls: "bg-slate-100 text-slate-500", bar: "bg-slate-300", dot: "bg-slate-300" }
   };
 
-  var KPI_IDS = ["continuer-total", "income", "trudoustroystvo", "nagruzka-pps"];
+  var KPI_IDS = ["continuer-total", "income", "trudoustroystvo", "nir"];
 
   function $(id) { return document.getElementById(id); }
 
@@ -152,6 +151,29 @@
     });
     while (labels.length < series.length) labels.unshift("");
 
+    // Один период — рисовать нечего. Раньше на таком месте оставалась
+    // пустая сетка: она выглядела как сломанный график, а не как
+    // отсутствие истории. Честнее сказать это словами.
+    var canvas = $("trendChart");
+    var wrap = canvas.parentNode;
+    var empty = wrap.querySelector(".trend-empty");
+    if (series.length < 2) {
+      if (state.trend) { state.trend.destroy(); state.trend = null; }
+      canvas.style.display = "none";
+      if (!empty) {
+        empty = document.createElement("div");
+        empty.className = "trend-empty flex h-full items-center justify-center px-6 text-center text-sm text-slate-500";
+        wrap.appendChild(empty);
+      }
+      empty.textContent = "У показателя один период в документах — исторического ряда нет. " +
+        "График не рисуется, чтобы не показывать выдуманную динамику.";
+      $("chartTitle").textContent = m.title;
+      $("chartSubtitle").textContent = "один период · " + (m.unit || "значение");
+      return;
+    }
+    canvas.style.display = "";
+    if (empty) empty.remove();
+
     $("chartTitle").textContent = m.title;
     $("chartSubtitle").textContent = "по периодам · " + (m.unit || "значение") +
       (m.target ? " · цель " + num(m.target) : "");
@@ -209,21 +231,28 @@
     });
   }
 
-  // ---------- Источники: полукруг со счётчиком ----------
+  // ---------- Показатели по блокам: полукруг со счётчиком ----------
   function renderSources() {
-    var official = 0, demo = 0;
-    state.metrics.forEach(function (m) { if (m.source === "official") official++; else demo++; });
-    var total = official + demo;
+    var palette = ["#2563eb", "#0ea5e9", "#14b8a6", "#f59e0b", "#8b5cf6", "#ec4899", "#64748b"];
+    var counts = {};
+    state.blocks.forEach(function (b) { counts[b.id] = 0; });
+    state.metrics.forEach(function (m) {
+      if (counts[m.block] !== undefined) counts[m.block]++;
+    });
+    var rows = state.blocks.map(function (b, i) {
+      return { label: b.title, value: counts[b.id] || 0, color: palette[i % palette.length] };
+    });
+    var total = state.metrics.length;
     $("sourceTotal").textContent = num(total);
 
     if (state.sources) state.sources.destroy();
     state.sources = new Chart($("sourceChart"), {
       type: "doughnut",
       data: {
-        labels: ["Официальные документы", "Демонстрационные"],
+        labels: rows.map(function (r) { return r.label; }),
         datasets: [{
-          data: [official, demo],
-          backgroundColor: ["#2563eb", "#cbd5e1"],
+          data: rows.map(function (r) { return r.value; }),
+          backgroundColor: rows.map(function (r) { return r.color; }),
           borderColor: "#ffffff",
           borderWidth: 3,
           hoverOffset: 4
@@ -242,15 +271,11 @@
       }
     });
 
-    var rows = [
-      { label: "Официальные", color: "border-blue-600", value: official },
-      { label: "Демо", color: "border-slate-300", value: demo }
-    ];
     $("sourceLegend").innerHTML = rows.map(function (r) {
       var share = total ? Math.round((r.value / total) * 100) : 0;
-      return '<li class="border-l-2 pl-2.5 ' + r.color + '">' +
-        '<p class="text-[11px] uppercase tracking-[0.06em] text-slate-400">' + r.label + "</p>" +
-        '<p class="text-sm font-semibold tabular-nums text-slate-900">' + r.value + " <span class=\"text-xs font-medium text-slate-400\">" + share + "%</span></p>" +
+      return '<li class="border-l-2 pl-2.5" style="border-color:' + r.color + '">' +
+        '<p class="text-[11px] uppercase tracking-[0.06em] text-slate-400">' + esc(r.label) + "</p>" +
+        '<p class="text-sm font-semibold tabular-nums text-slate-900">' + r.value + ' <span class="text-xs font-medium text-slate-400">' + share + "%</span></p>" +
       "</li>";
     }).join("");
   }
@@ -460,7 +485,7 @@
         '<p class="mt-1.5 text-[11px] text-slate-400">' + num(raw) + "% от цели " + num(m.target) + "</p>";
     } else {
       progress = '<p class="mt-3 text-[11px] text-slate-400">' +
-        (m.source === "official" ? "официальный документ" : "демонстрационное значение") + "</p>";
+        (m.source === "official" ? "официальный документ" : "источник не указан") + "</p>";
     }
     return '<div class="rounded-xl border border-slate-100 p-4 transition-colors hover:border-slate-200 hover:bg-slate-50/60">' +
       '<div class="flex items-start justify-between gap-2">' +
@@ -510,9 +535,9 @@
 
   // ---------- Документы ----------
   function docBadge(isDemo) {
-    return isDemo
-      ? '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>демо</span>'
-      : '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>официальный</span>';
+    // Демонстрационных документов больше нет; параметр оставлен, чтобы
+    // не менять вызовы, но метка всегда одна — «в индексе».
+    return '<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>в индексе</span>';
   }
 
   function renderDocs() {
@@ -548,7 +573,6 @@
     $("todayLine").textContent = date.charAt(0).toUpperCase() + date.slice(1);
     $("subtitle").textContent = state.metrics.length + " показателей в " + state.blocks.length +
       " блоках · данные из витрины и документов";
-    $("demoBadge").hidden = !state.demo;
   }
 
   // ---------- События ----------
@@ -615,7 +639,6 @@
       state.metrics = metrics.metrics || [];
       state.blocks = metrics.blocks || [];
       state.periods = metrics.periods || [];
-      state.demo = !!metrics.demo;
       state.health = res[2];
 
       var docs = res[1] || {};

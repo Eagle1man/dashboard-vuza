@@ -330,7 +330,6 @@
       source: parts.join(" · "),
       sources: out.sources || [],
       charts: [],
-      demo: !!out.demo_notice,
       server: true,
       meta: meta
     };
@@ -365,7 +364,7 @@
   async function ask(question, data, ctx, signal) {
     // Приоритет 0: локальный сервер с корпусом документов (RAG).
     // Если сервер поднят, он и источник истины, и генератор ответа:
-    // документы вуза полезнее демо-цифр, которые всё равно выдуманы.
+    // ответ по документам вуза точнее встроенной аналитики.
     const api = global.DashboardAPI;
     if (api) {
       try {
@@ -382,7 +381,7 @@
         if (e && e.name === "AbortError") throw e;
         return {
           text: "⚠️ " + describeServerError(e) +
-            "\n\nНиже — встроенная аналитика по демо-данным.\n\n" +
+            "\n\nНиже — встроенная аналитика по витрине.\n\n" +
             answerLocal(question, data, ctx).text,
           source: "запасной режим (встроенная аналитика)",
           charts: answerLocal(question, data, ctx).charts

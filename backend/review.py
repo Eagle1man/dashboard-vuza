@@ -167,7 +167,7 @@ def _conflicts(conn, upload_id: int, card: dict,
         if ex.get("src_upload") and int(ex["src_upload"]) != upload_id:
             conflicts.append(item)
         else:
-            item["reason"] = ("демонстрационное значение" if ex.get("src_upload")
+            item["reason"] = ("значение вне загрузки" if ex.get("src_upload")
                               is None else "значение этой же загрузки")
             replaced.append(item)
     return conflicts, replaced

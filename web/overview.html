@@ -101,11 +101,6 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5">
-          <span id="demoBadge" hidden class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200/70">
-            <i data-lucide="info" class="h-3.5 w-3.5"></i>
-            демонстрационные данные
-          </span>
-
           <div class="relative">
             <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
             <input id="searchInput" type="search" placeholder="Найти показатель…"
@@ -142,12 +137,12 @@
 
         <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
           <div class="mb-1">
-            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Источники данных</h2>
-            <p class="mt-0.5 text-[13px] text-slate-500">Откуда взяты числа</p>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Показатели по блокам</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Сколько чисел в каждом блоке</p>
           </div>
 
           <div class="relative mx-auto mt-3 h-[150px] w-full max-w-[260px]">
-            <canvas id="sourceChart" aria-label="Кольцевая диаграмма источников данных" role="img"></canvas>
+            <canvas id="sourceChart" aria-label="Кольцевая диаграмма показателей по блокам" role="img"></canvas>
             <div class="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center">
               <span class="text-[26px] font-semibold leading-none tracking-display" id="sourceTotal">—</span>
               <span class="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">показателей</span>

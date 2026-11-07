@@ -251,35 +251,26 @@ def test_reformulate_keeps_terms():
           any("отчисл" in t for t in terms), str(terms))
 
 
-def test_metrics_tool_marks_demo():
-    """Инструмент чисел обязан сам помечать результат как демо-данные."""
+def test_metrics_tool_official_only():
+    """Инструмент чисел отвечает только по документам: демо-метрик нет."""
     from backend import db
     conn = db.connect()
     try:
-        r = tools.query("какая успеваемость студентов", conn)
-        count = tools.query("сколько публикаций в Scopus", conn)
         official = tools.query("сколько всего обучающихся в университете", conn)
+        removed = tools.query("какая успеваемость студентов", conn)
         junk = tools.query("какая погода в Ростове", conn)
     finally:
         conn.close()
-    check("инструмент нашёл показатель", r.get("ok") is True, str(r)[:80])
-    check("результат помечен как демонстрационный", r.get("demo") is True)
-    check("в тексте есть предупреждение", "демонстрационной" in r.get("notice", ""),
-          r.get("notice", ""))
-    # Разбивка по кафедрам есть только у счётных величин. У процента
-    # она бессмысленна: кафедра получила бы долю от процента, и
-    # «успеваемость 11,4 %» читалось бы как провал.
-    check("у процентного показателя разбивки нет",
-          len(r.get("by_org", [])) == 0, str(r.get("by_org"))[:80])
-    check("у счётного показателя разбивка получена",
-          len(count.get("by_org", [])) >= 5, str(count.get("by_org"))[:80])
-    # Официальный показатель: источник назван, демо-метки нет.
+    check("официальный показатель найден", official.get("ok") is True,
+          str(official)[:80])
     check("официальный показатель не помечен как демо",
           official.get("ok") is True and official.get("demo") is False,
           str(official.get("demo")))
     check("у официального показателя назван источник",
           "Отчёт о самообследовании" in (official.get("notice") or ""),
           str(official.get("notice"))[:100])
+    check("удалённая демо-метрика больше не находится",
+          removed.get("ok") is False, str(removed)[:80])
     check("посторонний вопрос честно отклонён", junk.get("ok") is False, str(junk))
 
 
@@ -308,7 +299,7 @@ def main():
                test_degraded_when_model_down,
                test_agent_without_documents_fails_honestly,
                test_judge_thresholds, test_reformulate_keeps_terms,
-               test_metrics_tool_marks_demo, test_metrics_sql_is_parameterised):
+               test_metrics_tool_official_only, test_metrics_sql_is_parameterised):
         fn()
     print()
     if FAILURES:

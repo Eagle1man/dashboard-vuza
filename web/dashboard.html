@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20261107-0203" />
+  <link rel="stylesheet" href="css/style.css?v=20261107-1510" />
 </head>
 <body>
   <aside class="app-side">
@@ -31,8 +31,8 @@
       <span id="searchBadge" class="search-badge" hidden></span>
     </div>
     <div class="header-controls">
-      <div class="role-switch" title="Демонстрация ролевого доступа: переключатель фильтрует блоки на этой странице и не даёт реальных прав">
-        <label for="roleSelect">Роль <span class="tag-demo">демо</span></label>
+      <div class="role-switch" title="Вид по роли: переключатель фильтрует блоки на этой странице; проверки прав нет">
+        <label for="roleSelect">Роль</label>
         <select id="roleSelect">
           <option value="rector">Ректор</option>
           <option value="prorector">Проректор</option>
@@ -51,7 +51,7 @@
           <p class="sub" id="updateStamp">Обновлено: —</p>
         </div>
         <div class="page-actions">
-          <button id="btnRefresh" class="btn btn-primary" title="Перечитать витрину показателей из базы сервера (в демо-режиме — сгенерировать новый срез). С внешними системами не синхронизирует — подключение внешних источников делает владелец.">⟳ Обновить показатели</button>
+          <button id="btnRefresh" class="btn btn-primary" title="Перечитать витрину показателей из базы сервера. С внешними системами не синхронизирует — подключение внешних источников делает владелец.">⟳ Обновить показатели</button>
           <button id="btnExportCsv" class="btn btn-outline" title="Экспорт сводки в CSV">⬇ CSV</button>
         </div>
       </div>
