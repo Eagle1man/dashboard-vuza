@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from backend import analytics  # noqa: E402
+from backend import config, crew, db, llm  # noqa: E402
 
 KB = ROOT / "knowledge" / "official" / "monitoring"
 
@@ -226,3 +227,39 @@ def test_renamed_university_is_found(conn):
                          "(г. Ростов-на-Дону)» в выпуске 2024?")
     assert data, "витрина не нашла вуз с дополненным названием"
     assert data["numbers"][0] == pytest.approx(70.92)
+
+
+# ------------------------------------------------- встраивание в экипаж
+
+def test_crew_keeps_calculated_numbers(conn, monkeypatch):
+    """Расчёт витрины доходит до ответа и не вырезается проверкой чисел.
+
+    Проверка чисел удаляет предложения с числами, которых нет в
+    контексте. Если расчёт не попал в контекст как фрагмент, верный ответ
+    с разницей был бы снят как выдуманный — это и проверяем здесь.
+    """
+    question = ("На сколько значение показателя «E.1 Средний балл ЕГЭ» "
+                "у ИУБиП отличается от значения у вуза «Федеральное "
+                "государственное автономное образовательное учреждение "
+                "высшего образования «Южный федеральный университет»» "
+                "в выпуске 2025?")
+    data = analytics.answer(conn, question)
+    assert data and data["kind"] == "compare_vuz", data
+
+    monkeypatch.setattr(analytics, "try_answer", lambda q: data)
+    monkeypatch.setattr(llm, "chat", lambda *a, **k: (
+        "Разница составляет -12.22 балла [1]. У ИУБиП 60.74, у вуза "
+        "сравнения 72.96 [1].", {"ok": True, "model": "stub"}))
+
+    dash = db.connect()
+    db.init_db(dash)
+    try:
+        out = crew.run(question, dash, mode="fast")
+    finally:
+        dash.close()
+
+    assert out["search"]["monitoring"]["code"] == "E1", out["search"]
+    assert "-12.22" in out["answer"], out["answer"]
+    report = out.get("grounding") or {}
+    assert not report.get("removed"), report
+    assert not report.get("unsupported_numbers"), report

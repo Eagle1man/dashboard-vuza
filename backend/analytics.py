@@ -149,11 +149,6 @@ def norm_num(raw: str) -> float | None:
         return None
 
 
-def _name_tokens(name: str) -> set:
-    return {t for t in norm_name(name).split()
-            if len(t) > 2 and t not in GENERIC_NAME_WORDS}
-
-
 def _clean_title(name: str) -> str:
     """Название показателя из источника: склеенное — разделить, длинное — сжать.
 
@@ -574,11 +569,6 @@ def find_vuz(conn, question: str, level: str = LEVEL_VO,
     return None
 
 
-def _year_in(question: str, default: int = 2025) -> int:
-    years = [int(y) for y in YEAR_RE.findall(question)]
-    return years[0] if years else default
-
-
 def _sources(conn, level, release, code):
     """Путь документа и заголовок — чтобы ответ ссылался на реальный файл."""
     if level == LEVEL_SPO:
@@ -840,6 +830,12 @@ def as_chunk(data) -> dict:
         "text": data["text"],
         "rel_path": src["rel_path"],
         "is_demo": False,
+        # Полный набор полей, как у фрагмента поиска: иначе интерфейс
+        # падает на списке источников (doc_type, score, found_by).
+        "doc_type": "monitoring",
+        "score": None,
+        "coverage": None,
+        "found_by": "analytics",
     }
 
 
