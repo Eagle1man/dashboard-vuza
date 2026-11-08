@@ -16,10 +16,10 @@
           fontFamily: {
             sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
           },
-          colors: { ink: "#0f1115", canvas: "#f7f8fa" },
+          colors: { ink: "#0f172a", canvas: "#faf8ff", brand: "#14b8a6", brandDark: "#0d9488" },
           boxShadow: {
-            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
-            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+            card: "0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
           },
           letterSpacing: { display: "-0.02em" },
         },
@@ -28,6 +28,8 @@
   </script>
   <link rel="stylesheet" href="css/vendor/golos.css" />
   <link rel="stylesheet" href="css/glass.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/redesign.css" />
   <script src="js/glass.js"></script>
   <script src="js/vendor/chart.umd.min.js"></script>
   <script src="js/vendor/lucide.min.js"></script>
@@ -112,7 +114,7 @@
             <i data-lucide="printer" class="h-4 w-4"></i>
             Печать / PDF
           </button>
-          <a href="dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
+          <a href="dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-card transition hover:bg-brandDark active:translate-y-px">
             <i data-lucide="sparkles" class="h-4 w-4"></i>
             Спросить ассистента
           </a>

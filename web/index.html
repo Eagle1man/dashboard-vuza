@@ -6,6 +6,8 @@
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
   <link rel="stylesheet" href="css/style.css?v=20261108-0307" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/redesign.css" />
   <style>
     /* ---------- Первый экран: лендинг-вход ----------
        Палитра дизайн-системы eagle1man: светлая azure-подложка днём,
@@ -32,7 +34,11 @@
       --land-shadow: 0 18px 44px rgba(6, 61, 107, .16);
       --land-shadow-hover: 0 26px 56px rgba(6, 61, 107, .22);
     }
-    html[data-theme="light"] {
+    /* Тёмная тема лендинга. Светлая — в :root выше.
+       Раньше здесь стоял селектор [data-theme="light"] с тёмными
+       значениями: страница с data-theme="light" открывалась тёмной,
+       а переключатель «День / Ночь» работал наоборот. */
+    html[data-theme="dark"] {
       --land-bg: linear-gradient(180deg, #0f0f0f 0%, #171717 100%);
       --land-fg: #f5f5f5;
       --land-fg-dim: #adadad;

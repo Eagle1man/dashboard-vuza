@@ -1,0 +1,140 @@
+/* tokens.css — дизайн-система «Executive Analytics Dashboard».
+
+   Источник: handoff из Google Stitch (design_tokens.tokens.json,
+   tokens.css, tailwind.tokens.config.js). Здесь токены приведены к
+   CSS-переменным дашборда: старые имена (--bg, --surface, --primary)
+   сохранены, иначе пришлось бы переписывать весь style.css.
+
+   Подключать ПОСЛЕ style.css и glass.css: одинаковые селекторы, но
+   этот файл идёт позже, поэтому его значения побеждают.
+*/
+
+@import url("vendor/inter.css");
+
+:root {
+  /* --- Шрифты --- */
+  --font-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* JetBrains Mono в проект не вложен: на чужих машинах останется
+     системный моноширинный, цифры всё равно выровнены tabular-nums. */
+  --font-numbers: "JetBrains Mono", "Roboto Mono", ui-monospace, Consolas, monospace;
+
+  /* --- Радиусы --- */
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-base: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* --- Отступы --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* --- Бренд --- */
+  --brand-primary: #14b8a6;
+  --brand-primary-dark: #0d9488;
+  --brand-primary-darker: #0f766e;
+  --brand-primary-light: #ccfbf1;
+  --brand-primary-lighter: #f0fdfa;
+
+  /* --- Поверхности --- */
+  --surface-base: #faf8ff;
+  --surface-dim: #d2d9f4;
+  --surface-lowest: #ffffff;
+  --surface-low: #f2f3ff;
+  --surface-container: #eceeff;
+  --surface-high: #e2e5f8;
+  --surface-dark: #0f172a;
+  --surface-dark-elevated: #1e293b;
+
+  /* --- Текст --- */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* --- Статусы --- */
+  --status-success: #10b981;
+  --status-success-bg: #ecfdf5;
+  --status-success-border: #a7f3d0;
+  --status-warning: #f59e0b;
+  --status-warning-bg: #fffbeb;
+  --status-warning-border: #fde68a;
+  --status-danger: #ef4444;
+  --status-danger-bg: #fef2f2;
+  --status-danger-border: #fecaca;
+  --status-info: #3b82f6;
+  --status-info-bg: #eff6ff;
+  --status-info-border: #bfdbfe;
+
+  /* --- Тени --- */
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, .05), 0 1px 2px -1px rgba(0, 0, 0, .05);
+  --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, .07), 0 2px 4px -2px rgba(0, 0, 0, .05);
+  --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, .08), 0 4px 6px -4px rgba(0, 0, 0, .04);
+
+  /* --- Совместимость со style.css --- */
+  --bg: var(--surface-base);
+  --surface: var(--surface-lowest);
+  --surface-2: var(--surface-low);
+  --surface-3: var(--surface-lowest);
+  --border: #e6e8f7;
+  --border-strong: var(--surface-dim);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --primary: var(--brand-primary);
+  --primary-hover: var(--brand-primary-dark);
+  --on-primary: var(--text-inverse);
+  --navy: var(--surface-dark);
+  --navy-deep: var(--surface-dark);
+  --azure-soft: var(--brand-primary-lighter);
+  --amber: var(--status-warning);
+  --amber-soft: var(--status-warning-bg);
+  --amber-deep: #b45309;
+  --green: var(--status-success);
+  --yellow: var(--status-warning);
+  --red: var(--status-danger);
+  --shadow: var(--shadow-card);
+  --shadow-lg: var(--shadow-elevated);
+  --r-control: var(--radius-base);
+  --r-card: var(--radius-lg);
+  --r-pill: var(--radius-full);
+  --font-display: var(--font-base);
+  --fab-bg: var(--brand-primary);
+  --fab-fg: var(--text-inverse);
+  --fab-shadow: 0 10px 24px rgba(20, 184, 166, .35);
+}
+
+/* Тёмная тема. Специфичность у [data-theme="dark"] и :root одинаковая,
+   поэтому порядок важен: этот блок идёт после :root и побеждает. */
+[data-theme="dark"] {
+  --bg: #08090d;
+  --surface: #0f172a;
+  --surface-2: #1e293b;
+  --surface-3: #0f172a;
+  --border: #253045;
+  --border-strong: #334155;
+  --text: #e5edf7;
+  --muted: #94a3b8;
+  --primary: #2dd4bf;
+  --primary-hover: #14b8a6;
+  --on-primary: #04211d;
+  --navy: #0f172a;
+  --navy-deep: #ffffff;
+  --azure-soft: #1e293b;
+  --amber: #f59e0b;
+  --amber-soft: #2a2417;
+  --amber-deep: #fbbf24;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --shadow: none;
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, .6);
+  --fab-bg: #14b8a6;
+  --fab-fg: #04211d;
+  --fab-shadow: 0 10px 26px rgba(20, 184, 166, .45);
+}

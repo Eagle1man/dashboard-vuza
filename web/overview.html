@@ -14,15 +14,17 @@
             sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
           },
           colors: {
-            ink: "#0f1115",
-            canvas: "#f7f8fa",
+            ink: "#0f172a",
+            canvas: "#faf8ff",
+            brand: "#14b8a6",
+            brandDark: "#0d9488",
           },
           // Тени из Mosaic: контурная 1px + мягкая 2px, прозрачность 0.08.
           // Одна размытая тень выглядит как грязь, две дают глубину.
           boxShadow: {
-            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
-            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
-            pop: "0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.01)",
+            card: "0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+            pop: "0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04)",
           },
           letterSpacing: {
             display: "-0.02em",
@@ -33,6 +35,8 @@
   </script>
   <link rel="stylesheet" href="/css/vendor/golos.css" />
   <link rel="stylesheet" href="/css/glass.css" />
+  <link rel="stylesheet" href="/css/tokens.css" />
+  <link rel="stylesheet" href="/css/redesign.css" />
   <script src="/js/glass.js"></script>
   <script src="/js/vendor/chart.umd.min.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
@@ -43,8 +47,8 @@
       border-radius: 14px;
       padding: 10px 10px 9px;
       background:
-        radial-gradient(120% 100% at 20% 0%, rgba(45, 212, 191, .14) 0%, transparent 55%),
-        linear-gradient(155deg, #0b1220 0%, #0f1f2e 55%, #0d2f2b 100%);
+        radial-gradient(120% 100% at 20% 0%, rgba(20, 184, 166, .18) 0%, transparent 58%),
+        linear-gradient(155deg, #0f172a 0%, #131f34 55%, #123c39 100%);
       border: 1px solid rgba(148, 163, 184, .22);
       box-shadow: 0 14px 30px -20px rgba(2, 6, 23, .9),
                   inset 0 1px 0 rgba(255, 255, 255, .06);
@@ -146,7 +150,7 @@
                    class="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 shadow-card outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:w-[260px]" />
           </div>
 
-          <a href="/dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
+          <a href="/dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-card transition hover:bg-brandDark active:translate-y-px">
             <i data-lucide="sparkles" class="h-4 w-4"></i>
             Ассистент
           </a>

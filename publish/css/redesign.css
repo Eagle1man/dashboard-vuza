@@ -1,0 +1,195 @@
+/* redesign.css — оформление по дизайн-системе Stitch.
+
+   Тонкий слой поверх style.css: меняет только вид, не разметку.
+   Всё, что задаёт структуру (сетки, отступы блоков), остаётся в style.css.
+   Откат — убрать один <link> на эту страницу.
+*/
+
+/* ---------- Полотно и типографика ---------- */
+body {
+  font-family: var(--font-base);
+  background-image:
+    radial-gradient(900px 420px at 100% -8%, rgba(20, 184, 166, .07), transparent 62%),
+    radial-gradient(700px 380px at -10% 110%, rgba(59, 130, 246, .05), transparent 60%);
+  background-attachment: fixed;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-base);
+  letter-spacing: -.02em;
+}
+
+/* Числа: моноширинный для крупных значений и таблиц, tabular везде. */
+.metric-cell .value,
+.kpi-value {
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+}
+.legend-value,
+.data td,
+.data th,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Боковой рейл ---------- */
+.app-side {
+  background: var(--surface-dark);
+  border-right: 1px solid rgba(148, 163, 184, .14);
+}
+.app-side .brand-name { color: #f1f5f9; }
+.side-link {
+  color: #94a3b8;
+  border-radius: var(--radius-base);
+}
+.side-link:hover {
+  background: rgba(255, 255, 255, .06);
+  color: #e2e8f0;
+}
+.side-link.on {
+  background: rgba(20, 184, 166, .16);
+  color: #5eead4;
+}
+
+/* ---------- Верхняя панель ---------- */
+.app-top {
+  background: rgba(250, 248, 255, .86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.search-wrap input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, .18);
+}
+.search-badge { background: var(--brand-primary); }
+
+/* ---------- Карточки ---------- */
+.section-card,
+.widget-block,
+.filter-bar,
+.metric-cell {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.section-card:hover,
+.widget-block:hover,
+.metric-cell:hover {
+  box-shadow: var(--shadow-hover);
+}
+.chart-panel {
+  background: var(--surface-low);
+  border-radius: var(--radius-md);
+}
+
+/* ---------- Кнопки и поля ---------- */
+.btn {
+  border-radius: var(--radius-base);
+  font-weight: 600;
+}
+.btn-primary {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--brand-primary-dark);
+  border-color: var(--brand-primary-dark);
+}
+.btn:focus-visible,
+.btn-outline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, .28);
+}
+select:focus,
+input:focus {
+  outline: none;
+}
+
+/* ---------- Таблицы ---------- */
+.data th {
+  background: var(--surface-low);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.data tr:hover td {
+  background: var(--brand-primary-lighter);
+}
+
+/* ---------- Статусные пилюли ---------- */
+.status-green {
+  background: var(--status-success-bg);
+  color: #047857;
+  box-shadow: inset 0 0 0 1px var(--status-success-border);
+}
+.status-yellow {
+  background: var(--status-warning-bg);
+  color: #b45309;
+  box-shadow: inset 0 0 0 1px var(--status-warning-border);
+}
+.status-red {
+  background: var(--status-danger-bg);
+  color: #b91c1c;
+  box-shadow: inset 0 0 0 1px var(--status-danger-border);
+}
+
+/* ---------- Системный статус ---------- */
+.sys-status.is-ok {
+  border-color: var(--status-success-border);
+  color: #047857;
+  background: var(--status-success-bg);
+}
+.sys-status.is-warn {
+  border-color: var(--status-warning-border);
+  color: #b45309;
+  background: var(--status-warning-bg);
+}
+.sys-status.is-offline {
+  border-color: var(--status-danger-border);
+  color: #b91c1c;
+  background: var(--status-danger-bg);
+}
+
+/* ---------- Ассистент ---------- */
+.ai-panel {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-elevated);
+}
+.ai-header { background: var(--surface-low); }
+.ai-fab {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-dark));
+  box-shadow: var(--fab-shadow);
+}
+.ai-fab:hover { filter: brightness(1.06); }
+.ai-input input:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, .18);
+}
+.ai-msg .ai-bubble { border-radius: var(--radius-md); }
+
+/* ---------- Тёмные радар-карточки ---------- */
+.mini-radar-card { border-radius: var(--radius-lg); }
+
+/* ---------- Тосты ---------- */
+.toast { border-radius: var(--radius-md); }
+
+/* ---------- Скроллбар ---------- */
+* {
+  scrollbar-color: var(--surface-dim) transparent;
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--surface-dim);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #b9c2e6; background-clip: content-box; }
+
+/* ---------- Тёмная тема ---------- */
+[data-theme="dark"] body { background-image: none; }
+[data-theme="dark"] .app-top { background: rgba(8, 9, 13, .82); }
+[data-theme="dark"] .chart-panel { background: var(--surface-2); }
+[data-theme="dark"] .data th { background: var(--surface-2); }
+[data-theme="dark"] .data tr:hover td { background: rgba(20, 184, 166, .08); }
