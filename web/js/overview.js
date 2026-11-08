@@ -142,6 +142,7 @@
   }
 
   function renderTrend() {
+    if (!$("trendChart")) return;
     var m = trendMetric();
     if (!m) return;
 
@@ -1201,6 +1202,218 @@
       "средний балл ЕГЭ принятых, НПР с учёными степенями и численность НПР (знаменатель E.2 и E.4).</p>";
   }
 
+  // ---------- Мини-радары по разделам ----------
+  var MINI_CHARTS = [];
+
+  function miniBlockItems() {
+    var items = [{ id: "all", title: "Все блоки" }];
+    var blocks = (state.blocks || []).slice();
+    var spo = { id: "spo", title: "СПО" };
+    var digital = -1;
+    blocks.forEach(function (b, i) { if (b.id === "digital") digital = i; });
+    if (digital >= 0) blocks.splice(digital, 0, spo); else blocks.push(spo);
+    return items.concat(blocks);
+  }
+
+  function eRadarData() {
+    var data = state.monitoring;
+    if (!data || !data.available || !data.years) return null;
+    var years = Object.keys(data.years).sort();
+    var inds = (data.years[years[years.length - 1]] || {}).indicators || {};
+    var codes = ["E1", "E2", "E3", "E4", "E8"].filter(function (c) { return inds[c]; });
+    var labels = [], vuz = [], compare = [], region = [];
+    codes.forEach(function (code) {
+      var ind = inds[code];
+      var med = ind.medians || {};
+      var reg = med.region;
+      var rf = med.rf;
+      var ratio = (reg !== null && reg !== undefined && reg > 0)
+        ? Math.min(2, ind.value / reg) : null;
+      labels.push(code.replace("E", "E."));
+      vuz.push(ratio);
+      compare.push((rf !== null && rf !== undefined && reg > 0) ? Math.min(2, rf / reg) : null);
+      region.push(ratio !== null ? 1 : null);
+    });
+    return { labels: labels, vuz: vuz, compare: compare, region: region, compareLabel: "Медиана РФ" };
+  }
+
+  function blockRadarData(blockId) {
+    var codes = BLOCK_MONITORING_CODES[blockId] || [];
+    var map = directionIndex();
+    var labels = [], vuz = [], compare = [], region = [];
+    codes.forEach(function (code) {
+      var entry = map[code];
+      if (!entry) return;
+      var ind = entry.ind;
+      var reg = ind.median_region;
+      var ratio = (reg !== null && reg !== undefined && reg > 0 && ind.median_region_ratio > 0)
+        ? Math.min(2, ind.median_region_ratio) : null;
+      var priv = (ind.median_private !== null && ind.median_private !== undefined &&
+                  reg !== null && reg !== undefined && reg > 0)
+        ? Math.min(2, ind.median_private / reg) : null;
+      labels.push(code);
+      vuz.push(ratio);
+      compare.push(priv);
+      region.push(ratio !== null ? 1 : null);
+    });
+    return labels.length
+      ? { labels: labels, vuz: vuz, compare: compare, region: region, compareLabel: "Медиана частных" }
+      : null;
+  }
+
+  function spoRadarData() {
+    var data = state.spo;
+    if (!data || !data.available || !data.rows || !data.rows.length) return null;
+    var years = data.years || [];
+    var last = years.length ? years[years.length - 1] : null;
+    var sections = (data.sections || []).slice();
+    if (!sections.length) {
+      sections = ["1", "2", "3", "4", "5", "6", "7"].map(function (code) {
+        return { code: code };
+      });
+    }
+    var labels = [], vuz = [], compare = [], region = [];
+    sections.forEach(function (section) {
+      var rows = data.rows.filter(function (r) {
+        return String(r.code).split(".")[0] === section.code;
+      });
+      var vr = [], cr = [];
+      rows.forEach(function (row) {
+        var b = (row.years && row.years[last]) || {};
+        if (b.org !== null && b.org !== undefined && b.region > 0) {
+          vr.push(Math.min(2, b.org / b.region));
+        }
+        if (b.rf !== null && b.rf !== undefined && b.region > 0) {
+          cr.push(Math.min(2, b.rf / b.region));
+        }
+      });
+      if (!vr.length) return;
+      labels.push(section.code);
+      vuz.push(vr.reduce(function (a, b) { return a + b; }, 0) / vr.length);
+      compare.push(cr.length ? cr.reduce(function (a, b) { return a + b; }, 0) / cr.length : null);
+      region.push(1);
+    });
+    return labels.length
+      ? { labels: labels, vuz: vuz, compare: compare, region: region, compareLabel: "Медиана РФ" }
+      : null;
+  }
+
+  function miniRadarConfig(data) {
+    return {
+      type: "radar",
+      data: {
+        labels: data.labels,
+        datasets: [
+          {
+            label: "ИУБиП",
+            data: data.vuz,
+            borderColor: "#0f766e",
+            backgroundColor: "rgba(15,118,110,.18)",
+            borderWidth: 2.2,
+            pointRadius: 2.2,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: "#0f766e",
+            pointBorderWidth: 1.5,
+            fill: true
+          },
+          {
+            label: data.compareLabel || "Медиана сравнения",
+            data: data.compare,
+            borderColor: "#1e3a8a",
+            borderDash: [4, 3],
+            borderWidth: 1.1,
+            pointRadius: 0,
+            fill: false
+          },
+          {
+            label: "Медиана региона",
+            data: data.region,
+            borderColor: "#92400e",
+            borderDash: [2, 2],
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#0f172a",
+            padding: 7,
+            cornerRadius: 7,
+            callbacks: {
+              label: function (ctx) {
+                var v = ctx.parsed.r;
+                if (v === null || v === undefined) return ctx.dataset.label + ": нет сравнения";
+                return ctx.dataset.label + ": ×" + Number(v).toFixed(2);
+              }
+            }
+          }
+        },
+        scales: {
+          r: {
+            min: 0,
+            max: 2,
+            ticks: { display: false },
+            grid: { color: "#e2e8f0" },
+            angleLines: { color: "#e2e8f0" },
+            pointLabels: {
+              display: data.labels.length <= 8,
+              color: "#334155",
+              font: { size: 7, family: "'Golos Text', Inter, sans-serif" }
+            }
+          }
+        }
+      }
+    };
+  }
+
+  function renderMiniRadars() {
+    var box = $("miniRadars");
+    if (!box) return;
+    function plural(n, one, few, many) {
+      var a = Math.abs(n) % 100, b = a % 10;
+      if (a > 10 && a < 20) return many;
+      if (b > 1 && b < 5) return few;
+      if (b === 1) return one;
+      return many;
+    }
+    MINI_CHARTS.forEach(function (chart) { chart.destroy(); });
+    MINI_CHARTS = [];
+    var items = miniBlockItems();
+    box.innerHTML = items.map(function (item) {
+      return '<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2">' +
+        '<p class="truncate text-[10.5px] font-semibold text-slate-800" title="' + esc(item.title) + '">' + esc(item.title) + "</p>" +
+        '<div style="position:relative;height:132px"><canvas id="miniRadar-' + item.id + '" role="img" aria-label="' + esc(item.title) + '"></canvas></div>' +
+        '<p class="mt-1 text-[9.5px] leading-tight text-slate-500" id="miniRadarNote-' + item.id + '">—</p>' +
+      "</div>";
+    }).join("");
+    $("miniRadarsTotal").textContent = items.length + " разделов";
+    items.forEach(function (item) {
+      var data = item.id === "all" ? eRadarData()
+        : item.id === "spo" ? spoRadarData()
+        : blockRadarData(item.id);
+      var note = $("miniRadarNote-" + item.id);
+      if (!data) {
+        if (note) note.textContent = "нет данных мониторинга";
+        return;
+      }
+      if (note) {
+        note.textContent = item.id === "spo"
+          ? data.labels.length + " разделов · среднее к медиане региона"
+          : data.labels.length + " " + plural(data.labels.length, "показатель", "показателя", "показателей") +
+            " · к медиане региона";
+      }
+      var canvas = $("miniRadar-" + item.id);
+      if (canvas) MINI_CHARTS.push(new Chart(canvas, miniRadarConfig(data)));
+    });
+  }
+
   // ---------- Блоки ----------
   function matches(metric) {
     if (state.block !== "all" && metric.block !== state.block) return false;
@@ -1392,6 +1605,7 @@
       renderSources();
       renderMonitoring();
       renderMonitoringLinks();
+      renderMiniRadars();
       renderGoals();
       renderBlocks();
       lucide.createIcons();
