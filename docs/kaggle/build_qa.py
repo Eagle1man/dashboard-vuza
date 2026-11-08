@@ -99,6 +99,11 @@ def context_text(chunks):
     return llm.build_context(chunks)
 
 
+def held_out(key, total, count):
+    bucket = int(hashlib.sha1(key.encode("utf-8")).hexdigest()[:8], 16)
+    return bucket % total < count
+
+
 def add(task, question, answer, chunks, expected_paths,
         expected_value=None, operands=None, source="", refusal_kind=None,
         split=None):
@@ -320,6 +325,11 @@ for card in sorted((KB / "by-vuz").glob("*.md")):
         taken += 1
 
 # ---------- 4. Отказы ----------------------------------------------------
+# Первый прогон показал: 5% отказов в train недостаточно — адаптер
+# выучивает «всегда отвечать числом» и игнорирует правило 3 промпта.
+# Цель: ~25% отказов в train, с акцентом на главный провал — контекст
+# содержит число за другой год, вопрос спрашивает не тот год.
+
 _, facts_2025 = detail_facts("2025")
 refusal_context = [chunk("ИУБиП, выпуск 2025", "",
                          f["line"]) for f in facts_2025[:6]]
@@ -330,9 +340,19 @@ absent_questions = [
     "Какое место занял ИУБиП в рейтинге QS в 2025 году?",
     "Сколько иностранных студентов из Китая обучается в ИУБиП?",
     "Каков средний балл ЕГЭ у ИУБиП в 2026 году?",
+    "Сколько публикаций в Web of Science у ИУБиП в 2025 году?",
+    "Какой индекс Хирша у ИУБиП в 2025 году?",
+    "Сколько мест в общежитии у ИУБиП?",
+    "Какое место занял ИУБиП в рейтинге THE в 2025 году?",
+    "Каков бюджет ИУБиП на 2026 год?",
+    "Сколько аспирантов защитило диссертации в ИУБиП в 2025 году?",
+    "Сколько договоров о целевом обучении заключил ИУБиП в 2025 году?",
+    "Какова средняя зарплата выпускников ИУБиП через год после выпуска?",
+    "Сколько студентов из Индии обучается в ИУБиП?",
+    "Каков проходной балл на юриспруденцию в ИУБиП в 2026 году?",
+    "Сколько студентов учится в ИУБиП в 2028 году?",
+    "Какое значение показателя трудоустройства выпускников ИУБиП в 2027 году?",
 ]
-# Разносим по всем частям: вопрос «данных нет» не зависит от содержания
-# документа, поэтому его можно проверять в test, не открывая ответ.
 for i, question in enumerate(absent_questions):
     add("refusal", question, NO_ANSWER, refusal_context,
         ["official/monitoring/2025-iubip.md"], refusal_kind="absent_data",
@@ -349,8 +369,7 @@ for f in facts_2024[:20]:
         ["official/monitoring/2024-iubip.md"],
         refusal_kind="year_mismatch",
     )
-# И зеркально: в контексте 2025, спрашиваем про 2024. Без симметрии
-# модель выучивает «вопрос про 2025 = отказ», а не «нет факта — отказ».
+# Зеркально: контекст 2025, вопрос про 2024.
 for f in facts_2025[:20]:
     add(
         "refusal",
@@ -358,6 +377,29 @@ for f in facts_2025[:20]:
         NO_ANSWER,
         [chunk("ИУБиП, выпуск 2025", "", f["line"])],
         ["official/monitoring/2025-iubip.md"],
+        refusal_kind="year_mismatch",
+    )
+# Будущий/прошлый год при наличии реального контекста — именно это
+# сломало адаптер в замере (вопрос про 2027 → число за 2025).
+for f in facts_2025[:18]:
+    for year in ("2026", "2027"):
+        add(
+            "refusal",
+            f"Какое значение показателя «{f['title']}» у ИУБиП в {year} году?",
+            NO_ANSWER,
+            [chunk("ИУБиП, выпуск 2025", "", f["line"])],
+            ["official/monitoring/2025-iubip.md"],
+            refusal_kind="year_mismatch",
+            split="train" if year == "2026" else ("train", "test")[
+                held_out("ref-future:" + f["title"], 10, 2)],
+        )
+for f in facts_2024[:12]:
+    add(
+        "refusal",
+        f"Какое значение показателя «{f['title']}» у ИУБиП в 2026 году?",
+        NO_ANSWER,
+        [chunk("ИУБиП, выпуск 2024", "", f["line"])],
+        ["official/monitoring/2024-iubip.md"],
         refusal_kind="year_mismatch",
     )
 
@@ -378,9 +420,9 @@ def region_rows(year, limit):
     return title, out[:limit]
 
 
-# test: контекст 2025, вопрос про 2024 — модель обязана отказать.
-title_25, rows_25 = region_rows("2025", 5)
-for r in rows_25:
+# test: контекст 2025, вопрос про 2024/2026 — модель обязана отказать.
+title_25, rows_25 = region_rows("2025", 12)
+for r in rows_25[:5]:
     add("refusal",
         f"Какое значение показателя «{r['section']}» у вуза «{r['name']}» "
         f"в выпуске 2024?",
@@ -388,6 +430,15 @@ for r in rows_25:
         [chunk(title_25, r["section"], r["line"])],
         ["official/monitoring/region-2025.md"],
         refusal_kind="year_mismatch")
+for r in rows_25[5:12]:
+    add("refusal",
+        f"Какое значение показателя «{r['section']}» у вуза «{r['name']}» "
+        f"в выпуске 2026?",
+        NO_ANSWER,
+        [chunk(title_25, r["section"], r["line"])],
+        ["official/monitoring/region-2025.md"],
+        refusal_kind="year_mismatch",
+        split="test" if held_out("ref-reg26:" + r["name"], 10, 3) else "train")
 
 # dev: контекст 2024, вопрос про 2025.
 title_24, rows_24 = region_rows("2024", 5)
@@ -399,6 +450,40 @@ for r in rows_24:
         [chunk(title_24, r["section"], r["line"])],
         ["official/monitoring/region-2024.md"],
         refusal_kind="year_mismatch")
+
+# Чужой вуз в контексте, вопрос про «нас/ИУБиП» — нельзя подставлять
+# чужое число (правило 5.1 промпта).
+title_25b, rows_25b = region_rows("2025", 40)
+for r in rows_25b[12:32]:
+    add("refusal",
+        f"Какое значение показателя «{r['section']}» у ИУБиП в выпуске 2025?",
+        NO_ANSWER,
+        [chunk(title_25b, r["section"], r["line"])],
+        ["official/monitoring/region-2025.md"],
+        refusal_kind="wrong_org",
+        split="train" if not held_out("ref-org:" + r["name"] + r["section"], 10, 2)
+        else "test")
+
+# Показатель не в фрагменте: контекст про один E, вопрос про другой.
+e_pairs = [
+    ("E.1. Образовательная деятельность", "E.8. Дополнительный показатель"),
+    ("E.2. Научно-исследовательская деятельность", "E.1. Образовательная деятельность"),
+    ("E.3. Международная деятельность", "E.4. Финансово-экономическая деятельность"),
+    ("E.4. Финансово-экономическая деятельность", "E.2. Научно-исследовательская деятельность"),
+    ("E.8. Дополнительный показатель", "E.3. Международная деятельность"),
+]
+for i, (ctx_section, asked) in enumerate(e_pairs):
+    row = next((r for r in rows_25b if r["section"] == ctx_section), None)
+    if not row:
+        continue
+    add("refusal",
+        f"Какое значение показателя «{asked}» у вуза «{row['name']}» "
+        f"в выпуске 2025?",
+        NO_ANSWER,
+        [chunk(title_25b, row["section"], row["line"])],
+        ["official/monitoring/region-2025.md"],
+        refusal_kind="missing_indicator",
+        split=("train", "dev", "test")[i % 3])
 
 # ---------- 5. Структура базы -------------------------------------------
 summary = (KB / "summary.md").read_text(encoding="utf-8")
@@ -710,6 +795,62 @@ for fact in store_facts:
         expected_value=value,
         source="мониторинг, E-показатели, выпуск 2025",
         split="test")
+
+# 6.5. Отказы по структурированным фактам: год не тот, но число рядом.
+# Это главный провал первого прогона — адаптер брал число из контекста.
+for fact in store_facts:
+    if not (fact["level"] == "VO" and fact["release"] == 2025
+            and fact.get("section") == "III" and fact.get("org_id") == "1971"
+            and fact.get("kind") == "value"):
+        continue
+    code, title = fact["code"], fact["title"]
+    value, unit = fact.get("value_text"), fact.get("unit") or ""
+    text = f"{code}. {title} — {value} {unit}".strip()
+    for year in ("2026", "2027", "2024"):
+        add("refusal",
+            f"Какое значение показателя «{title}» у ИУБиП в {year} году?",
+            NO_ANSWER,
+            [chunk("ИУБиП, выпуск 2025: направления деятельности",
+                   fact.get("block") or "", text)],
+            ["official/monitoring/2025-directions.md"],
+            refusal_kind="year_mismatch",
+            split="test" if (year == "2027" and held_out("ref-dir27:" + code, 10, 2))
+            else "train")
+
+for fact in store_facts:
+    if not (fact["level"] == "SPO" and fact["release"] == 2025
+            and fact.get("org_id") == "1971"
+            and re.fullmatch(r"\d+\.\d+", str(fact.get("code") or ""))):
+        continue
+    code, title = fact["code"], fact["title"]
+    value, unit = fact.get("value_text"), fact.get("unit") or ""
+    text = f"{code}. {title} — {value} {unit}"
+    for year in ("2026", "2027", "2024"):
+        add("refusal",
+            f"Какое значение показателя «{title}» у ИУБиП в СПО в {year} году?",
+            NO_ANSWER,
+            [chunk("ИУБиП, СПО, выпуск 2025", fact.get("block") or "", text)],
+            ["official/monitoring/spo/2025-iubip.md"],
+            refusal_kind="year_mismatch",
+            split="test" if (year == "2026" and held_out("ref-spo26:" + code, 10, 2))
+            else "train")
+
+for fact in store_facts:
+    if not (fact["level"] == "VO" and fact["release"] == 2025
+            and fact.get("section") == "II" and fact.get("org_id") == "1971"
+            and fact.get("kind") == "value" and fact.get("year") == 2025):
+        continue
+    title, value, unit = fact["title"], fact.get("value_text"), fact.get("unit") or ""
+    text = f"{title} — {value} {unit}"
+    for year in ("2026", "2027", "2024"):
+        add("refusal",
+            f"Какое значение показателя «{title}» у ИУБиП в {year} году?",
+            NO_ANSWER,
+            [chunk("ИУБиП, выпуск 2025: E-показатели",
+                   "Показатели мониторинга эффективности", text)],
+            ["official/monitoring/region-2025.md"],
+            refusal_kind="year_mismatch",
+            split="train" if year != "2027" else "test")
 
 # ---------- запись -------------------------------------------------------
 OUT_EVAL.mkdir(parents=True, exist_ok=True)

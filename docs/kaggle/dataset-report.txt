@@ -1,10 +1,10 @@
 СБОРКА ВОПРОСОВ И ДАТАСЕТА
 
-train: 829 — comparison 54, extraction 731, refusal 42, structure 2
-dev: 182 — comparison 15, extraction 160, refusal 7
-test: 207 — comparison 18, extraction 182, refusal 7
+train: 1130 — comparison 54, extraction 731, refusal 343, structure 2
+dev: 186 — comparison 15, extraction 160, refusal 11
+test: 235 — comparison 18, extraction 182, refusal 35
 
-всего вопросов: 1218
+всего вопросов: 1551
 held-out внутри документов: 8 показателей направлений и 4 показателя СПО (только test)
 отброшено проверкой «есть во фрагменте»: 0
 

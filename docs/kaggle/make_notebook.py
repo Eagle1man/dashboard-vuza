@@ -40,11 +40,10 @@ md("""# QLoRA для ассистента ректора (Qwen2.5-14B)
 каждый год, а проверяемость важнее памяти. LoRA учит формат ответа,
 ссылку на источник и отказ, когда данных нет; сами числа остаются в RAG.
 
-**Что изменилось после замера.** Вопросы и ответы теперь в боевом
-формате (`prompts.SYSTEM`, ссылки `[1]`), данные разделены по документам
-(829 train / 182 dev / 207 test), обучение — одна эпоха на 1280 токенах:
-системный промпт и самые длинные вопросы занимают больше 1024, вторая
-эпоха была бы переобучением.
+**Вторая попытка.** Первый прогон (`r=16`, `lr=2e-4`, 5% отказов в train)
+потерял `refusal_correct` (0,857 → 0,000): адаптер выучил всегда отвечать
+числом. Теперь отказов ~25% в train, ранг `r=8`, `alpha=16`, `lr=1e-4`,
+1 эпоха на 1280 токенах. Приёмка прежняя.
 
 Перед запуском добавьте датасет `orel1986/monitoring-qa` и включите GPU.
 """)
@@ -84,12 +83,14 @@ model, tokenizer = FastLanguageModel.from_pretrained(
 """)
 
 md("## 3. LoRA-адаптер\n")
-code("""model = FastLanguageModel.get_peft_model(
+code("""# Вторая попытка: меньше ранг и lr после провала по отказам.
+# Первый прогон (r=16, lr=2e-4, 5% отказов) потерял refusal_correct.
+model = FastLanguageModel.get_peft_model(
     model,
-    r=16,
+    r=8,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                     "gate_proj", "up_proj", "down_proj"],
-    lora_alpha=32,
+    lora_alpha=16,
     lora_dropout=0.05,
     bias="none",
     use_gradient_checkpointing="unsloth",
@@ -153,11 +154,11 @@ trainer = SFTTrainer(
     packing=False,
     args=TrainingArguments(
         per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,   # эффективный batch 16, ~52 шага
-        num_train_epochs=1,              # 829 примеров; вторая эпоха = переобучение
-        learning_rate=2e-4,
+        gradient_accumulation_steps=8,   # эффективный batch 16
+        num_train_epochs=1,
+        learning_rate=1e-4,
         lr_scheduler_type="cosine",
-        warmup_steps=3,
+        warmup_steps=5,
         optim="adamw_8bit",
         weight_decay=0.01,
         logging_steps=5,
@@ -212,7 +213,7 @@ for q in test:
     by_task[q["task"]].append(q)
 sample = []
 for task, limit in (("extraction", 24), ("comparison", 10),
-                    ("refusal", 8), ("structure", 6)):
+                    ("refusal", 16), ("structure", 6)):
     sample += by_task.get(task, [])[:limit]
 print("вопросов в замере:", len(sample),
       collections.Counter(q["task"] for q in sample))
