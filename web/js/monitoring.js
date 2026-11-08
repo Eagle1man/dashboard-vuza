@@ -125,9 +125,12 @@
 
     var rows = axes.map(function (axis) {
       var ind = indicators[axis.code];
+      var labelTip = axis.code === "E8"
+        ? ' title="НПР — научно-педагогические работники; учитываются кандидаты и доктора наук"'
+        : "";
       if (!ind) {
         return '<tr class="bg-slate-50/40">' +
-          '<td class="px-5 py-2.5"><p class="leading-snug text-slate-500">' + esc(axis.label) + "</p>" +
+          '<td class="px-5 py-2.5"><p class="leading-snug text-slate-500"' + labelTip + ">" + esc(axis.label) + "</p>" +
           '<p class="text-[11px] text-slate-400">' + esc(axis.unit || "") + "</p></td>" +
           '<td colspan="9" class="px-3 py-2.5 text-[12.5px] text-slate-400">' +
           esc(notes[release] || "в этом выпуске не публикуется") + "</td></tr>";
@@ -152,7 +155,7 @@
       }
 
       return '<tr class="transition-colors hover:bg-slate-50/60">' +
-        '<td class="px-5 py-2.5"><p class="leading-snug text-slate-700">' + esc(axis.label) + "</p>" +
+        '<td class="px-5 py-2.5"><p class="leading-snug text-slate-700"' + labelTip + ">" + esc(axis.label) + "</p>" +
         '<p class="text-[11px] text-slate-400">' + esc(axis.unit || "") + "</p></td>" +
         cells +
         '<td class="px-3 py-2.5 text-right"><span class="inline-flex flex-col items-end">' +

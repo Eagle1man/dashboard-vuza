@@ -500,7 +500,7 @@
     E2: "Наука",
     E3: "Международная",
     E4: "Финансы",
-    E8: "Доп. показатель"
+    E8: "НПР со степенями"
   };
 
   function wrapLabel(axis) {
@@ -1103,8 +1103,11 @@
           scoreBar(info.percentile) +
           "</span></td>";
       }).join("");
+      var tip = row.code === "E8"
+        ? ' title="НПР — научно-педагогические работники; учитываются кандидаты и доктора наук"'
+        : "";
       return '<tr class="border-b border-slate-50 text-[13px] transition-colors last:border-0 hover:bg-slate-50/60">' +
-        '<td class="min-w-0 py-2 pr-3 align-top leading-snug text-slate-600">' + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
+        '<td class="min-w-0 py-2 pr-3 align-top leading-snug text-slate-600"' + tip + ">" + esc(row.label.replace(/^E\.\d+\.\s*/, "")) +
         ' <span class="text-[11px] text-slate-400">' + esc(row.unit) + "</span></td>" + cells +
         "</tr>";
     }).join("");

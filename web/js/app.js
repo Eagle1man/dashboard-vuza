@@ -1546,7 +1546,7 @@ $("btnExportPdf").addEventListener("click", function () {
     var last = mon && mon.available ? mon.years[years[years.length - 1]] : null;
     var E_SHORT = {
       E1: "E.1 Образование", E2: "E.2 Наука", E3: "E.3 Международная",
-      E4: "E.4 Финансы", E8: "E.8 НПР со степенями"
+      E4: "E.4 Финансы", E8: "E.8 НПР с учёными степенями"
     };
     var codes = ["E1", "E2", "E3", "E4", "E8"];
 
@@ -1560,7 +1560,7 @@ $("btnExportPdf").addEventListener("click", function () {
         { code: "E2", label: "E.2 наука", color: "#0d9488", width: 2.4, radius: 3.5 },
         { code: "E3", label: "E.3 международная", color: "#f97316", width: 3.2, radius: 4.5 },
         { code: "E4", label: "E.4 финансы", color: "#8b5cf6", width: 2.2, radius: 3.5 },
-        { code: "E8", label: "E.8 НПР", color: "#cbd5e1", width: 1.6, radius: 3 }
+        { code: "E8", label: "E.8 НПР с учёными степенями", color: "#cbd5e1", width: 1.6, radius: 3 }
       ];
       eSeries = E_META.map(function (meta) {
         var ind = last.indicators[meta.code];
