@@ -1,0 +1,81 @@
+/* ============================================================
+   glass.css — «матовое стекло» для дашборда.
+
+   Включается классом .glass на <html> (его ставит glass.js).
+   Классический вид возвращается кнопкой «Стекло» / «Классика»
+   или удалением класса .glass с <html>.
+
+   Стиль намеренно мягкий: пастельный фон, полупрозрачные
+   карточки, тонкая светлая рамка и размытие того, что за ними.
+   ============================================================ */
+
+html.glass body {
+  background:
+    radial-gradient(1200px 800px at 8% -10%, #dbeafe 0%, rgba(219, 234, 254, 0) 60%),
+    radial-gradient(1000px 760px at 102% -6%, #ede9fe 0%, rgba(237, 233, 254, 0) 58%),
+    radial-gradient(900px 700px at 50% 112%, #ffedd5 0%, rgba(255, 237, 213, 0) 58%),
+    #f5f7fb !important;
+  background-attachment: fixed !important;
+}
+
+html.glass body::before {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side, rgba(147, 197, 253, .40), transparent 72%) 12% 18% / 42% 42% no-repeat,
+    radial-gradient(closest-side, rgba(196, 181, 253, .38), transparent 72%) 88% 12% / 38% 38% no-repeat,
+    radial-gradient(closest-side, rgba(253, 186, 116, .30), transparent 72%) 58% 94% / 44% 44% no-repeat;
+  filter: blur(18px);
+}
+
+/* Карточки современных страниц (Tailwind: rounded-2xl + bg-white). */
+html.glass .rounded-2xl.bg-white,
+html.glass .rounded-2xl.bg-white\/80,
+html.glass .rounded-2xl.bg-white\/90 {
+  background: rgba(255, 255, 255, .66) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border-color: rgba(255, 255, 255, .75) !important;
+  box-shadow: 0 20px 45px -28px rgba(15, 23, 42, .35),
+              inset 0 1px 0 rgba(255, 255, 255, .75) !important;
+}
+
+/* Карточки классических страниц. */
+html.glass .section-card,
+html.glass .widget-block,
+html.glass .metric-widget,
+html.glass .metric-cell {
+  background: rgba(255, 255, 255, .66) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border-color: rgba(255, 255, 255, .75) !important;
+  box-shadow: 0 20px 45px -28px rgba(15, 23, 42, .35),
+              inset 0 1px 0 rgba(255, 255, 255, .75) !important;
+}
+
+/* Тёмная тема классических страниц: стекло остаётся тёмным. */
+html.glass[data-theme="dark"] body {
+  background:
+    radial-gradient(1000px 700px at 10% -10%, rgba(30, 64, 175, .35) 0%, transparent 60%),
+    radial-gradient(900px 700px at 100% 0%, rgba(91, 33, 182, .30) 0%, transparent 60%),
+    radial-gradient(800px 600px at 50% 110%, rgba(180, 83, 9, .22) 0%, transparent 60%),
+    #0b1020 !important;
+}
+
+html.glass[data-theme="dark"] .section-card,
+html.glass[data-theme="dark"] .widget-block,
+html.glass[data-theme="dark"] .metric-widget,
+html.glass[data-theme="dark"] .metric-cell {
+  background: rgba(17, 24, 39, .55) !important;
+  border-color: rgba(255, 255, 255, .10) !important;
+  box-shadow: 0 20px 45px -28px rgba(0, 0, 0, .70),
+              inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+}
+
+/* Кнопка переключения — в шапке или боковом меню. */
+[data-glass-toggle] {
+  cursor: pointer;
+}
