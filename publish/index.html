@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Дашборд ректора · Южный университет (ИУБиП)</title>
   <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20261108-0307" />
+  <link rel="stylesheet" href="css/style.css?v=20261108-0317" />
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/redesign.css" />
   <style>
@@ -16,26 +16,26 @@
        Палитра дизайн-системы eagle1man: светлая azure-подложка днём,
        navy-герой с янтарной каймой, белые карточки, капсулы. */
     :root {
-      --land-bg: linear-gradient(180deg, #ebf7ff 0%, #dcf0fc 100%);
-      --land-fg: #06172d;
-      --land-fg-dim: #4b688b;
+      --land-bg: linear-gradient(180deg, #faf8ff 0%, #f2f3ff 100%);
+      --land-fg: #0f172a;
+      --land-fg-dim: #475569;
       --land-card: #ffffff;
-      --land-card-border: #cfe0ed;
+      --land-card-border: #e6e8f7;
       --land-input-bg: #ffffff;
-      --land-hero: #0c5f97;
-      --land-hero-2: #063d6b;
-      --land-azure: #097aae;
-      --land-azure-hover: #065d89;
-      --land-amber: #e5b02a;
-      --land-amber-ink: #063d6b;
-      --land-link: #097aae;
-      --land-link-out: #c8102e;
-      --land-ok: #0f7a38;
-      --land-err: #c62828;
-      --land-glow-a: rgba(126, 200, 242, .55);
-      --land-glow-b: rgba(242, 193, 78, .42);
-      --land-shadow: 0 18px 44px rgba(6, 61, 107, .16);
-      --land-shadow-hover: 0 26px 56px rgba(6, 61, 107, .22);
+      --land-hero: #0f766e;
+      --land-hero-2: #14b8a6;
+      --land-azure: #14b8a6;
+      --land-azure-hover: #0d9488;
+      --land-amber: #14b8a6;
+      --land-amber-ink: #ffffff;
+      --land-link: #0d9488;
+      --land-link-out: #ef4444;
+      --land-ok: #10b981;
+      --land-err: #ef4444;
+      --land-glow-a: rgba(20, 184, 166, .28);
+      --land-glow-b: rgba(59, 130, 246, .18);
+      --land-shadow: 0 10px 30px rgba(15, 23, 42, .10);
+      --land-shadow-hover: 0 18px 44px rgba(15, 23, 42, .16);
     }
     /* Тёмная тема лендинга. Светлая — в :root выше.
        Раньше здесь стоял селектор [data-theme="light"] с тёмными
@@ -48,12 +48,14 @@
       --land-card: #1f1f1f;
       --land-card-border: #383838;
       --land-input-bg: #262626;
-      --land-azure: #0b78ab;
-      --land-azure-hover: #0e8dcc;
-      --land-link: #4fb3e0;
-      --land-link-out: #e35d6a;
-      --land-ok: #2fa363;
-      --land-err: #ff8a85;
+      --land-azure: #2dd4bf;
+      --land-azure-hover: #14b8a6;
+      --land-amber: #2dd4bf;
+      --land-amber-ink: #04211d;
+      --land-link: #5eead4;
+      --land-link-out: #f87171;
+      --land-ok: #34d399;
+      --land-err: #f87171;
       --land-glow-a: rgba(9, 122, 174, .38);
       --land-glow-b: rgba(229, 176, 42, .26);
       --land-shadow: 0 18px 44px rgba(0, 0, 0, .5);
@@ -66,9 +68,9 @@
       color: var(--land-fg);
       display: flex;
       flex-direction: column;
-      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      font-family: var(--font-base);
     }
-    .landing h1, .landing h2 { font-family: Georgia, "Times New Roman", serif; }
+    .landing h1, .landing h2 { font-family: var(--font-base); letter-spacing: -.02em; }
 
     /* угловые «световые пятна» — живость без картинок */
     .landing::before, .landing::after {
@@ -100,7 +102,7 @@
       font-size: 13.5px; color: var(--land-fg);
       background: var(--land-card);
       border: 1px solid var(--land-card-border);
-      border-radius: 6px; padding: 10px 18px;
+      border-radius: 10px; padding: 10px 18px;
       min-height: 40px;
       text-decoration: none; cursor: pointer;
       box-shadow: var(--land-shadow);
@@ -123,21 +125,21 @@
       animation: fadeUp .6s ease both;
       width: 100%; max-width: 880px;
       background: linear-gradient(135deg, var(--land-hero) 0%, var(--land-hero-2) 100%);
-      border-radius: 12px;
+      border-radius: 24px;
       border-bottom: 5px solid var(--land-amber);
       padding: 40px 34px 36px;
-      box-shadow: 0 24px 60px rgba(6, 61, 107, .35);
+      box-shadow: 0 24px 60px rgba(15, 118, 110, .28);
     }
     .land-eyebrow {
       font-size: 12px; font-weight: 700;
       text-transform: uppercase; letter-spacing: .14em;
-      color: var(--land-amber);
+      color: #ccfbf1;
       margin-bottom: 16px;
     }
     .land-logo {
       width: 84px; height: 84px;
       background: #fff;
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 12px;
       box-shadow: 0 12px 34px rgba(0, 0, 0, .30);
       margin: 0 auto 18px;
@@ -154,13 +156,14 @@
     .land-cards {
       display: flex; gap: 22px; flex-wrap: wrap;
       justify-content: center;
+      align-items: flex-start;
       width: 100%; max-width: 900px;
     }
     .land-card {
       flex: 1 1 320px; max-width: 420px;
       background: var(--land-card);
       border: 1px solid var(--land-card-border);
-      border-radius: 12px;
+      border-radius: 24px;
       padding: 26px 26px 24px;
       box-shadow: var(--land-shadow);
       text-align: left;
@@ -179,7 +182,7 @@
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
       width: 100%;
       padding: 13px 20px;
-      border-radius: 6px;
+      border-radius: 10px;
       border: none;
       font-size: 15px; font-weight: 600;
       cursor: pointer;
@@ -199,7 +202,7 @@
     .land-field input {
       width: 100%;
       padding: 12px 14px;
-      border-radius: 6px;
+      border-radius: 10px;
       border: 1px solid var(--land-card-border);
       background: var(--land-input-bg);
       color: var(--land-fg);
@@ -208,7 +211,7 @@
       outline: none;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .land-field input:focus { border-color: var(--land-azure); box-shadow: 0 0 0 3px rgba(9, 122, 174, .22); }
+    .land-field input:focus { border-color: var(--land-azure); box-shadow: 0 0 0 3px rgba(20, 184, 166, .22); }
     .land-err { color: var(--land-err); font-size: 13.5px; min-height: 17px; margin-top: 4px; }
 
     .land-hint { font-size: 13px; color: var(--land-fg-dim); margin-top: 12px; line-height: 1.5; }
