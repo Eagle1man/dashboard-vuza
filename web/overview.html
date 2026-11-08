@@ -36,6 +36,42 @@
   <script src="/js/glass.js"></script>
   <script src="/js/vendor/chart.umd.min.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
+  <style>
+    .mini-radar-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 14px;
+      padding: 10px 10px 9px;
+      background:
+        radial-gradient(120% 100% at 20% 0%, rgba(45, 212, 191, .14) 0%, transparent 55%),
+        linear-gradient(155deg, #0b1220 0%, #0f1f2e 55%, #0d2f2b 100%);
+      border: 1px solid rgba(148, 163, 184, .22);
+      box-shadow: 0 14px 30px -20px rgba(2, 6, 23, .9),
+                  inset 0 1px 0 rgba(255, 255, 255, .06);
+    }
+    .mini-radar-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 42%);
+    }
+    .mini-radar-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mini-radar-note {
+      font-size: 9.5px;
+      line-height: 1.3;
+      color: #94a3b8;
+    }
+  </style>
 </head>
 
 <body class="overflow-x-hidden bg-canvas font-sans text-slate-900 antialiased">
@@ -132,9 +168,9 @@
             <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="miniRadarsTotal">—</span>
           </div>
           <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-teal-700"></span>ИУБиП</span>
-            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-blue-900"></span>медиана сравнения</span>
-            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-800"></span>медиана региона</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-teal-400"></span>ИУБиП</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-blue-400"></span>медиана сравнения</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-400"></span>медиана региона</span>
           </div>
           <div id="miniRadars" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
         </article>

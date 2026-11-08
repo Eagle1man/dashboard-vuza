@@ -1310,30 +1310,30 @@
           {
             label: "ИУБиП",
             data: data.vuz,
-            borderColor: "#0f766e",
-            backgroundColor: "rgba(15,118,110,.18)",
-            borderWidth: 2.2,
-            pointRadius: 2.2,
+            borderColor: "#5eead4",
+            backgroundColor: "rgba(45, 212, 191, .20)",
+            borderWidth: 2.4,
+            pointRadius: 2.4,
             pointBackgroundColor: "#ffffff",
-            pointBorderColor: "#0f766e",
-            pointBorderWidth: 1.5,
+            pointBorderColor: "#5eead4",
+            pointBorderWidth: 1.6,
             fill: true
           },
           {
             label: data.compareLabel || "Медиана сравнения",
             data: data.compare,
-            borderColor: "#1e3a8a",
-            borderDash: [4, 3],
-            borderWidth: 1.1,
+            borderColor: "#93c5fd",
+            borderDash: [5, 4],
+            borderWidth: 1.2,
             pointRadius: 0,
             fill: false
           },
           {
             label: "Медиана региона",
             data: data.region,
-            borderColor: "#92400e",
-            borderDash: [2, 2],
-            borderWidth: 1,
+            borderColor: "#fbbf24",
+            borderDash: [2, 3],
+            borderWidth: 1.1,
             pointRadius: 0,
             fill: false
           }
@@ -1346,7 +1346,7 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#0f172a",
+            backgroundColor: "#020617",
             padding: 7,
             cornerRadius: 7,
             callbacks: {
@@ -1363,12 +1363,12 @@
             min: 0,
             max: 2,
             ticks: { display: false },
-            grid: { color: "#e2e8f0" },
-            angleLines: { color: "#e2e8f0" },
+            grid: { color: "rgba(148, 163, 184, .20)" },
+            angleLines: { color: "rgba(148, 163, 184, .20)" },
             pointLabels: {
               display: data.labels.length <= 8,
-              color: "#334155",
-              font: { size: 7, family: "'Golos Text', Inter, sans-serif" }
+              color: "#cbd5e1",
+              font: { size: 7.5, family: "'Golos Text', Inter, sans-serif" }
             }
           }
         }
@@ -1390,10 +1390,10 @@
     MINI_CHARTS = [];
     var items = miniBlockItems();
     box.innerHTML = items.map(function (item) {
-      return '<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-2">' +
-        '<p class="truncate text-[10.5px] font-semibold text-slate-800" title="' + esc(item.title) + '">' + esc(item.title) + "</p>" +
-        '<div style="position:relative;height:132px"><canvas id="miniRadar-' + item.id + '" role="img" aria-label="' + esc(item.title) + '"></canvas></div>' +
-        '<p class="mt-1 text-[9.5px] leading-tight text-slate-500" id="miniRadarNote-' + item.id + '">—</p>' +
+      return '<div class="mini-radar-card">' +
+        '<p class="mini-radar-title" title="' + esc(item.title) + '">' + esc(item.title) + "</p>" +
+        '<div style="position:relative;height:150px"><canvas id="miniRadar-' + item.id + '" role="img" aria-label="' + esc(item.title) + '"></canvas></div>' +
+        '<p class="mini-radar-note mt-1" id="miniRadarNote-' + item.id + '">—</p>' +
       "</div>";
     }).join("");
     $("miniRadarsTotal").textContent = items.length + " разделов";
