@@ -27,7 +27,8 @@
     server: false,     // поднят ли локальный сервер
     health: null,      // его /api/health
     monitoring: null,  // /api/monitoring: E-показатели и места
-    science: null      // /api/science: публикационная активность
+    science: null,     // /api/science: публикационная активность
+    eChart: null       // Chart.js: динамика E-показателей
   };
 
   function $(id) { return document.getElementById(id); }
@@ -1382,12 +1383,163 @@ $("btnExportPdf").addEventListener("click", function () {
       });
   }
 
+  var CHART_FONT = "'Golos Text', Inter, Roboto, system-ui, sans-serif";
+
+  var E_CALLOUTS = {
+    id: "eCallouts",
+    items: [],
+    afterDatasetsDraw: function (chart) {
+      var meta = chart.getDatasetMeta(2);
+      if (!meta || meta.hidden || !meta.data.length) return;
+      var area = chart.chartArea;
+      var ctx = chart.ctx;
+      E_CALLOUTS.items.forEach(function (item) {
+        var el = meta.data[item.index];
+        if (!el) return;
+        ctx.save();
+        ctx.font = "600 11px " + CHART_FONT;
+        var padX = 7;
+        var w = ctx.measureText(item.text).width;
+        var x = item.side === "left" ? el.x - w - 18 : el.x + 12;
+        var y = el.y + item.dy;
+        if (x + w + padX * 2 > area.right) x = area.right - w - padX * 2;
+        if (x < area.left + padX) x = area.left + padX;
+        if (y - 12 < area.top) y = area.top + 12;
+        if (y + 12 > area.bottom) y = area.bottom - 12;
+        var bx = x - padX, by = y - 12, bw = w + padX * 2, bh = 18;
+        ctx.fillStyle = "rgba(249,115,22,.12)";
+        ctx.strokeStyle = "rgba(249,115,22,.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 7);
+        else ctx.rect(bx, by, bw, bh);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#c2410c";
+        ctx.textBaseline = "middle";
+        ctx.fillText(item.text, x, y);
+        ctx.strokeStyle = "rgba(249,115,22,.55)";
+        ctx.beginPath();
+        ctx.moveTo(el.x, el.y);
+        ctx.lineTo(item.side === "left" ? x + w + 2 : x - 2, y);
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+  };
+
+  function renderEDynamics(labels, series) {
+    var canvas = document.getElementById("eDynamics");
+    if (!canvas) return;
+    if (!window.Chart) {
+      var wrap = canvas.parentNode;
+      wrap.innerHTML = C.lineChart(labels, series.map(function (s) {
+        return { name: s.code, data: s.data, color: s.color };
+      }));
+      return;
+    }
+    var a2024 = series[2] && series[2].absolute ? Number(series[2].absolute[3]) : null;
+    var a2025 = series[2] && series[2].absolute ? Number(series[2].absolute[4]) : null;
+    var peak = series[2] && series[2].absolute ? series[2].absolute[3] : null;
+    E_CALLOUTS.items = [
+      { index: 3, text: "пик 2024" + (peak !== null && peak !== undefined ? " · " + fmtFull(peak) + " %" : ""), dy: -26, side: "right" },
+      { index: 4, text: (a2024 && a2025 ? "−" + Math.abs(Math.round((a2025 / a2024 - 1) * 100)) + " % к 2024" : "спад 2025"), dy: 24, side: "left" }
+    ];
+    state.eChart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: series.map(function (s) {
+          return {
+            label: s.label,
+            data: s.data,
+            absolute: s.absolute,
+            unit: s.unit,
+            borderColor: s.color,
+            backgroundColor: "transparent",
+            borderWidth: s.width,
+            pointRadius: s.radius,
+            pointHoverRadius: 6,
+            pointBackgroundColor: "#ffffff",
+            pointBorderColor: s.color,
+            pointBorderWidth: 2,
+            pointHitRadius: 14,
+            tension: 0.35,
+            spanGaps: true
+          };
+        })
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 650, easing: "easeOutQuart" },
+        layout: { padding: { top: 26, right: 10 } },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              usePointStyle: true,
+              pointStyle: "circle",
+              boxWidth: 8,
+              boxHeight: 8,
+              padding: 18,
+              color: "#475569",
+              font: { family: CHART_FONT, size: 12 }
+            }
+          },
+          tooltip: {
+            backgroundColor: "#0f172a",
+            titleColor: "#e2e8f0",
+            bodyColor: "#f8fafc",
+            padding: 10,
+            cornerRadius: 10,
+            displayColors: true,
+            callbacks: {
+              label: function (ctx) {
+                var ds = ctx.dataset;
+                var abs = ds.absolute ? ds.absolute[ctx.dataIndex] : null;
+                var text = ds.label + ": " + ctx.parsed.y + " инд.";
+                if (abs !== null && abs !== undefined) {
+                  text += " · " + fmtFull(abs) + (ds.unit ? " " + ds.unit : "");
+                }
+                return text;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: "#64748b", font: { family: CHART_FONT, size: 11 } }
+          },
+          y: {
+            grace: "8%",
+            grid: { color: "#eef1f5", drawTicks: false },
+            border: { display: false },
+            ticks: {
+              color: "#94a3b8",
+              padding: 10,
+              font: { family: CHART_FONT, size: 11 },
+              callback: function (v) { return Math.round(v); }
+            }
+          }
+        }
+      },
+      plugins: [E_CALLOUTS]
+    });
+  }
+
   function renderCharts() {
     var grid = $("chartsGrid");
     if (!grid) return;
+    if (state.eChart) { state.eChart.destroy(); state.eChart = null; }
+    E_CALLOUTS.items = [];
     var m = function (id) { return state.data.metrics.find(function (x) { return x.id === id; }); };
     var val = function (id) { var x = m(id); return x ? Number(x.current) || 0 : 0; };
     var html = "";
+    var eLabels = null, eSeries = null;
 
     var mon = state.monitoring;
     var years = mon && mon.available ? Object.keys(mon.years).sort() : [];
@@ -1403,23 +1555,36 @@ $("btnExportPdf").addEventListener("click", function () {
     if (last) {
       var firstInd = last.indicators.E1 || {};
       var yearsHist = Object.keys(firstInd.values || {}).sort();
-      var series = codes.map(function (code, i) {
-        var ind = last.indicators[code];
+      var E_META = [
+        { code: "E1", label: "E.1 образование", color: "#94a3b8", width: 1.8, radius: 3 },
+        { code: "E2", label: "E.2 наука", color: "#0d9488", width: 2.4, radius: 3.5 },
+        { code: "E3", label: "E.3 международная", color: "#f97316", width: 3.2, radius: 4.5 },
+        { code: "E4", label: "E.4 финансы", color: "#8b5cf6", width: 2.2, radius: 3.5 },
+        { code: "E8", label: "E.8 НПР", color: "#cbd5e1", width: 1.6, radius: 3 }
+      ];
+      eSeries = E_META.map(function (meta) {
+        var ind = last.indicators[meta.code];
         var vals = ind && ind.values ? ind.values : {};
         var base = vals[yearsHist[0]];
         return {
-          name: code,
-          color: CHART_PALETTE[i % CHART_PALETTE.length],
+          code: meta.code,
+          label: meta.label,
+          color: meta.color,
+          width: meta.width,
+          radius: meta.radius,
+          unit: (ind && ind.unit) || "",
+          absolute: yearsHist.map(function (y) { return vals[y]; }),
           data: yearsHist.map(function (y) {
             var v = vals[y];
-            if (v === null || v === undefined || !base) return 0;
-            return Math.round(v / base * 100);
+            if (v === null || v === undefined || !base) return null;
+            return Math.round(v / base * 1000) / 10;
           })
         };
       });
+      eLabels = yearsHist;
       html += chartPanel("Динамика E-показателей, 2021–2025",
-        "индекс: 2021 = 100 · E.1 образование, E.2 наука, E.3 международная, E.4 финансы, E.8 НПР со степенями",
-        '<div class="chart-wrap">' + C.lineChart(yearsHist, series) + "</div>", "chart-panel-wide");
+        "индекс: 2021 = 100 · наведите на точки · клик по легенде скрывает линию",
+        '<div class="chart-wrap chart-dynamics"><canvas id="eDynamics" role="img" aria-label="Динамика E-показателей, 2021–2025"></canvas></div>', "chart-panel-wide");
     } else {
       html += chartPanel("Динамика E-показателей, 2021–2025",
         "сервер недоступен — данные мониторинга не загружены",
@@ -1512,6 +1677,7 @@ $("btnExportPdf").addEventListener("click", function () {
       gauge(val("trudoustroystvo"), "Трудоустройство выпускников"));
 
     grid.innerHTML = html;
+    if (eLabels && eSeries) renderEDynamics(eLabels, eSeries);
     requestAnimationFrame(function () {
       grid.querySelectorAll(".hbar-fill").forEach(function (el) {
         el.style.width = el.getAttribute("data-w");
