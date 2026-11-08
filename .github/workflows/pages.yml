@@ -1,0 +1,45 @@
+name: Deploy static dashboard to GitHub Pages
+
+# Публикуется только готовый каталог publish/ — он собирается локально
+# командой `python -m backend.build_static` и коммитится.
+#
+# Почему не собирать здесь: сборке нужна база data/dashboard.db (13 МБ),
+# а она в git не хранится. CI её не получит, и страницы останутся пустыми.
+# Поэтому в репозиторий кладётся результат сборки, а workflow только
+# отдаёт его на Pages.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload publish/
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

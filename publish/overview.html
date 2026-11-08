@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <!-- Статическая витрина: снимок API и перехват fetch -->
+  <script src="js/static-data.js"></script>
+  <script src="js/static-api.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора — Обзор</title>
+
+  <script src="js/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+          colors: {
+            ink: "#0f1115",
+            canvas: "#f7f8fa",
+          },
+          // Тени из Mosaic: контурная 1px + мягкая 2px, прозрачность 0.08.
+          // Одна размытая тень выглядит как грязь, две дают глубину.
+          boxShadow: {
+            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+            pop: "0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.01)",
+          },
+          letterSpacing: {
+            display: "-0.02em",
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="css/vendor/golos.css" />
+  <link rel="stylesheet" href="css/glass.css" />
+  <script src="js/glass.js"></script>
+  <script src="js/vendor/chart.umd.min.js"></script>
+  <script src="js/vendor/lucide.min.js"></script>
+  <style>
+    .mini-radar-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 14px;
+      padding: 10px 10px 9px;
+      background:
+        radial-gradient(120% 100% at 20% 0%, rgba(45, 212, 191, .14) 0%, transparent 55%),
+        linear-gradient(155deg, #0b1220 0%, #0f1f2e 55%, #0d2f2b 100%);
+      border: 1px solid rgba(148, 163, 184, .22);
+      box-shadow: 0 14px 30px -20px rgba(2, 6, 23, .9),
+                  inset 0 1px 0 rgba(255, 255, 255, .06);
+    }
+    .mini-radar-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 42%);
+    }
+    .mini-radar-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #f1f5f9;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mini-radar-note {
+      font-size: 9.5px;
+      line-height: 1.3;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+
+<body class="overflow-x-hidden bg-canvas font-sans text-slate-900 antialiased">
+  <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
+
+  <!-- Боковой рейл: только иконки. Названия — в подсказке при наведении. -->
+  <aside id="rail"
+         class="fixed inset-y-0 left-0 z-40 flex w-[76px] -translate-x-full flex-col items-center bg-ink py-4 transition-transform duration-300 ease-out lg:translate-x-0">
+
+    <a href="overview.html" class="mb-6 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10" title="Дашборд ректора">
+      <img src="img/iubip-logo.svg" alt="ИУБиП" class="h-7 w-auto brightness-0 invert" />
+    </a>
+
+    <nav class="flex flex-1 flex-col items-center gap-1.5">
+      <a href="overview.html" class="group flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white" title="Обзор">
+        <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+      </a>
+      <a href="dashboard.html" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Лента показателей">
+        <i data-lucide="chart-line" class="h-5 w-5"></i>
+      </a>
+      <span class="my-2 h-px w-8 bg-white/10"></span>
+
+      <a href="dashboard.html#assistant" class="group flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Спросить ассистента">
+        <i data-lucide="sparkles" class="h-5 w-5"></i>
+      </a>
+    </nav>
+
+    <div class="flex flex-col items-center gap-3">
+      <span id="railStatus" class="h-2 w-2 rounded-full bg-slate-600" title="Состояние сервера"></span>
+      <a href="index.html" class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-xs font-semibold text-white" title="Аккаунт">
+        Р
+      </a>
+      <button id="closeRail" class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-4 w-4"></i>
+      </button>
+    </div>
+  </aside>
+
+  <div class="lg:pl-[76px]">
+    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+
+      <!-- Шапка и управление -->
+      <header class="mb-6 flex flex-col gap-4 sm:mb-7 lg:flex-row lg:items-end lg:justify-between">
+        <div class="flex items-start gap-3">
+          <button id="openRail" class="mt-1 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+          <div>
+            <h1 class="sr-only">Дашборд ректора</h1>
+            <p class="text-[13px] text-slate-500" id="todayLine">—</p>
+            <p class="mt-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              ЧОУ ВО «Южный университет (ИУБиП)» · Ростов-на-Дону
+            </p>
+            <p class="mt-1 text-sm text-slate-500" id="subtitle">47 показателей в 7 блоках</p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="relative">
+            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
+            <input id="searchInput" type="search" placeholder="Найти показатель…"
+                   class="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 shadow-card outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 sm:w-[260px]" />
+          </div>
+
+          <a href="dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
+            <i data-lucide="sparkles" class="h-4 w-4"></i>
+            Ассистент
+          </a>
+          <button type="button" data-glass-toggle class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-card transition hover:border-slate-300 hover:bg-slate-50" title="Переключить оформление: матовое стекло / классика">Стекло</button>
+        </div>
+      </header>
+
+      <!-- KPI -->
+      <section id="kpi" class="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ключевые показатели"></section>
+
+      <!-- График + источники -->
+      <section class="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-3" aria-label="Динамика и источники">
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card xl:col-span-2">
+          <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Радары по разделам</h2>
+              <p class="mt-0.5 text-[13px] text-slate-500">ИУБиП к медиане региона: чем дальше от центра, тем лучше</p>
+            </div>
+            <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="miniRadarsTotal">—</span>
+          </div>
+          <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-teal-400"></span>ИУБиП</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-blue-400"></span>медиана сравнения</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-400"></span>медиана региона</span>
+          </div>
+          <div id="miniRadars" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+        </article>
+
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+          <div class="mb-1">
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Показатели по блокам</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Сколько чисел в каждом блоке</p>
+          </div>
+
+          <div class="relative mx-auto mt-3 h-[150px] w-full max-w-[260px]">
+            <canvas id="sourceChart" aria-label="Кольцевая диаграмма показателей по блокам" role="img"></canvas>
+            <div class="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center">
+              <span class="text-[26px] font-semibold leading-none tracking-display" id="sourceTotal">—</span>
+              <span class="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">показателей</span>
+            </div>
+          </div>
+
+          <ul class="mt-4 grid grid-cols-2 gap-3" id="sourceLegend"></ul>
+        </article>
+      </section>
+
+      <!-- Цели и состояние -->
+      <section class="mb-5" aria-label="Цели на 2026">
+        <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+          <div class="flex items-start justify-between">
+            <div>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900" id="goalsTitle">Цели на 2026</h2>
+              <p class="mt-0.5 text-[13px] text-slate-500" id="goalsSubtitle">2024 → 2025 → цель</p>
+            </div>
+            <span class="rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700" id="goalsShare">—</span>
+          </div>
+          <p class="mt-4 text-[30px] font-semibold leading-none tracking-display" id="goalsValue">—</p>
+          <div class="mt-3 flex flex-wrap gap-1" id="goalsSquares"></div>
+          <p class="mt-3 text-[13px] text-slate-500" id="goalsNote">—</p>
+          <div class="mt-4" id="goalsDetail"></div>
+        </article>
+      </section>
+
+      <!-- Переключатель блоков: меняет и верхний радар, и карточки ниже -->
+      <section class="mb-4" aria-label="Выбор блока">
+        <div class="flex flex-wrap items-center gap-2" id="blockChips"></div>
+      </section>
+
+      <!-- Место в регионе -->
+      <section id="monitoringSection" class="mb-5" hidden aria-label="Место среди вузов Ростовской области">
+        <article class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900" id="monitoringTitle">Место среди вузов Ростовской области</h2>
+              <p class="mt-0.5 text-[13px] text-slate-500" id="monitoringSubtitle">
+                мониторинг эффективности · процентиль: 100 — лучший результат в области
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="monitoringAvg">—</span>
+              <span class="text-xs text-slate-400" id="monitoringYears"></span>
+            </div>
+          </div>
+
+          <div id="monitoringGrid" class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+            <div id="monitoringRadarCol">
+              <div class="relative h-[330px]" id="radarWrap">
+                <canvas id="radarChart" aria-label="Профиль вуза по показателям мониторинга" role="img"></canvas>
+              </div>
+              <div id="radarLegend" class="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-600"></div>
+            </div>
+            <div class="min-w-0" id="monitoringTable"></div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Влияние показателей ленты на место в мониторинге -->
+      <section id="monitoringLinksSection" class="mb-5" aria-label="Влияние показателей ленты на место в мониторинге">
+        <article class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-card">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Влияние показателей ленты на место в мониторинге</h2>
+              <p class="mt-0.5 text-[13px] text-slate-500">показатели дашборда → разделы мониторинга · место — средний процентиль по E.1–E.8</p>
+            </div>
+            <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="monitoringLinksTotal">—</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[1080px] text-left text-sm">
+              <thead>
+                <tr class="border-b border-slate-100 text-[10.5px] uppercase tracking-[0.07em] text-slate-400">
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Раздел мониторинга</th>
+                  <th scope="col" class="px-4 py-2.5 font-semibold">Показатели ленты</th>
+                  <th scope="col" class="px-4 py-2.5 font-semibold">Соответствующие показатели</th>
+                  <th scope="col" class="px-5 py-2.5 font-semibold">Чего нет в ленте</th>
+                </tr>
+              </thead>
+              <tbody id="monitoringLinksTable" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="monitoringLinksNote" class="border-t border-slate-100 px-5 py-3 text-[11.5px] leading-relaxed text-slate-500"></div>
+        </article>
+      </section>
+
+      <!-- Блоки показателей -->
+      <section id="blocksSection" class="space-y-4" aria-label="Показатели по блокам">
+        <div class="flex items-baseline justify-between gap-3">
+          <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">Показатели по блокам</h2>
+          <span class="text-[12px] text-slate-400" id="blocksHint">все блоки</span>
+        </div>
+        <div id="blocks" class="space-y-4"></div>
+        <p id="emptyState" hidden class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+          По запросу ничего не найдено. Измените слово поиска или выберите другой блок.
+        </p>
+      </section>
+
+      <p class="py-8 text-center text-xs text-slate-400">
+        Дашборд ректора · ЧОУ ВО «Южный университет (ИУБиП)»
+      </p>
+    </main>
+  </div>
+
+  <script src="js/monitoring-links.js"></script>
+  <script src="js/overview.js"></script>
+<div id="staticNote" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;padding:7px 14px;border-radius:999px;background:rgba(15,23,42,.82);color:#e2e8f0;font:12px/1.4 system-ui,sans-serif;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none">Статическая витрина · данные на 08.11.2026 · ассистент и загрузка данных отключены</div>
+</body>
+</html>

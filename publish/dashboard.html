@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <!-- Статическая витрина: снимок API и перехват fetch -->
+  <script src="js/static-data.js"></script>
+  <script src="js/static-api.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора · Южный университет (ИУБиП)</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css?v=20261108-0307" />
+  <link rel="stylesheet" href="css/glass.css" />
+  <script src="js/glass.js"></script>
+</head>
+<body>
+  <aside class="app-side">
+    <a class="brand" href="index.html" title="На главную страницу">
+      <img class="brand-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+      <span class="brand-name">Дашборд<br>ректора</span>
+    </a>
+    <nav class="side-nav">
+      <a class="side-link on" href="dashboard.html">Лента показателей</a>
+      </nav>
+    <div class="side-foot">
+      <span id="sysStatus" class="sys-status" title="Состояние локального сервера">проверка…</span>
+      <button id="themeToggle" class="btn btn-outline btn-small" title="Переключить тему">Тема</button>
+      <button type="button" data-glass-toggle class="btn btn-outline btn-small" title="Переключить оформление: матовое стекло / классика">Стекло</button>
+    </div>
+  </aside>
+
+  <header class="app-top">
+    <div class="search-wrap">
+      <input id="globalSearch" type="text" placeholder="Поиск метрик (Ctrl+F)" autocomplete="off" />
+      <span id="searchBadge" class="search-badge" hidden></span>
+    </div>
+    <div class="header-controls">
+      <div class="role-switch" title="Вид по роли: переключатель фильтрует блоки на этой странице; проверки прав нет">
+        <label for="roleSelect">Роль</label>
+        <select id="roleSelect">
+          <option value="rector">Ректор</option>
+          <option value="prorector">Проректор</option>
+          <option value="admin">Администратор</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <!-- Вью 1: Лента показателей -->
+    <section id="view-dashboard" class="view active">
+      <div class="page-head">
+        <div>
+          <h1>Лента показателей</h1>
+          <p class="sub" id="orgLine">ЧОУ ВО «Южный университет (ИУБиП)» · Ростов-на-Дону</p>
+          <p class="sub" id="updateStamp">Обновлено: —</p>
+        </div>
+        <div class="page-actions">
+          <button id="btnRefresh" class="btn btn-primary" title="Перечитать витрину показателей из базы сервера. С внешними системами не синхронизирует — подключение внешних источников делает владелец.">⟳ Обновить показатели</button>
+          <button id="btnExportCsv" class="btn btn-outline" title="Экспорт сводки в CSV">⬇ CSV</button>
+        </div>
+      </div>
+
+      <!-- Графики и диаграммы по показателям ленты: первый раздел страницы -->
+      <div class="section-card" id="chartsCard">
+        <h3>Графики и диаграммы</h3>
+        <p class="sub">структура контингента, план ФХД, место по E-показателям · наведите курсор на сегменты и ячейки</p>
+        <div id="chartsGrid" class="charts-grid"></div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Период</label>
+          <select id="filterPeriod">
+            <option value="month">Месяц</option>
+            <option value="quarter">Квартал</option>
+            <option value="year" selected>Год</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Подразделение</label>
+          <select id="filterDepartment"><option value="all">Все</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Статус</label>
+          <select id="filterStatus">
+            <option value="all">Все</option>
+            <option value="green">Зелёный</option>
+            <option value="yellow">Жёлтый</option>
+            <option value="red">Красный</option>
+            <option value="none">Без порога</option>
+          </select>
+        </div>
+        <div class="filter-group filter-tip">
+          <span>🖱 Перетаскивайте блоки для настройки порядка</span>
+        </div>
+      </div>
+      <div id="widgetGrid" class="widget-grid"></div>
+
+      <!-- Справочник образовательных программ по ФГОС.
+           Коды и годы — реальные, с сайта университета. Численность
+           обучающихся по программам на сайте не публикуется.
+           Свёрнут по умолчанию: список раскрывается по клику. -->
+      <div class="section-card" id="standardsCard">
+        <details id="standardsDetails" class="standards-details">
+          <summary class="standards-summary">
+            <span class="standards-title">Образовательные программы по ФГОС</span>
+            <span class="sub" id="standardsSummary"></span>
+            <span class="standards-chevron" aria-hidden="true">▸</span>
+          </summary>
+          <div class="table-wrap">
+            <table class="data" id="standardsTable">
+              <thead>
+                <tr>
+                  <th>Код</th><th>Программа</th><th>Уровень</th>
+                  <th>Утверждён</th><th>Изменён</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted" style="font-size:12px;margin-top:10px">
+            ⚠ — стандарт не менялся более трёх лет: кандидат на пересмотр,
+            а не ошибка в данных. Численность обучающихся по программам
+            на сайте не публикуется.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Вью 2: Детализация блока -->
+    <section id="view-detail" class="view">
+      <div class="page-head">
+        <div>
+          <button id="btnBack" class="btn btn-ghost">← Назад к ленте</button>
+          <h2 id="detailTitle">Блок</h2>
+          <p class="sub" id="detailSubtitle"></p>
+        </div>
+        <div class="page-actions">
+          <button id="btnDetailCsv" class="btn btn-outline" title="Экспорт в CSV">⬇ CSV</button>
+          <button id="btnExportPdf" class="btn btn-outline" title="Печать или сохранение в PDF">PDF</button>
+          <button id="btnExportXlsx" class="btn btn-outline" title="Экспорт в Excel">XLSX</button>
+        </div>
+      </div>
+      <div id="detailBody"></div>
+    </section>
+
+    <!-- Вью 3: Drill-down -->
+    <section id="view-drilldown" class="view">
+      <div class="page-head">
+        <div>
+          <button id="btnBackDrill" class="btn btn-ghost">← Назад к блоку</button>
+          <h2 id="drillTitle">Детализация</h2>
+          <p class="sub" id="drillSubtitle"></p>
+        </div>
+        <div class="page-actions">
+          <button id="btnDrillCsv" class="btn btn-outline" title="Экспорт записей в CSV">⬇ CSV</button>
+        </div>
+      </div>
+      <div id="drillBody"></div>
+    </section>
+  </main>
+<!-- ИИ-ассистент -->
+  <aside id="aiPanel" class="ai-panel" hidden>
+    <div class="ai-header">
+      <div class="ai-header-brand">
+        <img src="img/iubip-logo.svg" alt="" class="ai-logo" />
+        <div>
+          <strong>Аналитик ректора</strong>
+          <span class="ai-status" id="aiStatus" title="Проверяется по /api/health при загрузке страницы">проверяю…</span>
+        </div>
+      </div>
+      <button id="aiClose" class="btn btn-outline ai-close-btn" aria-label="Закрыть чат">✕ Закрыть</button>
+    </div>
+    <div class="ai-messages" id="aiMessages"></div>
+    <div class="ai-actions" id="aiSuggestions"></div>
+    <form id="aiForm" class="ai-input">
+      <input id="aiInput" type="text" maxlength="2000" placeholder="Например: почему выросло отчисление на 1 курсе?" autocomplete="off" />
+      <button type="submit" class="btn btn-primary">➤</button>
+    </form>
+  </aside>
+  <button id="aiOpen" class="ai-fab" title="Открыть чат с Аналитиком ректора">
+    <span class="ai-fab-ico">🤖</span><span>Аналитик ректора</span>
+  </button>
+
+  <!-- Тост-уведомления -->
+  <div id="toasts" class="toasts"></div>
+
+  <footer class="app-footer">
+    <img src="img/iubip-logo.svg" alt="Южный университет (ИУБиП)" class="footer-logo" />
+    <span class="footer-note">ЧОУ ВО «Южный университет (ИУБиП)» · Дашборд ректора · показателей: <span id="footerCounts">—</span> · документы университета в ленте — отчёт о самообследовании на 01.04.2026 и план ФХД на 2026 год · статическая витрина: данные вшиты в страницу</span>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/monitoring-links.js"></script>
+  <script src="js/vendor/chart.umd.min.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+<div id="staticNote" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;padding:7px 14px;border-radius:999px;background:rgba(15,23,42,.82);color:#e2e8f0;font:12px/1.4 system-ui,sans-serif;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none">Статическая витрина · данные на 08.11.2026 · ассистент и загрузка данных отключены</div>
+</body>
+</html>

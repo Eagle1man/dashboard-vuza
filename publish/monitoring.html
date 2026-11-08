@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <!-- Статическая витрина: снимок API и перехват fetch -->
+  <script src="js/static-data.js"></script>
+  <script src="js/static-api.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора — Мониторинг</title>
+
+  <script src="js/vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Golos Text", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+          },
+          colors: { ink: "#0f1115", canvas: "#f7f8fa" },
+          boxShadow: {
+            card: "0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.02)",
+            "card-hover": "0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+          },
+          letterSpacing: { display: "-0.02em" },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="css/vendor/golos.css" />
+  <link rel="stylesheet" href="css/glass.css" />
+  <script src="js/glass.js"></script>
+  <script src="js/vendor/chart.umd.min.js"></script>
+  <script src="js/vendor/lucide.min.js"></script>
+  <style>
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      #rail, #openRail, #overlay, .no-print { display: none !important; }
+      .lg\:pl-\[76px\] { padding-left: 0 !important; }
+      main { max-width: none !important; padding: 0 !important; }
+      section { break-inside: auto; box-shadow: none !important; }
+      details { break-inside: avoid; }
+      .overflow-x-auto { overflow: visible !important; }
+      table { min-width: 0 !important; font-size: 11px; }
+      th, td { padding-left: 4px !important; padding-right: 4px !important; }
+      #section-directions table { table-layout: fixed; width: 100%; font-size: 10px; }
+      #section-directions th { font-size: 9px; letter-spacing: 0.02em; }
+      #section-directions td { overflow-wrap: break-word; }
+      #section-directions th:nth-child(1), #section-directions td:nth-child(1) { width: 38px; }
+      #section-directions th:nth-child(3), #section-directions td:nth-child(3) { width: 58px; }
+      #section-directions th:nth-child(4), #section-directions td:nth-child(4) { width: 78px; }
+      #section-directions th:nth-child(5), #section-directions td:nth-child(5),
+      #section-directions th:nth-child(6), #section-directions td:nth-child(6) { width: 120px; }
+      .print-page-break { break-before: page; }
+      details > summary { list-style: none; }
+      a[href]::after { content: ""; }
+    }
+    .spark { display: inline-block; vertical-align: middle; }
+  </style>
+</head>
+
+<body class="overflow-x-hidden bg-canvas font-sans text-slate-900 antialiased">
+  <div id="overlay" class="fixed inset-0 z-30 hidden bg-slate-900/40 backdrop-blur-sm lg:hidden"></div>
+
+  <aside id="rail"
+         class="fixed inset-y-0 left-0 z-40 flex w-[76px] -translate-x-full flex-col items-center bg-ink py-4 transition-transform duration-300 ease-out lg:translate-x-0">
+    <a href="overview.html" class="mb-6 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10" title="Дашборд ректора">
+      <img src="img/iubip-logo.svg" alt="ИУБиП" class="h-7 w-auto brightness-0 invert" />
+    </a>
+
+    <nav class="flex flex-1 flex-col items-center gap-1.5">
+      <a href="overview.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Обзор">
+        <i data-lucide="layout-dashboard" class="h-5 w-5"></i>
+      </a>
+      <a href="dashboard.html" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Лента показателей">
+        <i data-lucide="chart-line" class="h-5 w-5"></i>
+      </a>
+      <a href="monitoring.html" class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white" title="Мониторинг">
+        <i data-lucide="telescope" class="h-5 w-5"></i>
+      </a>
+      <span class="my-2 h-px w-8 bg-white/10"></span>
+      <a href="dashboard.html#assistant" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" title="Спросить ассистента">
+        <i data-lucide="sparkles" class="h-5 w-5"></i>
+      </a>
+    </nav>
+
+    <div class="flex flex-col items-center gap-3">
+      <span id="railStatus" class="h-2 w-2 rounded-full bg-slate-600" title="Состояние сервера"></span>
+      <a href="index.html" class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-xs font-semibold text-white" title="Аккаунт">Р</a>
+      <button id="closeRail" class="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden" aria-label="Закрыть меню">
+        <i data-lucide="x" class="h-4 w-4"></i>
+      </button>
+    </div>
+  </aside>
+
+  <div class="lg:pl-[76px]">
+    <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+
+      <header class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="flex items-start gap-3">
+          <button id="openRail" class="mt-1 rounded-lg p-2 text-slate-500 hover:bg-white hover:text-slate-700 lg:hidden" aria-label="Открыть меню">
+            <i data-lucide="menu" class="h-5 w-5"></i>
+          </button>
+          <div>
+            <a href="overview.html" class="text-[13px] text-slate-500 transition hover:text-slate-700">← Обзор</a>
+            <h1 class="mt-1 text-[26px] font-semibold leading-tight tracking-display text-slate-900 sm:text-[30px]">Мониторинг эффективности</h1>
+            <p class="mt-1 text-sm text-slate-500" id="subtitle">выпуск 2025 · карточка ИУБиП · структура как на monitoring.miccedu.ru</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 no-print">
+          <button type="button" data-glass-toggle class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-card transition hover:border-slate-300 hover:bg-slate-50" title="Переключить оформление: матовое стекло / классика">Стекло</button>
+          <button id="btnPrint" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-card transition hover:border-slate-300 hover:bg-slate-50">
+            <i data-lucide="printer" class="h-4 w-4"></i>
+            Печать / PDF
+          </button>
+          <a href="dashboard.html#assistant" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-card transition hover:bg-blue-700 active:translate-y-px">
+            <i data-lucide="sparkles" class="h-4 w-4"></i>
+            Спросить ассистента
+          </a>
+        </div>
+      </header>
+
+      <!-- Навигация по разделам -->
+      <nav class="mb-6 flex flex-wrap gap-1.5 text-[12.5px] no-print" aria-label="Разделы мониторинга">
+        <a href="#section-card" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">I. Общие сведения</a>
+        <a href="#section-e" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">II. Показатели E</a>
+        <a href="#section-directions" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">III. Направления</a>
+        <a href="#section-role" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">IV. Кадры</a>
+        <a href="#section-detail" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">V. Доп. характеристики</a>
+        <a href="#section-region" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">Область</a>
+        <a href="#section-spo" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900">СПО</a>
+      </nav>
+
+      <!-- I. Общие сведения -->
+      <section id="section-card" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="Общие сведения">
+        <div class="border-b border-slate-100 px-5 py-4">
+          <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">I. Общие сведения</h2>
+          <p class="mt-0.5 text-[13px] text-slate-500">Карточка организации в мониторинге</p>
+        </div>
+        <div id="cardInfo" class="grid grid-cols-1 gap-x-8 gap-y-3 p-5 text-sm sm:grid-cols-2"></div>
+      </section>
+
+      <!-- II. Показатели мониторинга -->
+      <section id="section-e" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="Показатели мониторинга E">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">II. Показатели мониторинга эффективности</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">E.1–E.8: пять лет, динамика и медианы по РФ, субъекту и ведомственной принадлежности</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="eTotal">—</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[980px] text-left text-sm">
+            <thead>
+              <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                <th scope="col" class="px-5 py-2.5 font-semibold">Показатель</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">2021</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">2022</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">2023</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">2024</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">2025 · Δ</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">Тренд</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">Медиана РФ</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">Субъект</th>
+                <th scope="col" class="px-3 py-2.5 text-right font-semibold">Ведомство</th>
+              </tr>
+            </thead>
+            <tbody id="eTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="eNote">
+          Источник: monitoring.miccedu.ru, карточка вуза id=1971. ▲ — значение вуза выше медианы, ▼ — ниже.
+        </p>
+      </section>
+
+      <!-- III. Направления деятельности -->
+      <section id="section-directions" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="Результаты по направлениям деятельности">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">III. Результаты по направлениям деятельности</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">57 показателей: образование, наука, международная деятельность, финансы, инфраструктура, кадры</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="dirTotal">—</span>
+        </div>
+        <div id="directions" class="divide-y divide-slate-100"></div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="dirNote">
+          Сравнение с медианами — как на сайте: отношение «значение вуза / медиана». На графиках ×1 — уровень медианы, 0 — сравнения нет; «≥ 2×» означает, что шкала обрезана сверху и точная медиана не публикуется. В таблицах зелёный — выше медианы, оранжевый — ниже, серый — ровно медиана или сравнения нет.
+        </p>
+      </section>
+
+      <!-- IV. Роль организации -->
+      <section id="section-role" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="Роль организации в подготовке кадров">
+        <div class="border-b border-slate-100 px-5 py-4">
+          <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">IV. Роль организации в системе подготовки кадров</h2>
+          <p class="mt-0.5 text-[13px] text-slate-500">Контингент, отрасли наук и реализуемые УГН(С)</p>
+        </div>
+        <div class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+          <div id="cardContingent" class="text-sm"></div>
+          <div id="cardBranches" class="text-sm"></div>
+        </div>
+        <div class="border-t border-slate-100 px-5 py-4">
+          <h3 class="mb-2 text-[13px] font-semibold text-slate-700">Реализуемые УГН(С)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                  <th class="px-3 py-2 font-semibold">УГН(С)</th>
+                  <th class="px-3 py-2 text-right font-semibold">Контингент</th>
+                  <th class="px-3 py-2 text-right font-semibold">Доля в организации</th>
+                  <th class="px-3 py-2 text-right font-semibold">Доля в регионе</th>
+                  <th class="px-3 py-2 text-right font-semibold">Вузов</th>
+                  <th class="px-3 py-2 text-right font-semibold">Филиалов</th>
+                </tr>
+              </thead>
+              <tbody id="cardUgn" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- V. Дополнительные характеристики -->
+      <section id="section-detail" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="Дополнительные характеристики">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">V. Дополнительные характеристики</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500" id="detailSubtitle">56 показателей карточки вуза</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2" id="detailStats"></div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                <th scope="col" class="px-5 py-2.5 font-semibold">Показатель</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Выпуск 2024</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Выпуск 2025</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Изменение</th>
+              </tr>
+            </thead>
+            <tbody id="detailTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="detailNote">
+          Источник: monitoring.miccedu.ru, карточка вуза id=1971.
+        </p>
+      </section>
+
+      <!-- Сравнение с областью -->
+      <section id="section-region" class="mb-6 rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="ИУБиП среди вузов области">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">ИУБиП среди вузов Ростовской области</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Показатели вуза (ИУБиП) и медианы по РФ, субъекту и ведомственной принадлежности</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="regionAvg">—</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <div>
+            <div class="relative h-[330px]">
+              <canvas id="radarChart" aria-label="Профиль вуза среди вузов области" role="img"></canvas>
+            </div>
+            <div id="radarLegend" class="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-600"></div>
+          </div>
+          <div class="min-w-0" id="regionTable"></div>
+        </div>
+      </section>
+
+      <!-- СПО -->
+      <section id="section-spo" class="rounded-2xl border border-slate-200/80 bg-white shadow-card" aria-label="СПО: 2025 против 2024">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 class="text-[15px] font-semibold tracking-tight text-slate-900">СПО: показатели ИУБиП</h2>
+            <p class="mt-0.5 text-[13px] text-slate-500">Среднее профессиональное образование · 7 разделов, 20 показателей · 2025 против 2024</p>
+          </div>
+          <span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600" id="spoTotal">—</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[860px] text-left text-sm">
+            <thead>
+              <tr class="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                <th scope="col" class="px-5 py-2.5 font-semibold">Показатель</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2024</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">2025</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Δ</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Место в области</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">Область</th>
+                <th scope="col" class="px-5 py-2.5 text-right font-semibold">РФ</th>
+              </tr>
+            </thead>
+            <tbody id="spoTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <p class="border-t border-slate-100 px-5 py-3 text-[11px] leading-snug text-slate-400" id="spoNote">
+          Источник: monitoring.miccedu.ru, СПО, карточка организации id=1971.
+        </p>
+      </section>
+
+      <p class="py-8 text-center text-xs text-slate-400">
+        Дашборд ректора · ЧОУ ВО «Южный университет (ИУБиП)»
+      </p>
+    </main>
+  </div>
+
+  <script src="js/monitoring.js"></script>
+<div id="staticNote" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;padding:7px 14px;border-radius:999px;background:rgba(15,23,42,.82);color:#e2e8f0;font:12px/1.4 system-ui,sans-serif;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none">Статическая витрина · данные на 08.11.2026 · ассистент и загрузка данных отключены</div>
+</body>
+</html>

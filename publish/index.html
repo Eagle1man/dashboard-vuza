@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <!-- Статическая витрина: снимок API и перехват fetch -->
+  <script src="js/static-data.js"></script>
+  <script src="js/static-api.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд ректора · Южный университет (ИУБиП)</title>
+  <link rel="icon" type="image/svg+xml" href="img/iubip-logo.svg" />
+  <link rel="stylesheet" href="css/style.css?v=20261108-0307" />
+  <style>
+    /* ---------- Первый экран: лендинг-вход ----------
+       Палитра дизайн-системы eagle1man: светлая azure-подложка днём,
+       navy-герой с янтарной каймой, белые карточки, капсулы. */
+    :root {
+      --land-bg: linear-gradient(180deg, #ebf7ff 0%, #dcf0fc 100%);
+      --land-fg: #06172d;
+      --land-fg-dim: #4b688b;
+      --land-card: #ffffff;
+      --land-card-border: #cfe0ed;
+      --land-input-bg: #ffffff;
+      --land-hero: #0c5f97;
+      --land-hero-2: #063d6b;
+      --land-azure: #097aae;
+      --land-azure-hover: #065d89;
+      --land-amber: #e5b02a;
+      --land-amber-ink: #063d6b;
+      --land-link: #097aae;
+      --land-link-out: #c8102e;
+      --land-ok: #0f7a38;
+      --land-err: #c62828;
+      --land-glow-a: rgba(126, 200, 242, .55);
+      --land-glow-b: rgba(242, 193, 78, .42);
+      --land-shadow: 0 18px 44px rgba(6, 61, 107, .16);
+      --land-shadow-hover: 0 26px 56px rgba(6, 61, 107, .22);
+    }
+    html[data-theme="light"] {
+      --land-bg: linear-gradient(180deg, #0f0f0f 0%, #171717 100%);
+      --land-fg: #f5f5f5;
+      --land-fg-dim: #adadad;
+      --land-card: #1f1f1f;
+      --land-card-border: #383838;
+      --land-input-bg: #262626;
+      --land-azure: #0b78ab;
+      --land-azure-hover: #0e8dcc;
+      --land-link: #4fb3e0;
+      --land-link-out: #e35d6a;
+      --land-ok: #2fa363;
+      --land-err: #ff8a85;
+      --land-glow-a: rgba(9, 122, 174, .38);
+      --land-glow-b: rgba(229, 176, 42, .26);
+      --land-shadow: 0 18px 44px rgba(0, 0, 0, .5);
+      --land-shadow-hover: 0 26px 56px rgba(0, 0, 0, .6);
+    }
+
+    body.landing {
+      min-height: 100vh;
+      background: var(--land-bg);
+      color: var(--land-fg);
+      display: flex;
+      flex-direction: column;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .landing h1, .landing h2 { font-family: Georgia, "Times New Roman", serif; }
+
+    /* угловые «световые пятна» — живость без картинок */
+    .landing::before, .landing::after {
+      content: "";
+      position: fixed;
+      width: 46vmax; height: 46vmax;
+      border-radius: 50%;
+      filter: blur(70px);
+      opacity: .55;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .landing::before { background: var(--land-glow-a); top: -18vmax; right: -12vmax; }
+    .landing::after  { background: var(--land-glow-b); bottom: -20vmax; left: -14vmax; }
+
+    .land-top {
+      position: relative; z-index: 2;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 28px;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .land-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--land-fg-dim); }
+    .land-dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa4bd; box-shadow: 0 0 0 3px rgba(154,164,189,.25); }
+    .land-dot.on  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.25); }
+    .land-dot.off { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.25); }
+
+    .land-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13.5px; color: var(--land-fg);
+      background: var(--land-card);
+      border: 1px solid var(--land-card-border);
+      border-radius: 6px; padding: 10px 18px;
+      min-height: 40px;
+      text-decoration: none; cursor: pointer;
+      box-shadow: var(--land-shadow);
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    .land-chip:hover { transform: translateY(-1px); border-color: var(--land-azure); }
+
+    .land-main {
+      position: relative; z-index: 1;
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px 20px 40px;
+      gap: 30px;
+      text-align: center;
+    }
+
+    /* Блок бренда — navy-герой с янтарной каймой снизу. */
+    .land-brand {
+      animation: fadeUp .6s ease both;
+      width: 100%; max-width: 880px;
+      background: linear-gradient(135deg, var(--land-hero) 0%, var(--land-hero-2) 100%);
+      border-radius: 12px;
+      border-bottom: 5px solid var(--land-amber);
+      padding: 40px 34px 36px;
+      box-shadow: 0 24px 60px rgba(6, 61, 107, .35);
+    }
+    .land-eyebrow {
+      font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .14em;
+      color: var(--land-amber);
+      margin-bottom: 16px;
+    }
+    .land-logo {
+      width: 84px; height: 84px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, .30);
+      margin: 0 auto 18px;
+      display: block;
+    }
+    .land-brand h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      color: #fff;
+      letter-spacing: -.02em;
+      margin-bottom: 10px;
+    }
+    .land-brand p { color: rgba(255, 255, 255, .85); font-size: clamp(14px, 2vw, 17px); max-width: 640px; margin: 0 auto; }
+
+    .land-cards {
+      display: flex; gap: 22px; flex-wrap: wrap;
+      justify-content: center;
+      width: 100%; max-width: 900px;
+    }
+    .land-card {
+      flex: 1 1 320px; max-width: 420px;
+      background: var(--land-card);
+      border: 1px solid var(--land-card-border);
+      border-radius: 12px;
+      padding: 26px 26px 24px;
+      box-shadow: var(--land-shadow);
+      text-align: left;
+      animation: fadeUp .6s ease both;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .land-card:nth-child(1) { animation-delay: .12s; }
+    .land-card:nth-child(2) { animation-delay: .26s; }
+    .land-card:hover { transform: translateY(-4px); box-shadow: var(--land-shadow-hover); border-color: var(--land-azure); }
+
+    .land-card .icon { font-size: 34px; margin-bottom: 10px; }
+    .land-card h2 { font-size: 22px; margin-bottom: 8px; color: var(--land-fg); }
+    .land-card .desc { font-size: 14px; color: var(--land-fg-dim); margin-bottom: 18px; line-height: 1.55; }
+
+    .land-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%;
+      padding: 13px 20px;
+      border-radius: 6px;
+      border: none;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: filter .15s ease, transform .15s ease, background .15s ease;
+    }
+    .land-btn:hover { transform: translateY(-1px); }
+    .land-btn.primary { background: var(--land-azure); color: #fff; }
+    .land-btn.primary:hover { background: var(--land-azure-hover); }
+    /* Главное действие — янтарная капсула с тёмным текстом. */
+    .land-btn.call { background: var(--land-amber); color: var(--land-amber-ink); }
+    .land-btn.call:hover { filter: brightness(1.06); }
+    .land-btn.ghost { background: transparent; color: var(--land-fg); border: 1px solid var(--land-card-border); }
+
+    .land-field { margin-bottom: 12px; }
+    .land-field label { display: block; font-size: 13.5px; color: var(--land-fg-dim); margin-bottom: 6px; }
+    .land-field input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--land-card-border);
+      background: var(--land-input-bg);
+      color: var(--land-fg);
+      /* 16px и больше: мельче — iOS Safari зумит страницу при фокусе. */
+      font-size: 16px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .land-field input:focus { border-color: var(--land-azure); box-shadow: 0 0 0 3px rgba(9, 122, 174, .22); }
+    .land-err { color: var(--land-err); font-size: 13.5px; min-height: 17px; margin-top: 4px; }
+
+    .land-hint { font-size: 13px; color: var(--land-fg-dim); margin-top: 12px; line-height: 1.5; }
+    .land-hint code { background: rgba(127,127,127,.14); padding: 1px 6px; border-radius: 6px; }
+
+    .land-welcome { font-size: 14px; margin-bottom: 14px; color: var(--land-fg); }
+    .land-welcome b { color: var(--land-ok); }
+    .land-link { color: var(--land-link); }
+    .land-link-out { color: var(--land-link-out); }
+
+    .land-foot {
+      position: relative; z-index: 2;
+      text-align: center;
+      padding: 0 20px 22px;
+      font-size: 12.5px;
+      color: var(--land-fg-dim);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 560px) {
+      .land-cards { flex-direction: column; align-items: stretch; }
+      .land-card { max-width: none; }
+      .land-top { padding: 14px 16px; }
+      .land-brand { padding: 30px 20px 26px; border-radius: 12px; }
+    }
+  </style>
+</head>
+<body class="landing">
+  <!-- Верхняя панель: состояние сервера и управление -->
+  <div class="land-top">
+    <span class="land-status">
+      <span class="land-dot" id="srvDot"></span>
+      <span id="srvText">проверка сервера…</span>
+    </span>
+    <div style="display:flex; gap:10px; flex-wrap:wrap">
+      <button id="themeToggle" class="land-chip" title="Сменить тему">◐ День / Ночь</button>
+      </div>
+  </div>
+
+  <!-- Центр: бренд + карточки-действия -->
+  <main class="land-main">
+    <div class="land-brand">
+      <div class="land-eyebrow">ЧОУ ВО «Южный университет (ИУБиП)»</div>
+      <img class="land-logo" src="img/iubip-logo.svg" alt="Логотип Южного университета (ИУБиП)" />
+      <h1>Дашборд ректора</h1>
+      <p>Показатели университета, аналитика на данных
+         и приём файлов от подразделений в единую базу знаний.</p>
+    </div>
+
+    <div class="land-cards">
+      <!-- Карточка 1: лента показателей, без входа -->
+      <section class="land-card">
+        <div class="icon">📈</div>
+        <h2>Лента показателей</h2>
+        <p class="desc">Метрики и графики университета, детализация по блокам,
+           экспорт и ИИ-аналитик «Аналитик ректора». Вход не нужен.</p>
+        <a class="land-btn call" href="overview.html">Открыть дашборд →</a>
+      </section>
+
+      <!-- Карточка 2: мониторинг -->
+      <section class="land-card">
+        <div class="icon">📊</div>
+        <h2>Мониторинг</h2>
+        <p class="desc">Карточка вуза как на monitoring.miccedu.ru: E-показатели, места и перцентили, сравнение с медианами региона и РФ, СПО.</p>
+        <a class="land-btn call" href="monitoring.html">Открыть мониторинг →</a>
+      </section>
+    </div>
+  </main>
+
+  <div class="land-foot">
+    ЧОУ ВО «Южный университет (ИУБиП)» · статическая витрина: данные вшиты в страницу, загрузка файлов и ассистент доступны в полной версии
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // ---------- Тема ----------
+      // Ключ тот же, что у дашборда (dash_theme_v2): тема выбранная на
+      // входе должна пережить переход на рабочие страницы. v2 — чтобы
+      // старая сохранённая «тёмная» не перебивала новый светлый вид.
+      var KEY = "dash_theme_v2";
+      var saved = localStorage.getItem(KEY);
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+      document.getElementById("themeToggle").addEventListener("click", function () {
+        var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", cur);
+        localStorage.setItem(KEY, cur);
+      });
+
+      // ---------- Состояние сервера ----------
+      var dot = document.getElementById("srvDot");
+      var txt = document.getElementById("srvText");
+      fetch("/api/health").then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        dot.classList.add("on");
+        txt.textContent = "статическая витрина";
+      }).catch(function () {
+        dot.classList.add("off");
+        txt.textContent = "статическая витрина";
+      });
+
+      function esc(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+    })();
+  </script>
+<div id="staticNote" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;padding:7px 14px;border-radius:999px;background:rgba(15,23,42,.82);color:#e2e8f0;font:12px/1.4 system-ui,sans-serif;backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none">Статическая витрина · данные на 08.11.2026 · ассистент и загрузка данных отключены</div>
+</body>
+</html>
