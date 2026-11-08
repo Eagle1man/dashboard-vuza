@@ -1,0 +1,20 @@
+{
+  "source": "Платформа «Доступ» (http://10.19.20.20:8080/)",
+  "snapshot_at": "2026-11-08",
+  "publications": {
+    "total": 52,
+    "elibrary": 50,
+    "scopus": 2,
+    "demo": 12
+  },
+  "authors": 45,
+  "editions": 29,
+  "duplicates_removed": 3,
+  "annotations": 0,
+  "identifiers": {
+    "edn": 3,
+    "doi": 4,
+    "eid_scopus": 2
+  },
+  "citations": [48, 28, 22, 6, 4, 1]
+}

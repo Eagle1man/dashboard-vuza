@@ -36,6 +36,7 @@ from . import llm
 from . import monitoring
 from . import retrieve
 from . import review
+from . import science
 from . import tools
 from . import uploads
 
@@ -367,6 +368,16 @@ def monitoring_detail():
 def monitoring_spo():
     """СПО: показатели организации за 2024 и 2025, область и РФ, место."""
     return monitoring.spo()
+
+
+@app.get("/api/science")
+def science_publications():
+    """Публикационная активность: платформа «Доступ» или последний снимок.
+
+    Пароль платформы не хранится в репозитории: задаётся переменной
+    SCIENCE_PASSWORD вместе с адресом API SCIENCE_API_URL.
+    """
+    return science.report()
 
 
 @app.get("/api/monitoring/directions")

@@ -26,7 +26,8 @@
     seed: 2026,
     server: false,     // поднят ли локальный сервер
     health: null,      // его /api/health
-    monitoring: null   // /api/monitoring: E-показатели и места
+    monitoring: null,  // /api/monitoring: E-показатели и места
+    science: null      // /api/science: публикационная активность
   };
 
   function $(id) { return document.getElementById(id); }
@@ -288,6 +289,7 @@ function updateStamp() {
     });
     enableDrag();
     updateFooterNote();
+    renderScienceLive();
   }
 
   // Сколько в ленте чисел из документов. Демонстрационных значений
@@ -351,6 +353,10 @@ function updateStamp() {
     metrics.forEach(function (m) { h += widgetHTML(m, pl); });
     if (metrics.length === 0) h += "<p class='muted'>Нет показателей по заданным фильтрам.</p>";
     h += "</div>";
+    // Живая публикационная активность — только в блоке «Наука».
+    if (block.id === "science") {
+      h += '<div class="science-live" id="scienceLive"><p class="muted">Загружаю публикационную активность…</p></div>';
+    }
     return h;
   }
 
@@ -701,6 +707,7 @@ function updateStamp() {
         applyAlertsIndicators();
         renderDashboard();
         renderCharts();
+        renderScienceLive(true);
         updateStamp();
       } catch (err) {
         showToast("Не удалось обновить: " + err.message, "warn");
@@ -1298,6 +1305,83 @@ $("btnExportPdf").addEventListener("click", function () {
       dots + lab + "</svg>";
   }
 
+  // ---------- Публикационная активность (платформа «Доступ») ----------
+  function paintScience(box, data) {
+    if (!data || !data.available) {
+      box.innerHTML = '<p class="muted">' +
+        esc((data && data.reason) || "Данных публикационной активности нет.") + "</p>";
+      return;
+    }
+    var pubs = data.publications || {};
+    var ids = data.identifiers || {};
+    var citations = (data.citations || []).filter(function (v) { return isFinite(Number(v)); });
+    var totalCit = citations.reduce(function (a, b) { return a + Number(b); }, 0);
+    var mode = data.mode === "live"
+      ? '<span class="sci-badge sci-live">онлайн</span>'
+      : '<span class="sci-badge sci-snap">снимок</span>';
+    var kpis = [
+      { v: pubs.total, l: "публикаций", s: (pubs.elibrary || 0) + " РИНЦ + " + (pubs.scopus || 0) + " Scopus" },
+      { v: data.authors, l: "авторов", s: "уникальных" },
+      { v: data.editions, l: "изданий", s: "в базе" },
+      { v: totalCit, l: "цитирований", s: "по " + citations.length + " работам" }
+    ];
+    var kpiHtml = kpis.map(function (k) {
+      return '<div class="sci-kpi"><span class="sci-kpi-value">' + fmtFull(k.v) + "</span>" +
+        '<span class="sci-kpi-label">' + esc(k.l) + "</span>" +
+        '<span class="sci-kpi-sub">' + esc(k.s) + "</span></div>";
+    }).join("");
+    var citeRows = citations.map(function (c, i) {
+      return { label: "Работа " + (i + 1), value: Number(c), color: "#2563eb", text: c + " цит." };
+    });
+    var sourceDonut = donutSVG([
+      { label: "eLIBRARY / РИНЦ", value: pubs.elibrary || 0, color: "#2563eb" },
+      { label: "Scopus", value: pubs.scopus || 0, color: "#14b8a6" }
+    ]);
+    box.innerHTML =
+      '<div class="science-head"><div><h4>Публикационная активность</h4>' +
+        '<p class="science-src">' + esc(data.source || "Платформа «Доступ»") + " · " + mode +
+        " · обновлено " + esc(data.updated_at || "—") + "</p></div></div>" +
+      '<div class="science-kpis">' + kpiHtml + "</div>" +
+      '<div class="science-charts">' +
+        '<div class="science-chart">' + sourceDonut + "</div>" +
+        '<div class="science-chart"><p class="science-chart-title">Цитирования работ</p>' +
+          (citeRows.length ? hbars(citeRows) : '<p class="muted">нет данных</p>') + "</div>" +
+      "</div>" +
+      '<p class="science-flags">Демонстрационных: <b>' + (pubs.demo || 0) + "</b> · дублей отсечено: <b>" +
+        (data.duplicates_removed || 0) + "</b> · аннотаций: <b>" + (data.annotations || 0) +
+        "</b> · ID: <b>" + (ids.edn || 0) + "</b> EDN, <b>" + (ids.doi || 0) + "</b> DOI, <b>" +
+        (ids.eid_scopus || 0) + "</b> EID Scopus</p>" +
+      (data.annotations === 0
+        ? '<p class="science-warn">Аннотаций нет — у работ статус «Недостаточно данных»; это ограничение источника, а не ошибка дашборда.</p>'
+        : "") +
+      '<p class="science-note">РИНЦ и Scopus — разные учёты и не суммируются. ' +
+        (data.mode === "live"
+          ? "Данные приходят с платформы «Доступ»."
+          : "Сервис недоступен — показан последний снимок; онлайн-обновление включится, когда платформа ответит.") +
+      "</p>";
+  }
+
+  function renderScienceLive(force) {
+    var box = $("scienceLive");
+    if (!box) return;
+    if (state.science && !force) { paintScience(box, state.science); return; }
+    box.innerHTML = '<p class="muted">Загружаю публикационную активность…</p>';
+    fetch("/api/science", { headers: { Accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) throw new Error("/api/science: HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        state.science = data;
+        var live = $("scienceLive");
+        if (live) paintScience(live, data);
+      })
+      .catch(function (err) {
+        var live = $("scienceLive");
+        if (live) live.innerHTML = '<p class="muted">Платформа «Доступ» недоступна: ' + esc(err.message) + "</p>";
+      });
+  }
+
   function renderCharts() {
     var grid = $("chartsGrid");
     if (!grid) return;
@@ -1461,6 +1545,7 @@ $("btnExportPdf").addEventListener("click", function () {
         state.monitoring = null;
       }
       renderCharts();
+      renderScienceLive(true);
       setStatus(h);
     } catch (err) {
       // Раньше здесь стоял молчаливый catch, и любая ошибка выглядела

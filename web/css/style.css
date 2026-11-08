@@ -303,6 +303,25 @@ html[data-theme="dark"] .widget-value { color: #fff; }
 .gauge-arc { transition: stroke-dasharray .8s ease; }
 .gauge-value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 800; color: var(--text); }
 .radar-svg { width: 100%; max-width: 340px; height: auto; margin: 0 auto; display: block; }
+
+/* ---------- Публикационная активность ---------- */
+.science-live { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.science-head h4 { font-size: 14px; margin: 0 0 2px; }
+.science-src { font-size: 11.5px; color: var(--muted); }
+.sci-badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
+.sci-live { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.sci-snap { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.science-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.sci-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.sci-kpi-value { font-size: 20px; font-weight: 800; line-height: 1.1; }
+.sci-kpi-label { font-size: 11.5px; color: var(--text); }
+.sci-kpi-sub { font-size: 10.5px; color: var(--muted); }
+.science-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
+.science-chart { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+.science-chart-title { font-size: 11.5px; font-weight: 700; color: var(--muted); margin: 0 0 6px; }
+.science-flags { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.science-warn { font-size: 11.5px; color: var(--amber-deep); margin-top: 4px; }
+.science-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
 .chart-wrap { width: 100%; overflow-x: auto; }
 .chart-svg { width: 100%; min-width: 360px; height: auto; display: block; }
 .metric-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
